@@ -6,7 +6,7 @@ import { validateOutput } from "./validate.js";
 import { listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson, writeText } from "./artifact-manager.js";
-import { extractSteppingStone, extractSearchKeywords } from "../agent/prime-retrieval.js";
+import { createRetrievalPacket, extractSteppingStone, extractSearchKeywords } from "../agent/prime-retrieval.js";
 
 async function callOpenAI(prompt) {
   requireEnv("OPENAI_API_KEY", CONFIG.OPENAI_API_KEY);
@@ -88,7 +88,24 @@ export async function execute() {
 
       await writeJson(artifactPaths.normalizedSpec, normalizedSpec);
 
-      const prompt = await buildPrompt(brief);
+      let retrievalPacket = null;
+      try {
+        retrievalPacket = await createRetrievalPacket({
+          procurementId: `job_${job.jobId}`,
+          phase: brief.category ?? "artifact-bundle",
+          searchKeywords: extractSearchKeywords({
+            title: brief.title,
+            details: brief.goal,
+            requirements: brief.required_sections,
+            category: brief.category,
+          }),
+        });
+        await writeJson(artifactPaths.retrievalPacket, retrievalPacket);
+      } catch (retrievalErr) {
+        console.warn(`[execute] retrieval packet generation failed (non-fatal): ${retrievalErr.message}`);
+      }
+
+      const prompt = await buildPrompt(brief, retrievalPacket);
       const markdown = await callOpenAI(prompt);
 
       const validation = validateOutput(markdown, brief);
@@ -135,6 +152,7 @@ export async function execute() {
         artifactPath: artifactPaths.deliverable,
         briefPath: artifactPaths.brief,
         validationPath: artifactPaths.validation,
+        retrievalPacketPath: retrievalPacket ? artifactPaths.retrievalPacket : null,
         executedAt: new Date().toISOString(),
         attempts: {
           ...job.attempts,

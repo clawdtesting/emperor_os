@@ -24,6 +24,7 @@ export function getJobArtifactPaths(jobId) {
     normalizedSpec: path.join(dir, "normalized_spec.json"),
     strategy: path.join(dir, "strategy.json"),
     brief: path.join(dir, "brief.json"),
+    retrievalPacket: path.join(dir, "retrieval_packet_execution.json"),
     deliverable: path.join(dir, "deliverable.md"),
     validation: path.join(dir, "validation.json"),
     publishManifest: path.join(dir, "publish_manifest.json"),

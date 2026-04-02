@@ -101,22 +101,26 @@ export async function createRetrievalPacket({ procurementId, phase, searchKeywor
 
   const results = await searchArchive({ phase, keywords: searchKeywords });
 
+  const mappedResults = results.map(r => ({
+    archiveId:   r.id,
+    title:       r.title,
+    summary:     r.summary,
+    phase:       r.phase,
+    tags:        r.tags ?? [],
+    artifactPath: r.artifactPath ?? null,
+    relevanceScore: r._score,
+  }));
+
   const packet = {
     schema:         "emperor-os/retrieval-packet/v1",
     procurementId:  String(procurementId),
     phase,
     searchKeywords,
     searchedAt:     new Date().toISOString(),
-    resultsFound:   results.length,
-    results:        results.map(r => ({
-      archiveId:   r.id,
-      title:       r.title,
-      summary:     r.summary,
-      phase:       r.phase,
-      tags:        r.tags ?? [],
-      artifactPath: r.artifactPath ?? null,
-      relevanceScore: r._score,
-    })),
+    resultsFound:   mappedResults.length,
+    results:        mappedResults,
+    // Compatibility alias: legacy callers may still read `items`.
+    items:          mappedResults,
     useDecision:    null,  // filled in by writeRetrievalDecision()
     decisionNote:   null,
     decisionAt:     null,
@@ -187,6 +191,11 @@ export async function extractSteppingStone({ procurementId, phase, primitive, ti
     summary,
     tags,
     content:       primitive,
+    sourceArtifactPath: primitive?.artifactPath ?? null,
+    outcome: {
+      status: primitive?.outcomeStatus ?? null,
+      score:  primitive?.outcomeScore ?? null,
+    },
     extractedAt:   new Date().toISOString(),
   });
 
@@ -212,6 +221,9 @@ export async function extractSteppingStone({ procurementId, phase, primitive, ti
     summary,
     tags: tags ?? [],
     artifactPath,
+    sourceArtifactPath: primitive?.artifactPath ?? null,
+    outcomeStatus: primitive?.outcomeStatus ?? null,
+    outcomeScore: primitive?.outcomeScore ?? null,
     addedAt: new Date().toISOString(),
   });
   await saveArchiveIndex(index);

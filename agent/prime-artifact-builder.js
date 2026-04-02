@@ -366,7 +366,12 @@ export async function writeTrialBundle(procurementId, {
   await writeFile(fetchPath, { procurementId: String(procurementId), ...fetchbackVerification });
   files.push(fetchPath);
 
-  await writeFile(path.join(dir, "retrieval_packet.json"), retrievalPacket ?? { procurementId: String(procurementId), items: [] });
+  await writeFile(path.join(dir, "retrieval_packet.json"), retrievalPacket ?? {
+    schema: "emperor-os/retrieval-packet/v1",
+    procurementId: String(procurementId),
+    results: [],
+    items: [],
+  });
   await writeFile(path.join(dir, "decomposition_plan.json"), decompositionPlan ?? { procurementId: String(procurementId), steps: [] });
   await writeFile(path.join(dir, "validator_packet.json"), validatorPacket ?? { procurementId: String(procurementId), checks: [] });
   await writeFile(path.join(dir, "draft.md"), draftMarkdown ?? "# Draft\n");

@@ -26,12 +26,21 @@ export async function loadTemplateSet(category) {
   };
 }
 
-export async function buildPrompt(brief) {
+export async function buildPrompt(brief, retrievalPacket = null) {
   const templates = await loadTemplateSet(brief.category);
+  const retrievedContext = retrievalPacket?.results?.length
+    ? [
+        "Retrieved capability context (archive hits):",
+        ...retrievalPacket.results.slice(0, 5).map((r, idx) =>
+          `${idx + 1}. ${r.title ?? r.archiveId}\n   Summary: ${r.summary ?? "n/a"}\n   Tags: ${(r.tags ?? []).join(", ")}`
+        )
+      ].join("\n")
+    : "Retrieved capability context: none";
 
   return [
     templates.base.trim(),
     templates.category.trim(),
+    retrievedContext,
     "Structured job brief JSON:",
     JSON.stringify(brief, null, 2)
   ]
