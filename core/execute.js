@@ -6,6 +6,7 @@ import { validateOutput } from "./validate.js";
 import { listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson, writeText } from "./artifact-manager.js";
+import { extractSteppingStone, extractSearchKeywords } from "../agent/prime-retrieval.js";
 
 async function callOpenAI(prompt) {
   requireEnv("OPENAI_API_KEY", CONFIG.OPENAI_API_KEY);
@@ -104,6 +105,29 @@ export async function execute() {
       }
 
       await writeText(artifactPaths.deliverable, markdown);
+
+      // Extract reusable stepping stone from completed deliverable.
+      try {
+        const title = brief.title ?? `Job ${job.jobId}`;
+        await extractSteppingStone({
+          procurementId: `job_${job.jobId}`,
+          phase:   brief.category ?? "artifact-bundle",
+          primitive: {
+            jobId:           job.jobId,
+            category:        brief.category,
+            deliverableType: brief.category,
+            contentLength:   markdown.length,
+            contentSample:   markdown.slice(0, 400),
+            artifactPath:    artifactPaths.deliverable,
+          },
+          title:   `Deliverable: ${title}`,
+          summary: `Completed v1 job ${job.jobId}. Category: ${brief.category ?? "unclassified"}.`,
+          tags:    ["v1", brief.category ?? "artifact-bundle", ...extractSearchKeywords(brief)],
+        });
+        console.log(`[execute] stepping stone extracted for job ${job.jobId}`);
+      } catch (extractErr) {
+        console.warn(`[execute] stepping stone extraction failed (non-fatal): ${extractErr.message}`);
+      }
 
       await setJobState(job.jobId, {
         status: "deliverable_ready",

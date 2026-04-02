@@ -72,9 +72,9 @@ import {
   assertTrialSubmitGate,
 } from "../prime-review-gates.js";
 import { activateBridge } from "../prime-execution-bridge.js";
-import { createRetrievalPacket } from "../prime-retrieval.js";
+import { createRetrievalPacket, extractSteppingStone, extractSearchKeywords } from "../prime-retrieval.js";
 import { evaluateFit } from "./prime-evaluate.js";
-import { generateApplicationMarkdown, generateTrialMarkdown, publishAndVerify } from "./prime-content.js";
+import { generateApplicationMarkdown, generateTrialMarkdown, publishAndVerify, draftWithLLM } from "./prime-content.js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -175,8 +175,14 @@ async function handleEvaluateFit(procurementId, procStruct, jobSpec) {
   // Build retrieval packet for context.
   let retrievalPacket = null;
   try {
-    retrievalPacket = await createRetrievalPacket(procurementId);
-  } catch (_) {}
+    retrievalPacket = await createRetrievalPacket({
+      procurementId,
+      phase:          "application",
+      searchKeywords: extractSearchKeywords(jobSpec),
+    });
+  } catch (err) {
+    log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
+  }
 
   const fitEvaluation = evaluateFit({ procurementId, jobSpec, procStruct });
 
@@ -214,14 +220,27 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
   // Build retrieval packet.
   let retrievalPacket = null;
   try {
-    retrievalPacket = await createRetrievalPacket(procurementId);
-  } catch (_) {}
+    retrievalPacket = await createRetrievalPacket({
+      procurementId,
+      phase:          "application",
+      searchKeywords: extractSearchKeywords(jobSpec),
+    });
+  } catch (err) {
+    log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
+  }
 
-  // Generate application markdown.
+  // Generate application markdown — attempt LLM draft, fall back to template.
   const fitEvaluation = await readJson(
     path.join(procSubdir(procurementId, "inspection"), "fit_evaluation.json"),
     null
   );
+  let llmDraft = null;
+  try {
+    llmDraft = await draftWithLLM({ phase: "application", procurementId, jobSpec, fitEvaluation, retrievalPacket });
+    log(`#${procurementId}: LLM application draft produced (${llmDraft.length} chars)`);
+  } catch (err) {
+    log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
+  }
   const applicationMarkdown = generateApplicationMarkdown({
     procurementId,
     jobSpec,
@@ -229,6 +248,7 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
     agentAddress:   AGENT_ADDRESS,
     agentSubdomain: AGENT_SUBDOMAIN,
     retrievalPacket,
+    llmDraft,
   });
 
   // Publish to IPFS.
@@ -268,6 +288,30 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
 
   await transitionProcStatus(procurementId, PROC_STATUS.APPLICATION_DRAFTED);
   log(`#${procurementId}: → APPLICATION_DRAFTED (applicationURI=${applicationURI})`);
+
+  // Extract stepping stone from completed application draft.
+  try {
+    const title = (typeof jobSpec === "object" ? jobSpec?.title : null) ?? `Procurement #${procurementId}`;
+    await extractSteppingStone({
+      procurementId,
+      phase:   "application",
+      primitive: {
+        applicationURI,
+        agentSubdomain:  AGENT_SUBDOMAIN,
+        fitScore:        fitEvaluation?.score ?? null,
+        contentLength:   applicationMarkdown.length,
+        contentSample:   applicationMarkdown.slice(0, 400),
+        artifactPath:    path.join(procSubdir(procurementId, "application"), "application_brief.md"),
+      },
+      title:   `Application: ${title}`,
+      summary: `Application for procurement #${procurementId}. Fit score: ${fitEvaluation?.score?.toFixed(3) ?? "n/a"}.`,
+      tags:    ["application", "procurement", ...extractSearchKeywords(jobSpec).slice(0, 5)],
+    });
+    log(`#${procurementId}: stepping stone extracted for application`);
+  } catch (err) {
+    log(`#${procurementId}: stepping stone extraction failed (non-fatal): ${err.message}`);
+  }
+
   return true;
 }
 
@@ -519,14 +563,28 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
   // Build retrieval packet.
   let retrievalPacket = null;
   try {
-    retrievalPacket = await createRetrievalPacket(procurementId);
-  } catch (_) {}
+    retrievalPacket = await createRetrievalPacket({
+      procurementId,
+      phase:          "trial",
+      searchKeywords: extractSearchKeywords(jobSpec),
+    });
+  } catch (err) {
+    log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
+  }
 
-  // Generate trial content.
+  // Generate trial content — attempt LLM draft, fall back to template.
+  let llmTrialDraft = null;
+  try {
+    llmTrialDraft = await draftWithLLM({ phase: "trial", procurementId, jobSpec, retrievalPacket });
+    log(`#${procurementId}: LLM trial draft produced (${llmTrialDraft.length} chars)`);
+  } catch (err) {
+    log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
+  }
   const trialMarkdown = generateTrialMarkdown({
     procurementId,
     jobSpec,
     retrievalPacket,
+    llmDraft: llmTrialDraft,
   });
 
   // Publish to IPFS + fetchback verify.
@@ -555,6 +613,30 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
     trialFetchback: fetchback,
     trialArtifactDir: procSubdir(procurementId, "trial"),
   });
+
+  // Extract stepping stone from completed trial artifact.
+  try {
+    const title = (typeof jobSpec === "object" ? jobSpec?.title : null) ?? `Procurement #${procurementId}`;
+    const deliverableType = (typeof jobSpec === "object" ? jobSpec?.category : null) ?? "artifact-bundle";
+    await extractSteppingStone({
+      procurementId,
+      phase:   "trial",
+      primitive: {
+        trialURI,
+        deliverableType,
+        fetchbackVerified: fetchback.verified,
+        contentLength:     trialMarkdown.length,
+        contentSample:     trialMarkdown.slice(0, 400),
+        artifactPath:      path.join(procSubdir(procurementId, "trial"), "final.md"),
+      },
+      title:   `Trial: ${title}`,
+      summary: `Trial artifact for procurement #${procurementId}. Type: ${deliverableType}.`,
+      tags:    ["trial", "procurement", deliverableType, ...extractSearchKeywords(jobSpec).slice(0, 5)],
+    });
+    log(`#${procurementId}: stepping stone extracted for trial`);
+  } catch (err) {
+    log(`#${procurementId}: stepping stone extraction failed (non-fatal): ${err.message}`);
+  }
 
   return true; // caller (handleBuildTrialTx) continues immediately
 }

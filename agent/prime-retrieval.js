@@ -337,6 +337,45 @@ export async function seedPrimeArchive() {
   log(`Archive seeded with ${templates.length} Prime primitive templates.`);
 }
 
+// ── Search keyword extraction ─────────────────────────────────────────────────
+
+/**
+ * Derives search keywords from a job spec for archive retrieval.
+ * Extracts meaningful domain terms, filtering stopwords and short tokens.
+ *
+ * @param {object|string} jobSpec
+ * @returns {string[]}  up to 12 lowercase keyword strings
+ */
+export function extractSearchKeywords(jobSpec) {
+  if (!jobSpec) return [];
+  const text = typeof jobSpec === "string"
+    ? jobSpec
+    : [jobSpec.title, jobSpec.description, jobSpec.details, jobSpec.requirements, jobSpec.deliverables]
+        .filter(Boolean).join(" ");
+
+  const STOP = new Set([
+    "the","a","an","in","of","to","and","or","for","with","that","this","is","are",
+    "was","were","be","been","has","have","had","it","its","from","as","by","on",
+    "at","we","our","your","their","will","can","do","not","but","all","any","if",
+    "into","than","more","also","each","when","which","who","what","how","may",
+    "per","use","used","using","make","made","set","get","up","so","they","them",
+    "then","no","he","she","his","her","new","one","two","three","should","must",
+    "would","could","please","need","needs","provide","including","based","create",
+    "write","build","develop","produce","generate",
+  ]);
+
+  const seen = new Set();
+  const keywords = [];
+  for (const raw of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (raw.length >= 4 && !STOP.has(raw) && !seen.has(raw)) {
+      seen.add(raw);
+      keywords.push(raw);
+      if (keywords.length >= 12) break;
+    }
+  }
+  return keywords;
+}
+
 function log(msg) {
   console.log(`[prime-retrieval] ${msg}`);
 }

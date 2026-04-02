@@ -10,8 +10,13 @@ const FORBIDDEN_PATTERNS = [
   /i can't/i,
   /i cannot/i,
   /here'?s the final deliverable/i,
-  /meta commentary/i
+  /meta commentary/i,
+  // Reject bracket-notation placeholder content (e.g. *[Main analysis results]*)
+  /\*\[[^\]]{3,}\]\*/,
 ];
+
+// Minimum non-placeholder characters required per required section.
+const MIN_SECTION_BODY_CHARS = 40;
 
 export function validateOutput(content, brief) {
   const errors = [];
@@ -31,8 +36,18 @@ export function validateOutput(content, brief) {
   }
 
   for (const section of brief.required_sections ?? []) {
-    if (!normalized.toLowerCase().includes(String(section).toLowerCase())) {
+    const sectionLower = String(section).toLowerCase();
+    if (!normalized.toLowerCase().includes(sectionLower)) {
       errors.push(`missing required section: ${section}`);
+      continue;
+    }
+    // Require at least MIN_SECTION_BODY_CHARS of non-heading, non-placeholder text
+    // in the content following the section heading.
+    const headingIdx = normalized.toLowerCase().indexOf(sectionLower);
+    const afterHeading = normalized.slice(headingIdx + sectionLower.length, headingIdx + sectionLower.length + 800);
+    const stripped = afterHeading.replace(/\*\[[^\]]*\]\*/g, "").replace(/^#+.*/gm, "").trim();
+    if (stripped.length < MIN_SECTION_BODY_CHARS) {
+      errors.push(`section '${section}' has insufficient substantive content (${stripped.length} chars after stripping placeholders)`);
     }
   }
 

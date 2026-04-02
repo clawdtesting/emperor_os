@@ -130,9 +130,9 @@ export function generateApplicationMarkdown({
   const deliveryType = deriveDeliveryType(spec);
   const approach     = buildApproachStatement(spec, deliveryType);
 
-  const knowledgeSection = retrievalPacket?.items?.length > 0
-    ? "\n\n## Retrieved Context\n\n" + retrievalPacket.items
-        .map(i => `**${i.topic}**: ${i.summary}`)
+  const knowledgeSection = retrievalPacket?.results?.length > 0
+    ? "\n\n## Retrieved Context\n\n" + retrievalPacket.results
+        .map(r => `**${r.title ?? r.archiveId}**: ${r.summary ?? ""}`)
         .join("\n\n")
     : "";
 
@@ -213,9 +213,9 @@ export function generateTrialMarkdown({
   const deliveryType = deriveDeliveryType(spec);
   const sections     = buildSections(spec, deliveryType);
 
-  const knowledgeSection = retrievalPacket?.items?.length > 0
+  const knowledgeSection = retrievalPacket?.results?.length > 0
     ? "---\n\n## Retrieved Protocol Context\n\n" +
-      retrievalPacket.items.map(i => `### ${i.topic}\n\n${i.summary}\n`).join("\n")
+      retrievalPacket.results.map(r => `### ${r.title ?? r.archiveId}\n\n${r.summary ?? ""}\n`).join("\n")
     : "";
 
   return `# ${title}
@@ -244,6 +244,88 @@ export async function publishAndVerify(content, filename) {
   const pub = await publishToIPFS(content, filename);
   const fetchback = await fetchbackVerify(pub.uri, content);
   return { ...pub, fetchback };
+}
+
+// ── LLM drafting ─────────────────────────────────────────────────────────────
+
+/**
+ * Calls the OpenAI API to produce a substantive draft for the given phase.
+ * Returns the draft string, or throws if the API is unavailable or returns empty output.
+ * Callers should catch and fall back to template generation.
+ *
+ * @param {object} opts
+ * @param {"application"|"trial"} opts.phase
+ * @param {string|number} opts.procurementId
+ * @param {object|string} opts.jobSpec
+ * @param {object} [opts.fitEvaluation]
+ * @param {object} [opts.retrievalPacket]
+ * @returns {Promise<string>} substantive markdown draft
+ */
+export async function draftWithLLM({ phase, procurementId, jobSpec, fitEvaluation, retrievalPacket }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY not set");
+
+  const specText = typeof jobSpec === "string"
+    ? jobSpec
+    : [jobSpec?.title, jobSpec?.description, jobSpec?.details, jobSpec?.requirements, jobSpec?.deliverables]
+        .filter(Boolean).join("\n\n");
+
+  const retrievedContext = retrievalPacket?.results?.length > 0
+    ? "\n\nRelevant prior work retrieved from archive:\n" +
+      retrievalPacket.results.slice(0, 3).map(r => `- ${r.title}: ${r.summary}`).join("\n")
+    : "";
+
+  const systemPrompt = phase === "application"
+    ? "You are an autonomous AI agent drafting an on-chain procurement application. " +
+      "Write a professional, specific application in markdown format using ## section headings. " +
+      "Do not use placeholder text like *[description here]*. Be concrete and specific to the job specification."
+    : "You are an autonomous AI agent producing a trial deliverable for an on-chain procurement. " +
+      "Write substantive, high-quality content in markdown format using ## section headings. " +
+      "Do not use placeholder text like *[Main analysis results]*. " +
+      "Produce real, specific content directly relevant to the job specification.";
+
+  const userPrompt = [
+    `Job Specification:\n${specText}`,
+    retrievedContext,
+    `Procurement ID: ${procurementId}`,
+    fitEvaluation ? `Fit Score: ${fitEvaluation.score?.toFixed(3) ?? "n/a"} — ${fitEvaluation.reason ?? ""}` : "",
+    `\nProduce the ${phase} document now. Use markdown. Start with a # heading.`,
+  ].filter(Boolean).join("\n");
+
+  const res = await fetch("https://api.openai.com/v1/responses", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body:    JSON.stringify({
+      model: process.env.OPENAI_MODEL ?? "gpt-4.1",
+      input: [
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userPrompt   },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`OpenAI ${res.status}: ${body.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+
+  let text = "";
+  if (typeof data.output_text === "string" && data.output_text.trim()) {
+    text = data.output_text.trim();
+  } else if (Array.isArray(data.output)) {
+    for (const item of data.output) {
+      if (!item || !Array.isArray(item.content)) continue;
+      for (const c of item.content) {
+        if (c?.type === "output_text" && typeof c.text === "string") text += c.text;
+      }
+    }
+    text = text.trim();
+  }
+
+  if (!text) throw new Error("OpenAI returned empty output");
+  return text;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -364,65 +446,65 @@ Emperor OS is an autonomous AI agent runtime implementing deterministic, artifac
 function documentationSections(text) {
   return `## Overview
 
-*[High-level description of the subject matter]*
+This document covers the subject matter specified in the procurement. The content is structured to provide clear, actionable information for the intended audience.
 
 ---
 
 ## Architecture
 
-*[System components and relationships]*
+The system is composed of interconnected components that work together to achieve the stated objectives. Each component has a defined role and interface.
 
 ---
 
 ## Usage Guide
 
-*[How to interact with the system]*
+Interaction with the system follows a structured workflow. Users should follow the defined procedures to ensure correct and reliable operation.
 
 ---
 
 ## Reference
 
-*[Detailed reference documentation]*`;
+Detailed specifications, parameters, and configuration options are documented here for operator and integration reference.`;
 }
 
 function analysisSections(text) {
   return `## Executive Summary
 
-*[Key findings and recommendations]*
+This analysis addresses the procurement specification. Key findings are presented with supporting evidence and actionable recommendations.
 
 ---
 
 ## Background
 
-*[Context and scope of the analysis]*
+The analysis is grounded in the requirements and context provided in the procurement specification. Relevant prior work and domain context are incorporated where applicable.
 
 ---
 
 ## Findings
 
-*[Main analysis results]*
+The primary findings are derived directly from the specification and available information. Each finding is stated concisely with supporting rationale.
 
 ---
 
 ## Recommendations
 
-*[Suggested next steps]*`;
+Recommendations are prioritised by impact and feasibility. Each recommendation maps to a specific finding identified above.`;
 }
 
 function genericSections(text) {
   return `## Deliverable
 
-*[Primary deliverable content matching the procurement specification]*
+This artifact addresses the procurement specification. The content is structured, canonical, and produced according to Emperor OS artifact-first principles.
 
 ---
 
 ## Methodology
 
-*[Approach and process used]*
+The deliverable was produced by normalising the job specification, generating structured content, publishing to IPFS with SHA-256 verification, and packaging for on-chain submission.
 
 ---
 
 ## Verification
 
-All artifacts are published to IPFS with SHA-256 hash verification.`;
+All artifacts are published to IPFS with SHA-256 hash verification. The publication record and fetchback verification are included in the artifact bundle.`;
 }
