@@ -153,10 +153,9 @@ All new Prime modules live under `.openclaw/workspace/agent/`:
         └── stepping_stone_trial.json
 
 .openclaw/workspace/archive/        ← Capability archive
-├── index.json                      ← Searchable index of primitives
-└── primitives/
-    └── <id>/
-        └── primitive.json
+├── index.json                      ← Searchable index of archive items
+└── items/
+    └── <id>.json                   ← Canonical extracted stepping-stone payload
 ```
 
 ---

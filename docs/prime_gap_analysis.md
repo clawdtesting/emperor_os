@@ -3,6 +3,22 @@ _Audit date: 2026-04-01 | Branch: claude/prime-operational-upgrade-9vzxt_
 
 ---
 
+> ⚠️ **Historical audit notice (updated 2026-04-03):**
+> This file records a point-in-time pre-integration audit.
+> Several gaps listed below were intentionally closed in subsequent implementation passes.
+
+## Resolved Since This Audit
+
+- Prime read layer now exists (`agent/prime-client.js`, `agent/prime-inspector.js`).
+- Prime phase model + deterministic next-action engine now exist (`agent/prime-phase-model.js`, `agent/prime-next-action.js`).
+- Prime persistence now exists per procurement (`agent/prime-state.js`).
+- Prime artifact bundle schemas are implemented (`agent/prime-artifact-builder.js`).
+- Prime unsigned tx builders are implemented (`agent/prime-tx-builder.js`).
+- Retrieval-before-solve and archive writeback are implemented (`agent/prime-retrieval.js`).
+- Prime operator docs now exist (`docs/prime_operator_runbook.md`, `docs/prime_unsigned_handoff_spec.md`, `docs/prime_phase_model.md`).
+
+---
+
 ## Capability Gap Table
 
 | Capability | Exists | Partial | Missing | Notes |
@@ -33,8 +49,8 @@ _Audit date: 2026-04-01 | Branch: claude/prime-operational-upgrade-9vzxt_
 | Restart-safe procurement resume | | | ✓ | Not implemented. State is non-atomic flat file. |
 | Selection detection / fallback promotion | | | ✓ | No winner detection or fallback logic. |
 | Selection-to-execution bridge | | | ✓ | No bridge from Prime procurement → AGIJobManager v1 completion flow. |
-| Retrieval-before-solve for Prime phases | | | ✓ | No retrieval system. |
-| Archive stepping-stone writeback | | | ✓ | No archive layer. |
+| Retrieval-before-solve for Prime phases | ✓ | | | **Resolved post-audit** (`agent/prime-retrieval.js`). |
+| Archive stepping-stone writeback | ✓ | | | **Resolved post-audit** (`agent/prime-retrieval.js`). |
 | Publication verification (fetch-back) | ✓ | | | `ipfs-verify.js` + `validate.js` exist for v1. Not wired into Prime phases. |
 | Operator runbook — Prime end-to-end | | | ✓ | No Prime-specific runbook. |
 | Operator runbook — unsigned handoff spec | | | ✓ | Not written. |

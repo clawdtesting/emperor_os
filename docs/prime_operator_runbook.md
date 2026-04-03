@@ -16,8 +16,9 @@ export AGENT_MERKLE_PROOF='["0x...","0x..."]'  # JSON array of bytes32
 export PINATA_JWT="..."               # for IPFS pinning
 export AGI_ALPHA_MCP="https://..."   # MCP endpoint
 
-# Working directory
-export WORKSPACE_ROOT="/home/ubuntu/emperor_OS/.openclaw/workspace"
+# Working directory (set to your runtime workspace root)
+# Example:
+export WORKSPACE_ROOT="$HOME/.openclaw/workspace"
 ```
 
 **Never set `AGENT_PRIVATE_KEY` in any workspace module.**  

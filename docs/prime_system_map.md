@@ -3,6 +3,24 @@ _Audit date: 2026-04-01 | Branch: claude/prime-operational-upgrade-9vzxt_
 
 ---
 
+> ⚠️ **Historical snapshot notice (updated 2026-04-03):**
+> This document is an audit snapshot from before the Prime substrate was fully wired.
+> Sections below are kept for forensic context, but several "missing" claims are now resolved.
+> See **Current-State Corrections** immediately below for the live topology.
+
+## Current-State Corrections (Live)
+
+| Area | Current state |
+|---|---|
+| Prime ABI | `agent/abi/AGIJobDiscoveryPrime.json` exists and is used by Prime client modules. |
+| Prime per-proc state | `agent/prime-state.js` persists per-procurement state at `artifacts/proc_<id>/state.json`. |
+| Prime retrieval/archive | `agent/prime-retrieval.js` writes/reads `archive/index.json` and `archive/items/<id>.json`. |
+| Prime artifact schemas | Implemented via `agent/prime-artifact-builder.js` bundles (inspection/application/reveal/finalist/trial/completion). |
+| Prime orchestration | `agent/prime/prime-orchestrator.js` + `agent/prime-monitor.js` + `agent/prime-next-action.js` provide deterministic phase progression. |
+| Unsigned Prime tx builders | Implemented in `agent/prime-tx-builder.js`; runtime remains unsigned-only. |
+
+---
+
 ## 1. Repository Layout
 
 ```
@@ -59,7 +77,7 @@ emperor_OS/
 | `.openclaw/workspace/agent/abi/ERC20.json` | ERC20 token ABI | Present |
 | `.openclaw/workspace/agent/abi-registry.js` | ABI loader + interface cache | Present |
 | `agi-agent/procurement_agent.js` lines 34–43 | Inline ABI2 fragments only | **Inline / not registered** |
-| `.openclaw/workspace/agent/abi/AGIJobDiscoveryPrime.json` | Full Prime ABI | **MISSING** |
+| `.openclaw/workspace/agent/abi/AGIJobDiscoveryPrime.json` | Full Prime ABI | **Present (historical row previously marked missing)** |
 
 ### 2.4 Artifact Handling
 | File | What it does |
@@ -85,7 +103,7 @@ artifacts/job_<jobId>/
   unsignedCompletion.json
 ```
 
-**Prime artifact schema:** Not yet defined in workspace. Placeholder exists in `agi-agent/data/`.
+**Prime artifact schema:** Implemented in current code via `agent/prime-artifact-builder.js` bundles (historical note above is superseded).
 
 ### 2.5 State Persistence
 | File | What it does |
