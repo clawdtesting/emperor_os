@@ -68,6 +68,35 @@ const PIPELINE_META = {
 
 app.get('/health', (_, res) => res.json({ ok: true, endpoint: MCP_ENDPOINT }))
 
+// ── ENS reverse lookup proxy (avoids browser CORS / rate-limits) ──────────────
+app.get('/api/ens/:address', async (req, res) => {
+  const address = req.params.address.toLowerCase()
+  // ensideas
+  try {
+    const r = await fetch(`https://api.ensideas.com/ens/resolve/${address}`, {
+      signal: AbortSignal.timeout(6000),
+    })
+    if (r.ok) {
+      const d = await r.json()
+      if (d?.name) return res.json({ name: d.name })
+    }
+  } catch {}
+  // web3.bio fallback
+  try {
+    const r = await fetch(`https://api.web3.bio/profile/${address}`, {
+      signal: AbortSignal.timeout(6000),
+    })
+    if (r.ok) {
+      const d = await r.json()
+      if (Array.isArray(d)) {
+        const ens = d.find(p => p.platform === 'ENS')
+        if (ens?.identity) return res.json({ name: ens.identity })
+      }
+    }
+  } catch {}
+  res.json({ name: null })
+})
+
 app.get('/api/agent', (_, res) => res.json({
   ens:   process.env.ENS_SUBDOMAIN || null,
   chain: 'Base Sepolia',
