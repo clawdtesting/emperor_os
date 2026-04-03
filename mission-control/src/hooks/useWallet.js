@@ -93,6 +93,7 @@ export function useWallet() {
       const active = accounts?.[0] || null
       setAccount(active)
       setChainId(chain || null)
+      setEnsName(null)
       resolveEns(active).then(setEnsName)
       await refreshBalances(active)
     } catch (e) {
@@ -116,6 +117,7 @@ export function useWallet() {
       const active = accounts?.[0] || null
       setAccount(active)
       setChainId(chain || null)
+      setEnsName(null)
       resolveEns(active).then(setEnsName)
       await refreshBalances(active)
       setStatus('connected')
