@@ -29,12 +29,12 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: agent/package.json
+          cache-dependency-path: AgiJobManager/package.json
 
       - name: Install dependencies
         run: npm install
-        working-directory: agent
+        working-directory: AgiJobManager
 
       - name: Run agent loop
         run: node loop.js
-        working-directory: agent
+        working-directory: AgiJobManager
