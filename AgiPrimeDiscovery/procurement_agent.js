@@ -517,6 +517,8 @@ async function poll(state) {
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
+export { poll, loadState, saveState }
+
 export function start() {
   if (!process.env.AGENT_PRIVATE_KEY) { console.error('[procurement] AGENT_PRIVATE_KEY not set'); return }
   if (!process.env.ETH_RPC_URL)       { console.error('[procurement] ETH_RPC_URL not set'); return }
