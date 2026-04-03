@@ -20,8 +20,8 @@ jobs:
 
       - name: Install deps
         run: npm install ethers dotenv
-        working-directory: agi-agent
+        working-directory: AgiPrimeDiscovery
 
       - name: Register agent identity
         run: node register_agent.js
-        working-directory: agi-agent
+        working-directory: AgiPrimeDiscovery
