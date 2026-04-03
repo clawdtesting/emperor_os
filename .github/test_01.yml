@@ -1,0 +1,35 @@
+name: test_01 — Smart Contract Explanation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_MODEL:   claude-sonnet-4-6
+      PINATA_JWT:        ${{ secrets.PINATA_JWT }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run test_01 flow
+        run: node tests/test_01/run.js
+
+      - name: Commit results
+        run: |
+          git config user.name "emperor-agent"
+          git config user.email "agent@empireos"
+          git add tests/test_01/results.json tests/test_01/deliverable.md
+          git diff --cached --quiet || git commit -m "test_01: IPFS results"
+          git push origin main

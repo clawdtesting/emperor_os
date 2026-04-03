@@ -1,0 +1,27 @@
+name: Register Agent Identity
+
+on:
+  workflow_dispatch:
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+
+    env:
+      ETH_RPC_URL:       ${{ secrets.ETH_RPC_URL }}
+      AGENT_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm install ethers dotenv
+        working-directory: agi-agent
+
+      - name: Register agent identity
+        run: node register_agent.js
+        working-directory: agi-agent

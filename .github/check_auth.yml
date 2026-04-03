@@ -1,0 +1,27 @@
+name: Check Agent Auth
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      ETH_RPC_URL:       ${{ secrets.ETH_RPC_URL }}
+      AGENT_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
+      AGENT_SUBDOMAIN:   ${{ secrets.ENS_SUBDOMAIN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm install ethers dotenv
+        working-directory: agi-agent
+
+      - name: Run check_auth
+        run: node check_auth.js
+        working-directory: agi-agent
