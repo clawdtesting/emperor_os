@@ -1,40 +1,20 @@
 // prime-retrieval.js
-// Retrieval-before-solve scaffolding for Prime procurement phases.
-//
-// Implements the capability flywheel:
-//   "Stepping Stone Extraction → Capability Archive Expansion → Faster/Better Future Solutions"
-//
-// Before any serious phase (application, trial, completion):
-//   1. Search archive for similar prior artifacts
-//   2. Write a retrieval_packet.json documenting what was found
-//   3. Record use/adapt/reject decision
-//
-// After phase completion:
-//   4. Write a stepping_stone.json extracting reusable primitives
-//
-// Archive location: .openclaw/workspace/archive/
-// Per-procurement retrieval: artifacts/proc_<id>/retrieval/
-//
-// SAFETY CONTRACT: File I/O only. No signing. No network calls.
+// Shared retrieval/extraction flywheel for Prime + v1 execution.
+// SAFETY CONTRACT: File I/O only. No signing. No broadcasting.
 
 import { promises as fs } from "fs";
 import path from "path";
-import crypto from "crypto";
 import { CONFIG } from "./config.js";
 import { ensureProcSubdir, writeJson, readJson } from "./prime-state.js";
 
-// ── Archive paths ─────────────────────────────────────────────────────────────
-
-export const ARCHIVE_ROOT      = path.join(CONFIG.WORKSPACE_ROOT, "archive");
-export const ARCHIVE_INDEX     = path.join(ARCHIVE_ROOT, "index.json");
-export const ARCHIVE_PRIMITIVES = path.join(ARCHIVE_ROOT, "primitives");
+export const ARCHIVE_ROOT = path.join(CONFIG.WORKSPACE_ROOT, "archive");
+export const ARCHIVE_INDEX = path.join(ARCHIVE_ROOT, "index.json");
+export const ARCHIVE_ITEMS = path.join(ARCHIVE_ROOT, "items");
 
 async function ensureArchive() {
-  await fs.mkdir(ARCHIVE_ROOT,      { recursive: true });
-  await fs.mkdir(ARCHIVE_PRIMITIVES, { recursive: true });
+  await fs.mkdir(ARCHIVE_ROOT, { recursive: true });
+  await fs.mkdir(ARCHIVE_ITEMS, { recursive: true });
 }
-
-// ── Archive index ─────────────────────────────────────────────────────────────
 
 async function loadArchiveIndex() {
   const data = await readJson(ARCHIVE_INDEX, null);
@@ -45,105 +25,91 @@ async function saveArchiveIndex(index) {
   await writeJson(ARCHIVE_INDEX, { ...index, updatedAt: new Date().toISOString() });
 }
 
-// ── Retrieval search ──────────────────────────────────────────────────────────
+function scoreArchiveEntry(entry, keywords = []) {
+  const keywordList = Array.isArray(keywords) ? keywords : [];
+  const text = [
+    entry.title ?? "",
+    entry.summary ?? "",
+    ...(entry.tags ?? []),
+    entry.phase ?? "",
+    entry.domain ?? "",
+    entry.deliverableType ?? "",
+  ].join(" ").toLowerCase();
 
-/**
- * Searches the archive for artifacts relevant to a given phase/query.
- * Uses simple keyword matching against indexed entries.
- *
- * @param {object} opts
- * @param {string} opts.phase       - "application" | "trial" | "completion"
- * @param {string[]} opts.keywords  - terms to match
- * @param {number} [opts.maxResults]
- * @returns {Promise<ArchiveEntry[]>}
- */
+  const keywordScore = keywordList.reduce((acc, kw) => (
+    text.includes(String(kw).toLowerCase()) ? acc + 1 : acc
+  ), 0);
+
+  const acceptedBoost = entry.wasAccepted === true ? 5 : 0;
+  const qualityScore = Number.isFinite(entry.qualityScore)
+    ? Number(entry.qualityScore)
+    : (Number.isFinite(entry.outcomeScore) ? Number(entry.outcomeScore) : 0);
+  const qualityBoost = Math.max(0, qualityScore) * 2;
+
+  return {
+    keywordScore,
+    rankingScore: keywordScore + acceptedBoost + qualityBoost,
+  };
+}
+
 export async function searchArchive({ phase, keywords, maxResults = 5 }) {
   await ensureArchive();
   const index = await loadArchiveIndex();
-  if (!index.entries || index.entries.length === 0) return [];
+  if (!index.entries?.length) return [];
 
-  const kw = keywords.map(k => k.toLowerCase());
+  const filtered = index.entries
+    .filter((e) => !phase || e.phase === phase || e.tags?.includes(phase));
 
-  const scored = index.entries
-    .filter(e => !phase || e.phase === phase || e.tags?.includes(phase))
-    .map(entry => {
-      const text = [
-        entry.title ?? "",
-        entry.summary ?? "",
-        ...(entry.tags ?? []),
-        entry.phase ?? "",
-      ].join(" ").toLowerCase();
-
-      const score = kw.reduce((acc, k) => acc + (text.includes(k) ? 1 : 0), 0);
-      return { ...entry, _score: score };
+  const ranked = filtered
+    .map((entry) => {
+      const { keywordScore, rankingScore } = scoreArchiveEntry(entry, keywords);
+      return { ...entry, _keywordScore: keywordScore, _score: rankingScore };
     })
-    .filter(e => e._score > 0)
+    .filter((entry) => entry._keywordScore > 0 || entry.wasAccepted === true || Number(entry.qualityScore ?? 0) > 0)
     .sort((a, b) => b._score - a._score)
     .slice(0, maxResults);
 
-  return scored;
+  return ranked;
 }
 
-// ── Retrieval packet ──────────────────────────────────────────────────────────
-
-/**
- * Creates a retrieval_packet.json for a phase.
- * Records what was searched and what was found.
- *
- * @param {object} opts
- * @param {string|number} opts.procurementId
- * @param {string} opts.phase
- * @param {string[]} opts.searchKeywords
- * @returns {Promise<RetrievalPacket>}
- */
-export async function createRetrievalPacket({ procurementId, phase, searchKeywords }) {
+export async function createRetrievalPacket({ procurementId, phase, keywords }) {
   const dir = await ensureProcSubdir(procurementId, "retrieval");
+  const cleanedKeywords = (keywords ?? []).map((k) => String(k).toLowerCase()).filter(Boolean);
 
-  const results = await searchArchive({ phase, keywords: searchKeywords });
-
-  const mappedResults = results.map(r => ({
-    archiveId:   r.id,
-    title:       r.title,
-    summary:     r.summary,
-    phase:       r.phase,
-    tags:        r.tags ?? [],
+  const results = await searchArchive({ phase, keywords: cleanedKeywords });
+  const items = results.map((r) => ({
+    archiveId: r.id,
+    title: r.title,
+    summary: r.summary,
+    phase: r.phase,
+    tags: r.tags ?? [],
     artifactPath: r.artifactPath ?? null,
+    sourceArtifactPath: r.sourceArtifactPath ?? null,
+    qualityScore: r.qualityScore ?? r.outcomeScore ?? null,
+    wasAccepted: r.wasAccepted ?? null,
     relevanceScore: r._score,
   }));
 
   const packet = {
-    schema:         "emperor-os/retrieval-packet/v1",
-    procurementId:  String(procurementId),
+    schema: "emperor-os/retrieval-packet/v2",
+    procurementId: String(procurementId),
     phase,
-    searchKeywords,
-    searchedAt:     new Date().toISOString(),
-    resultsFound:   mappedResults.length,
-    results:        mappedResults,
-    // Compatibility alias: legacy callers may still read `items`.
-    items:          mappedResults,
-    useDecision:    null,  // filled in by writeRetrievalDecision()
-    decisionNote:   null,
-    decisionAt:     null,
+    keywords: cleanedKeywords,
+    searchedAt: new Date().toISOString(),
+    resultsFound: items.length,
+    items,
+    results: items,
+    useDecision: null,
+    decisionNote: null,
+    decisionAt: null,
   };
 
   await writeJson(path.join(dir, `retrieval_packet_${phase}.json`), packet);
-
   return packet;
 }
 
-// ── Use/adapt/reject decision ─────────────────────────────────────────────────
-
-/**
- * Records the operator/system decision about retrieved artifacts.
- * @param {object} opts
- * @param {string|number} opts.procurementId
- * @param {string} opts.phase
- * @param {"use"|"adapt"|"reject"|"none"} opts.decision
- * @param {string} [opts.selectedArchiveId]  - which archive entry was used/adapted
- * @param {string} [opts.note]
- */
 export async function writeRetrievalDecision({ procurementId, phase, decision, selectedArchiveId, note }) {
-  const dir    = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "retrieval");
+  const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "retrieval");
   const pktPath = path.join(dir, `retrieval_packet_${phase}.json`);
 
   const existing = await readJson(pktPath, null);
@@ -151,219 +117,190 @@ export async function writeRetrievalDecision({ procurementId, phase, decision, s
 
   const updated = {
     ...existing,
-    useDecision:       decision,
+    useDecision: decision,
     selectedArchiveId: selectedArchiveId ?? null,
-    decisionNote:      note ?? null,
-    decisionAt:        new Date().toISOString(),
+    decisionNote: note ?? null,
+    decisionAt: new Date().toISOString(),
   };
 
   await writeJson(pktPath, updated);
 }
 
-// ── Stepping stone extraction ─────────────────────────────────────────────────
-
-/**
- * After completing a phase, extracts a reusable stepping stone for the archive.
- *
- * @param {object} opts
- * @param {string|number} opts.procurementId
- * @param {string} opts.phase
- * @param {object} opts.primitive - the extracted primitive content
- * @param {string} opts.title
- * @param {string} opts.summary
- * @param {string[]} opts.tags
- */
-export async function extractSteppingStone({ procurementId, phase, primitive, title, summary, tags }) {
+export async function extractSteppingStone({
+  source,
+  procurementId,
+  jobId,
+  phase,
+  artifactPath,
+  metadata,
+  primitive,
+  title,
+  summary,
+  tags,
+}) {
   await ensureArchive();
 
-  const id  = `proc_${procurementId}_${phase}_${Date.now()}`;
-  const dir = path.join(ARCHIVE_PRIMITIVES, id);
-  await fs.mkdir(dir, { recursive: true });
+  const effectiveSource = source ?? (String(procurementId ?? "").startsWith("job_") ? "v1" : "prime");
+  const effectiveProcurementId = procurementId ?? (jobId ? `job_${jobId}` : null);
+  if (!effectiveProcurementId) {
+    throw new Error("extractSteppingStone requires procurementId or jobId");
+  }
 
-  // Write the primitive content
-  const artifactPath = path.join(dir, "primitive.json");
-  await writeJson(artifactPath, {
-    schema:        "emperor-os/archive-primitive/v1",
+  const safePhase = String(phase ?? "unknown").replace(/[^a-z0-9_-]/gi, "_");
+  const id = `${effectiveSource}_${effectiveProcurementId}_${safePhase}_${Date.now()}`;
+
+  const derivedArtifactPath = artifactPath ?? primitive?.artifactPath ?? null;
+  const payload = {
+    schema: "emperor-os/archive-item/v2",
     id,
-    procurementId: String(procurementId),
+    source: effectiveSource,
+    procurementId: String(effectiveProcurementId),
+    jobId: jobId ?? primitive?.jobId ?? null,
     phase,
-    title,
-    summary,
-    tags,
-    content:       primitive,
-    sourceArtifactPath: primitive?.artifactPath ?? null,
-    outcome: {
-      status: primitive?.outcomeStatus ?? null,
-      score:  primitive?.outcomeScore ?? null,
-    },
-    extractedAt:   new Date().toISOString(),
-  });
+    title: title ?? `Artifact ${effectiveProcurementId}`,
+    summary: summary ?? "",
+    tags: tags ?? [],
+    domain: metadata?.domain ?? primitive?.domain ?? null,
+    deliverableType: metadata?.deliverableType ?? primitive?.deliverableType ?? null,
+    content: primitive ?? {},
+    artifactPath: path.join(ARCHIVE_ITEMS, `${id}.json`),
+    sourceArtifactPath: derivedArtifactPath,
+    qualityScore: metadata?.qualityScore ?? primitive?.outcomeScore ?? null,
+    wasAccepted: metadata?.wasAccepted ?? null,
+    outcomeStatus: primitive?.outcomeStatus ?? null,
+    outcomeScore: primitive?.outcomeScore ?? null,
+    timestamp: metadata?.timestamp ?? new Date().toISOString(),
+    extractedAt: new Date().toISOString(),
+  };
 
-  // Write stepping stone record in proc retrieval dir
-  const retrievalDir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "retrieval");
+  const archiveItemPath = path.join(ARCHIVE_ITEMS, `${id}.json`);
+  await writeJson(archiveItemPath, payload);
+
+  const retrievalDir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${effectiveProcurementId}`, "retrieval");
   await fs.mkdir(retrievalDir, { recursive: true });
-  await writeJson(path.join(retrievalDir, `stepping_stone_${phase}.json`), {
-    archiveId:    id,
+  await writeJson(path.join(retrievalDir, `stepping_stone_${safePhase}.json`), {
+    archiveId: id,
+    source: effectiveSource,
     phase,
-    title,
-    summary,
-    tags,
-    extractedAt:  new Date().toISOString(),
+    title: payload.title,
+    summary: payload.summary,
+    tags: payload.tags,
+    artifactPath: archiveItemPath,
+    sourceArtifactPath: derivedArtifactPath,
+    extractedAt: payload.extractedAt,
   });
 
-  // Update archive index
   const index = await loadArchiveIndex();
   index.entries = index.entries ?? [];
   index.entries.push({
     id,
+    source: effectiveSource,
+    procurementId: String(effectiveProcurementId),
+    jobId: payload.jobId,
     phase,
-    title,
-    summary,
-    tags: tags ?? [],
-    artifactPath,
-    sourceArtifactPath: primitive?.artifactPath ?? null,
-    outcomeStatus: primitive?.outcomeStatus ?? null,
-    outcomeScore: primitive?.outcomeScore ?? null,
+    title: payload.title,
+    summary: payload.summary,
+    tags: payload.tags,
+    domain: payload.domain,
+    deliverableType: payload.deliverableType,
+    artifactPath: archiveItemPath,
+    sourceArtifactPath: derivedArtifactPath,
+    qualityScore: payload.qualityScore,
+    wasAccepted: payload.wasAccepted,
+    outcomeStatus: payload.outcomeStatus,
+    outcomeScore: payload.outcomeScore,
     addedAt: new Date().toISOString(),
   });
   await saveArchiveIndex(index);
 
-  log(`Stepping stone extracted: ${id} — "${title}"`);
+  log(`Stepping stone extracted: ${id} — "${payload.title}"`);
   return id;
 }
 
-// ── Bulk stepping stone templates (Prime-specific primitives to seed archive) ──
+export async function updateArchiveOutcome({ archiveId, qualityScore, wasAccepted, outcomeStatus }) {
+  await ensureArchive();
+  const index = await loadArchiveIndex();
 
-/**
- * Seeds the archive with canonical Prime primitives if it is empty.
- * These serve as templates that future procurements can adapt.
- * Only called once at initialization.
- */
+  let updated = false;
+  index.entries = (index.entries ?? []).map((entry) => {
+    if (entry.id !== archiveId) return entry;
+    updated = true;
+    return {
+      ...entry,
+      qualityScore: Number.isFinite(qualityScore) ? qualityScore : entry.qualityScore ?? null,
+      wasAccepted: typeof wasAccepted === "boolean" ? wasAccepted : entry.wasAccepted ?? null,
+      outcomeStatus: outcomeStatus ?? entry.outcomeStatus ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+  if (!updated) return false;
+  await saveArchiveIndex(index);
+
+  const itemPath = path.join(ARCHIVE_ITEMS, `${archiveId}.json`);
+  const item = await readJson(itemPath, null);
+  if (item) {
+    await writeJson(itemPath, {
+      ...item,
+      qualityScore: Number.isFinite(qualityScore) ? qualityScore : item.qualityScore ?? null,
+      wasAccepted: typeof wasAccepted === "boolean" ? wasAccepted : item.wasAccepted ?? null,
+      outcomeStatus: outcomeStatus ?? item.outcomeStatus ?? null,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  return true;
+}
+
 export async function seedPrimeArchive() {
   await ensureArchive();
   const index = await loadArchiveIndex();
-  if (index.entries && index.entries.length > 0) return; // already seeded
+  if (index.entries?.length > 0) return;
 
   const templates = [
     {
-      phase:   "application",
-      title:   "Prime Application Template",
-      summary: "Canonical structure for Prime procurement application markdown",
-      tags:    ["application", "template", "markdown", "prime"],
-      content: {
-        sections: [
-          "## Agent Identity",
-          "## Capability Fit",
-          "## Proposed Methodology",
-          "## Deliverable Structure",
-          "## Timeline Estimate",
-          "## Quality Assurance",
-        ],
-        notes: "Adapt to specific job requirements. Be specific, not generic.",
-      },
+      phase: "application",
+      title: "Prime Application Structure",
+      summary: "Concrete markdown structure for procurement applications.",
+      tags: ["application", "prime", "structure"],
+      content: { sections: ["Summary", "Approach", "Capabilities", "Delivery Method"] },
     },
     {
-      phase:   "commit",
-      title:   "Commitment Hash Pattern",
-      summary: "keccak256(procurementId, agentAddress, applicationURI, salt) — canonical Prime commitment scheme",
-      tags:    ["commit", "hash", "keccak256", "salt", "prime"],
-      content: {
-        formula:   "keccak256(abi.encodePacked(uint256 procurementId, address agent, string appURI, bytes32 salt))",
-        saltNotes: "Generate with ethers.hexlify(ethers.randomBytes(32)). Store in commitment_material.json.",
-        warning:   "Salt must remain secret until reveal phase.",
-      },
-    },
-    {
-      phase:   "reveal",
-      title:   "Reveal Verification Pattern",
-      summary: "Re-compute commitment hash and compare with on-chain stored commitment before reveal",
-      tags:    ["reveal", "verification", "commitment", "prime"],
-      content: {
-        steps: [
-          "Load salt and applicationURI from commitment_material.json",
-          "Re-compute commitment hash using same formula as commit",
-          "Fetch on-chain commitment from applicationView(procurementId, agentAddress).commitment",
-          "Assert re-computed hash === on-chain commitment",
-          "Only proceed with reveal if assertion passes",
-        ],
-      },
-    },
-    {
-      phase:   "trial",
-      title:   "Trial Artifact Bundle Template",
-      summary: "Canonical structure for Prime trial submission bundle",
-      tags:    ["trial", "template", "bundle", "prime"],
-      content: {
-        requiredFiles: [
-          "trial_artifact_manifest.json",
-          "publication_record.json",
-          "fetchback_verification.json",
-          "unsigned_submit_trial_tx.json",
-          "review_manifest.json",
-        ],
-        notes: "Always verify IPFS fetchback before building submit tx.",
-      },
-    },
-    {
-      phase:   "monitoring",
-      title:   "Prime Deadline Warning Thresholds",
-      summary: "Standard urgency thresholds for Prime deadline monitoring",
-      tags:    ["monitoring", "deadlines", "urgency", "prime"],
-      content: {
-        urgentThresholdSecs: 14400,  // 4 hours
-        warningThresholdSecs: 86400, // 24 hours
-        criticalThresholdSecs: 3600, // 1 hour
-        notes: "Check every 60s in monitor loop. Emit warnings to logs.",
-      },
-    },
-    {
-      phase:   "publication",
-      title:   "IPFS Publication Verification Pattern",
-      summary: "Canonical fetch-back verification flow for IPFS-published artifacts",
-      tags:    ["ipfs", "publication", "verification", "fetchback"],
-      content: {
-        steps: [
-          "Pin content to Pinata: get IpfsHash",
-          "Construct gateway URL: https://ipfs.io/ipfs/<hash>",
-          "Fetch from gateway with 30s timeout",
-          "Confirm HTTP 200 and content is non-empty",
-          "Optionally verify content hash matches original",
-          "Write fetchback_verification.json with verified=true/false",
-        ],
-      },
+      phase: "trial",
+      title: "Prime Trial Deliverable Structure",
+      summary: "Concrete trial format with findings, implementation plan, and verification notes.",
+      tags: ["trial", "prime", "structure"],
+      content: { sections: ["Context", "Plan", "Execution", "Verification"] },
     },
   ];
 
   for (const t of templates) {
-    const procId = "seed";
     await extractSteppingStone({
-      procurementId: procId,
-      phase:   t.phase,
+      source: "prime",
+      procurementId: "seed",
+      phase: t.phase,
       primitive: t.content,
-      title:   t.title,
+      title: t.title,
       summary: t.summary,
-      tags:    t.tags,
+      tags: t.tags,
+      metadata: { domain: "general", deliverableType: "template", timestamp: new Date().toISOString() },
     });
   }
-
-  log(`Archive seeded with ${templates.length} Prime primitive templates.`);
 }
 
-// ── Search keyword extraction ─────────────────────────────────────────────────
-
-/**
- * Derives search keywords from a job spec for archive retrieval.
- * Extracts meaningful domain terms, filtering stopwords and short tokens.
- *
- * @param {object|string} jobSpec
- * @returns {string[]}  up to 12 lowercase keyword strings
- */
 export function extractSearchKeywords(jobSpec) {
   if (!jobSpec) return [];
-  const text = typeof jobSpec === "string"
+
+  const title = typeof jobSpec === "object" ? (jobSpec.title ?? "") : "";
+  const deliverableType = typeof jobSpec === "object"
+    ? (jobSpec.deliverableType ?? jobSpec.category ?? "")
+    : "";
+  const specText = typeof jobSpec === "string"
     ? jobSpec
-    : [jobSpec.title, jobSpec.description, jobSpec.details, jobSpec.requirements, jobSpec.deliverables]
-        .filter(Boolean).join(" ");
+    : [jobSpec.description, jobSpec.details, jobSpec.requirements, jobSpec.deliverables, jobSpec.goal]
+        .filter(Boolean)
+        .join(" ");
+
+  const text = [title, deliverableType, specText].join(" ");
 
   const STOP = new Set([
     "the","a","an","in","of","to","and","or","for","with","that","this","is","are",
@@ -379,12 +316,12 @@ export function extractSearchKeywords(jobSpec) {
   const seen = new Set();
   const keywords = [];
   for (const raw of text.toLowerCase().split(/[^a-z0-9]+/)) {
-    if (raw.length >= 4 && !STOP.has(raw) && !seen.has(raw)) {
-      seen.add(raw);
-      keywords.push(raw);
-      if (keywords.length >= 12) break;
-    }
+    if (raw.length < 4 || STOP.has(raw) || seen.has(raw)) continue;
+    seen.add(raw);
+    keywords.push(raw);
+    if (keywords.length >= 12) break;
   }
+
   return keywords;
 }
 

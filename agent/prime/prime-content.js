@@ -130,8 +130,9 @@ export function generateApplicationMarkdown({
   const deliveryType = deriveDeliveryType(spec);
   const approach     = buildApproachStatement(spec, deliveryType);
 
-  const knowledgeSection = retrievalPacket?.results?.length > 0
-    ? "\n\n## Retrieved Context\n\n" + retrievalPacket.results
+  const retrievedItems = retrievalPacket?.items ?? retrievalPacket?.results ?? [];
+  const knowledgeSection = retrievedItems.length > 0
+    ? "\n\n## Retrieved Context\n\n" + retrievedItems
         .map(r => `**${r.title ?? r.archiveId}**: ${r.summary ?? ""}`)
         .join("\n\n")
     : "";
@@ -213,9 +214,10 @@ export function generateTrialMarkdown({
   const deliveryType = deriveDeliveryType(spec);
   const sections     = buildSections(spec, deliveryType);
 
-  const knowledgeSection = retrievalPacket?.results?.length > 0
+  const retrievedItems = retrievalPacket?.items ?? retrievalPacket?.results ?? [];
+  const knowledgeSection = retrievedItems.length > 0
     ? "---\n\n## Retrieved Protocol Context\n\n" +
-      retrievalPacket.results.map(r => `### ${r.title ?? r.archiveId}\n\n${r.summary ?? ""}\n`).join("\n")
+      retrievedItems.map(r => `### ${r.title ?? r.archiveId}\n\n${r.summary ?? ""}\n`).join("\n")
     : "";
 
   return `# ${title}
@@ -270,9 +272,10 @@ export async function draftWithLLM({ phase, procurementId, jobSpec, fitEvaluatio
     : [jobSpec?.title, jobSpec?.description, jobSpec?.details, jobSpec?.requirements, jobSpec?.deliverables]
         .filter(Boolean).join("\n\n");
 
-  const retrievedContext = retrievalPacket?.results?.length > 0
+  const retrievedItems = retrievalPacket?.items ?? retrievalPacket?.results ?? [];
+  const retrievedContext = retrievedItems.length > 0
     ? "\n\nRelevant prior work retrieved from archive:\n" +
-      retrievalPacket.results.slice(0, 3).map(r => `- ${r.title}: ${r.summary}`).join("\n")
+      retrievedItems.slice(0, 3).map(r => `- ${r.title}: ${r.summary}`).join("\n")
     : "";
 
   const systemPrompt = phase === "application"
@@ -325,6 +328,9 @@ export async function draftWithLLM({ phase, procurementId, jobSpec, fitEvaluatio
   }
 
   if (!text) throw new Error("OpenAI returned empty output");
+  if (/\*\[[^\]]{3,}\]\*/.test(text)) {
+    throw new Error("OpenAI output contains forbidden placeholder markers");
+  }
   return text;
 }
 

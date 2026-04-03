@@ -17,6 +17,28 @@ const FORBIDDEN_PATTERNS = [
 
 // Minimum non-placeholder characters required per required section.
 const MIN_SECTION_BODY_CHARS = 40;
+const MIN_SUBSTANTIVE_CHARS = 120;
+
+export function isSubstantive(text) {
+  const normalized = String(text ?? "").trim();
+  if (normalized.length < MIN_SUBSTANTIVE_CHARS) return false;
+  if (normalized.includes("*[")) return false;
+  return true;
+}
+
+function hasRepeatedFiller(text) {
+  const lines = String(text ?? "")
+    .split("\n")
+    .map((line) => line.trim().toLowerCase())
+    .filter((line) => line.length >= 20);
+  if (lines.length < 3) return false;
+
+  const counts = new Map();
+  for (const line of lines) {
+    counts.set(line, (counts.get(line) ?? 0) + 1);
+  }
+  return [...counts.values()].some((count) => count >= 3);
+}
 
 export function validateOutput(content, brief) {
   const errors = [];
@@ -29,6 +51,12 @@ export function validateOutput(content, brief) {
 
   if (normalized.length < CONFIG.MIN_ARTIFACT_CHARS) {
     errors.push(`content shorter than minimum threshold (${CONFIG.MIN_ARTIFACT_CHARS})`);
+  }
+  if (!isSubstantive(normalized)) {
+    errors.push("content is not substantive");
+  }
+  if (hasRepeatedFiller(normalized)) {
+    errors.push("content contains repeated filler");
   }
 
   if (!normalized.includes("##")) {
@@ -48,6 +76,9 @@ export function validateOutput(content, brief) {
     const stripped = afterHeading.replace(/\*\[[^\]]*\]\*/g, "").replace(/^#+.*/gm, "").trim();
     if (stripped.length < MIN_SECTION_BODY_CHARS) {
       errors.push(`section '${section}' has insufficient substantive content (${stripped.length} chars after stripping placeholders)`);
+    }
+    if (!isSubstantive(stripped)) {
+      errors.push(`section '${section}' is not substantive`);
     }
   }
 

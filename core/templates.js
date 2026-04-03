@@ -28,10 +28,11 @@ export async function loadTemplateSet(category) {
 
 export async function buildPrompt(brief, retrievalPacket = null) {
   const templates = await loadTemplateSet(brief.category);
-  const retrievedContext = retrievalPacket?.results?.length
+  const retrievedItems = retrievalPacket?.items ?? retrievalPacket?.results ?? [];
+  const retrievedContext = retrievedItems.length
     ? [
         "Retrieved capability context (archive hits):",
-        ...retrievalPacket.results.slice(0, 5).map((r, idx) =>
+        ...retrievedItems.slice(0, 5).map((r, idx) =>
           `${idx + 1}. ${r.title ?? r.archiveId}\n   Summary: ${r.summary ?? "n/a"}\n   Tags: ${(r.tags ?? []).join(", ")}`
         )
       ].join("\n")

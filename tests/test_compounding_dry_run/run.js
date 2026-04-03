@@ -18,8 +18,17 @@ async function main() {
 
   // Run 1: complete job creates an archive primitive.
   await retrievalMod.extractSteppingStone({
+    source: "v1",
     procurementId: "dryrun_1",
     phase: "analysis",
+    artifactPath: path.join(TMP_WORKSPACE, "artifacts", "job_1", "deliverable.md"),
+    metadata: {
+      domain: "protocol",
+      deliverableType: "analysis",
+      timestamp: new Date().toISOString(),
+      qualityScore: 0.92,
+      wasAccepted: true,
+    },
     primitive: {
       artifactPath: path.join(TMP_WORKSPACE, "artifacts", "job_1", "deliverable.md"),
       outcomeStatus: "validated",
@@ -41,8 +50,17 @@ async function main() {
   const retrievalPacket = await retrievalMod.createRetrievalPacket({
     procurementId: "dryrun_2",
     phase: "analysis",
-    searchKeywords: ["protocol", "architecture", "validator"],
+    keywords: ["protocol", "architecture", "validator"],
   });
+  const retrievalPacketPath = path.join(
+    TMP_WORKSPACE,
+    "artifacts",
+    "proc_dryrun_2",
+    "retrieval",
+    "retrieval_packet_analysis.json"
+  );
+  await fs.access(retrievalPacketPath);
+
   if (!retrievalPacket.results?.length) {
     throw new Error("second execution did not retrieve prior primitive");
   }
@@ -58,6 +76,9 @@ async function main() {
   });
   if (!trialMarkdown.includes("Retrieved Protocol Context")) {
     throw new Error("retrieved content was not injected into generated artifact");
+  }
+  if (!trialMarkdown.includes("Protocol architecture analysis template")) {
+    throw new Error("generated content did not include retrieved prior work pattern");
   }
 
   // Validation guard: placeholder-only section bodies should fail.
@@ -88,6 +109,7 @@ async function main() {
   console.log("dry-run OK");
   console.log(`archive entries: ${archiveIndex.entries.length}`);
   console.log(`retrieval results: ${retrievalPacket.results.length}`);
+  console.log(`retrieval packet: ${retrievalPacketPath}`);
 }
 
 main().catch((err) => {

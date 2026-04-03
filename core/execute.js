@@ -93,7 +93,7 @@ export async function execute() {
         retrievalPacket = await createRetrievalPacket({
           procurementId: `job_${job.jobId}`,
           phase: brief.category ?? "artifact-bundle",
-          searchKeywords: extractSearchKeywords({
+          keywords: extractSearchKeywords({
             title: brief.title,
             details: brief.goal,
             requirements: brief.required_sections,
@@ -127,8 +127,17 @@ export async function execute() {
       try {
         const title = brief.title ?? `Job ${job.jobId}`;
         await extractSteppingStone({
+          source: "v1",
           procurementId: `job_${job.jobId}`,
           phase:   brief.category ?? "artifact-bundle",
+          artifactPath: artifactPaths.deliverable,
+          metadata: {
+            domain: brief.category ?? "general",
+            deliverableType: brief.category ?? "artifact-bundle",
+            timestamp: new Date().toISOString(),
+            qualityScore: Number.isFinite(job.score) ? job.score : null,
+            wasAccepted: true,
+          },
           primitive: {
             jobId:           job.jobId,
             category:        brief.category,

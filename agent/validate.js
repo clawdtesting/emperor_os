@@ -12,6 +12,12 @@ const FORBIDDEN_PATTERNS = [
   /here'?s the final deliverable/i,
   /meta commentary/i
 ];
+const MIN_SUBSTANTIVE_CHARS = 120;
+
+export function isSubstantive(text) {
+  const normalized = String(text ?? "").trim();
+  return normalized.length >= MIN_SUBSTANTIVE_CHARS && !normalized.includes("*[");
+}
 
 export function validateOutput(content, brief) {
   const errors = [];
@@ -24,6 +30,12 @@ export function validateOutput(content, brief) {
 
   if (normalized.length < CONFIG.MIN_ARTIFACT_CHARS) {
     errors.push(`content shorter than minimum threshold (${CONFIG.MIN_ARTIFACT_CHARS})`);
+  }
+  if (!isSubstantive(normalized)) {
+    errors.push("content is not substantive");
+  }
+  if (/\*\[[^\]]{3,}\]\*/.test(normalized)) {
+    errors.push("content contains placeholder markers");
   }
 
   if (!normalized.includes("##")) {

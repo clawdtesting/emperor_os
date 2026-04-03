@@ -178,7 +178,7 @@ async function handleEvaluateFit(procurementId, procStruct, jobSpec) {
     retrievalPacket = await createRetrievalPacket({
       procurementId,
       phase:          "application",
-      searchKeywords: extractSearchKeywords(jobSpec),
+      keywords:       extractSearchKeywords(jobSpec),
     });
   } catch (err) {
     log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
@@ -223,7 +223,7 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
     retrievalPacket = await createRetrievalPacket({
       procurementId,
       phase:          "application",
-      searchKeywords: extractSearchKeywords(jobSpec),
+      keywords:       extractSearchKeywords(jobSpec),
     });
   } catch (err) {
     log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
@@ -235,11 +235,19 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
     null
   );
   let llmDraft = null;
-  try {
-    llmDraft = await draftWithLLM({ phase: "application", procurementId, jobSpec, fitEvaluation, retrievalPacket });
-    log(`#${procurementId}: LLM application draft produced (${llmDraft.length} chars)`);
-  } catch (err) {
-    log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
+  if ((state.llmCallsUsed ?? 0) < 1) {
+    try {
+      llmDraft = await draftWithLLM({ phase: "application", procurementId, jobSpec, fitEvaluation, retrievalPacket });
+      await setProcState(procurementId, {
+        llmCallsUsed: (state.llmCallsUsed ?? 0) + 1,
+        llmDraftedAt: new Date().toISOString(),
+      });
+      log(`#${procurementId}: LLM application draft produced (${llmDraft.length} chars)`);
+    } catch (err) {
+      log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
+    }
+  } else {
+    log(`#${procurementId}: LLM budget already consumed for this procurement; using deterministic template`);
   }
   const applicationMarkdown = generateApplicationMarkdown({
     procurementId,
@@ -293,8 +301,15 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
   try {
     const title = (typeof jobSpec === "object" ? jobSpec?.title : null) ?? `Procurement #${procurementId}`;
     await extractSteppingStone({
+      source:  "prime",
       procurementId,
       phase:   "application",
+      artifactPath: path.join(procSubdir(procurementId, "application"), "application_brief.md"),
+      metadata: {
+        domain: typeof jobSpec === "object" ? (jobSpec?.domain ?? jobSpec?.category ?? "general") : "general",
+        deliverableType: typeof jobSpec === "object" ? (jobSpec?.category ?? "application") : "application",
+        timestamp: new Date().toISOString(),
+      },
       primitive: {
         applicationURI,
         agentSubdomain:  AGENT_SUBDOMAIN,
@@ -566,7 +581,7 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
     retrievalPacket = await createRetrievalPacket({
       procurementId,
       phase:          "trial",
-      searchKeywords: extractSearchKeywords(jobSpec),
+      keywords:       extractSearchKeywords(jobSpec),
     });
   } catch (err) {
     log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
@@ -574,11 +589,19 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
 
   // Generate trial content — attempt LLM draft, fall back to template.
   let llmTrialDraft = null;
-  try {
-    llmTrialDraft = await draftWithLLM({ phase: "trial", procurementId, jobSpec, retrievalPacket });
-    log(`#${procurementId}: LLM trial draft produced (${llmTrialDraft.length} chars)`);
-  } catch (err) {
-    log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
+  if ((state.llmCallsUsed ?? 0) < 1) {
+    try {
+      llmTrialDraft = await draftWithLLM({ phase: "trial", procurementId, jobSpec, retrievalPacket });
+      await setProcState(procurementId, {
+        llmCallsUsed: (state.llmCallsUsed ?? 0) + 1,
+        llmDraftedAt: new Date().toISOString(),
+      });
+      log(`#${procurementId}: LLM trial draft produced (${llmTrialDraft.length} chars)`);
+    } catch (err) {
+      log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
+    }
+  } else {
+    log(`#${procurementId}: LLM budget already consumed for this procurement; using deterministic template`);
   }
   const trialMarkdown = generateTrialMarkdown({
     procurementId,
@@ -619,8 +642,15 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
     const title = (typeof jobSpec === "object" ? jobSpec?.title : null) ?? `Procurement #${procurementId}`;
     const deliverableType = (typeof jobSpec === "object" ? jobSpec?.category : null) ?? "artifact-bundle";
     await extractSteppingStone({
+      source:  "prime",
       procurementId,
       phase:   "trial",
+      artifactPath: path.join(procSubdir(procurementId, "trial"), "final.md"),
+      metadata: {
+        domain: typeof jobSpec === "object" ? (jobSpec?.domain ?? jobSpec?.category ?? "general") : "general",
+        deliverableType,
+        timestamp: new Date().toISOString(),
+      },
       primitive: {
         trialURI,
         deliverableType,
