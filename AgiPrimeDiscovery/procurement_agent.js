@@ -278,11 +278,13 @@ async function handleNewProcurement(state, procurementId, jobId) {
 
     if (!decision.shouldApply) {
       log(`#${procurementId} skip — ${decision.reason}`)
+      notify(`⚫ Procurement #${procurementId} skipped\nJob ${jobId} — ${decision.reason}`)
       state.seen_procurements.push(procurementId)
       return
     }
 
     log(`#${procurementId} applying — ${decision.reason}`)
+    notify(`🔍 Procurement #${procurementId} — applying\nJob ${jobId}: ${decision.reason}`)
 
     // Draft application
     const appMarkdown = await draftApplication(specContent, wallet().address)
@@ -303,6 +305,7 @@ async function handleNewProcurement(state, procurementId, jobId) {
     log(`#${procurementId} commitApplication tx: ${tx.hash}`)
     await tx.wait()
     log(`#${procurementId} commit confirmed`)
+    notify(`✅ Procurement #${procurementId} — commit confirmed\n🔗 ${applicationURI}\n⛓️ ${tx.hash}`)
 
     state.seen_procurements.push(procurementId)
     state.pending_reveals.push({ procurementId, applicationURI, salt, commitDeadline, revealDeadline })
@@ -331,6 +334,7 @@ async function checkPendingReveals(state) {
       log(`#${r.procurementId} revealApplication tx: ${tx.hash}`)
       await tx.wait()
       log(`#${r.procurementId} reveal confirmed`)
+      notify(`📣 Procurement #${r.procurementId} — reveal confirmed\n🔗 ${r.applicationURI}\n⛓️ ${tx.hash}`)
       state.pending_reveals = state.pending_reveals.filter(x => x.procurementId !== r.procurementId)
     } catch (e) {
       console.error(`[procurement] reveal #${r.procurementId}:`, e.message)
@@ -375,6 +379,7 @@ async function checkShortlists(state) {
       if (alreadyTracked) continue
 
       log(`#${procurementId} Emperor_OS is a finalist!`)
+      notify(`🏆 Procurement #${procurementId} — Emperor_OS is a FINALIST!\nAccepting and preparing trial...`)
 
       const p = await contract().procurements(BigInt(procurementId))
       const jobId = p.jobId.toString()
@@ -383,6 +388,7 @@ async function checkShortlists(state) {
       log(`#${procurementId} acceptFinalist tx: ${tx.hash}`)
       await tx.wait()
       log(`#${procurementId} acceptance confirmed`)
+      notify(`✅ Procurement #${procurementId} — finalist acceptance confirmed\n⛓️ ${tx.hash}`)
 
       // Fetch job spec URI to store for trial generation
       const specContent = await fetchJobSpec(jobId).catch(() => null)
@@ -428,6 +434,7 @@ async function checkPendingTrials(state) {
       log(`#${t.procurementId} submitTrial tx: ${tx.hash}`)
       await tx.wait()
       log(`#${t.procurementId} trial confirmed`)
+      notify(`🚀 Procurement #${t.procurementId} — trial submitted!\nJob ${t.jobId}\n🔗 ${trialURI}\n⛓️ ${tx.hash}`)
 
       state.pending_trials = state.pending_trials.filter(x => x.procurementId !== t.procurementId)
 
@@ -520,3 +527,17 @@ export function start() {
 
 function log(msg)         { console.log(`[procurement] ${msg}`) }
 function sleep(ms)        { return new Promise(r => setTimeout(r, ms)) }
+
+async function notify(msg) {
+  const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim()
+  const chat  = (process.env.TELEGRAM_CHAT_ID   || '').trim()
+  if (!token || !chat) return
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ chat_id: chat, text: msg, parse_mode: 'HTML' }),
+      signal:  AbortSignal.timeout(15_000),
+    })
+  } catch {}
+}
