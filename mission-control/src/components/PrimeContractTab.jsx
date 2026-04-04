@@ -205,25 +205,8 @@ export function PrimeContractTab({ wallet, jobs = [] }) {
     return jobs.find(j => String(j.jobId) === String(jobId)) || null
   }
 
-  async function refreshReadViews() {
-    setLoading(true)
-    setError(null)
-    try {
-      const entries = await Promise.all(READ_FUNCTIONS.map(async f => {
-        const raw = await rpcCall(f.sig)
-        return [f.key, decodeValue(raw, f.type)]
-      }))
-      setValues(Object.fromEntries(entries))
-    } catch (e) {
-      setError(e.message || 'Failed reading Prime contract')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function fetchNextAction() {
-    setError(null)
-    const id = Number(procurementId)
+  async function fetchNextActionForId(rawId) {
+    const id = Number(rawId)
     if (!Number.isFinite(id) || id < 0) {
       setError('Enter a valid procurement ID')
       setNextActionDesc('')
@@ -243,6 +226,27 @@ export function PrimeContractTab({ wallet, jobs = [] }) {
     } catch (e) {
       setError(e.message || 'Failed reading next action')
     }
+  }
+
+  async function refreshReadViews() {
+    setLoading(true)
+    setError(null)
+    try {
+      const entries = await Promise.all(READ_FUNCTIONS.map(async f => {
+        const raw = await rpcCall(f.sig)
+        return [f.key, decodeValue(raw, f.type)]
+      }))
+      setValues(Object.fromEntries(entries))
+    } catch (e) {
+      setError(e.message || 'Failed reading Prime contract')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function fetchNextAction() {
+    setError(null)
+    await fetchNextActionForId(procurementId)
   }
 
   async function scanTransaction() {
@@ -310,12 +314,24 @@ export function PrimeContractTab({ wallet, jobs = [] }) {
         txHash: log.transactionHash,
       })).sort((a, b) => b.blockNumber - a.blockNumber)
       setScanEvents(parsed)
+      if (parsed.length > 0) {
+        const latestProcurementId = parsed[0].procurementId
+        setProcurementId(latestProcurementId)
+        await fetchNextActionForId(latestProcurementId)
+      }
     } catch (e) {
       setError(e.message || 'Failed scanning recent premium events')
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!wallet?.providerAvailable) return
+    refreshReadViews()
+    scanRecentPremiumEvents()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet?.providerAvailable, wallet?.chainId])
 
   return (
     <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 space-y-4">
