@@ -81,6 +81,9 @@ import { activateBridge } from "../prime-execution-bridge.js";
 import { createRetrievalPacket, extractSteppingStone, extractSearchKeywords } from "../prime-retrieval.js";
 import { evaluateFit } from "./prime-evaluate.js";
 import { generateApplicationMarkdown, generateTrialMarkdown, publishAndVerify, draftWithLLM } from "./prime-content.js";
+import { runPrimePreSignChecks } from "../prime-presign-checks.js";
+import { ingestFinalizedOperatorReceipt } from "../prime-receipts.js";
+import { buildValidatorScoringPayloads, discoverValidatorAssignment } from "../prime-validator-engine.js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +101,26 @@ function log(msg) {
 
 function logError(msg, err) {
   console.error(`[prime-orchestrator] ${new Date().toISOString()} ERROR ${msg}: ${err?.message ?? err}`);
+}
+
+async function guardIdempotentStep(procurementId, stepKey, fingerprint) {
+  const state = await getProcState(procurementId);
+  const existing = state?.stepJournal?.[stepKey] ?? null;
+  if (existing?.fingerprint === fingerprint && existing?.status === "done") {
+    log(`#${procurementId}: replay guard hit for ${stepKey} (${fingerprint})`);
+    return false;
+  }
+  await setProcState(procurementId, {
+    stepJournal: {
+      ...(state?.stepJournal ?? {}),
+      [stepKey]: {
+        fingerprint,
+        status: "done",
+        at: new Date().toISOString(),
+      },
+    },
+  });
+  return true;
 }
 
 // ── Crash recovery ────────────────────────────────────────────────────────────
@@ -357,6 +380,9 @@ async function handleBuildCommitTx(procurementId, procStruct) {
     merkleProof:            MERKLE_PROOF,
     applicationArtifactPath: path.join(procSubdir(procurementId, "application"), "application_brief.md"),
   });
+  const didRun = await guardIdempotentStep(procurementId, "buildCommitTx", String(txPath));
+  if (!didRun) return false;
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
 
   await transitionProcStatus(procurementId, PROC_STATUS.COMMIT_READY, {
     canonicalPhase: toCanonicalPhase(PROC_STATUS.COMMIT_READY),
@@ -371,6 +397,7 @@ async function handleBuildCommitTx(procurementId, procStruct) {
 }
 
 async function handleWaitRevealWindow(procurementId, procStruct) {
+  await ingestFinalizedOperatorReceipt({ procurementId, action: "commitApplication" }).catch(() => {});
   // Detect if commit has landed on-chain since last check.
   if (!AGENT_ADDRESS) return false;
   const appView = await fetchApplicationView(procurementId, AGENT_ADDRESS);
@@ -439,6 +466,9 @@ async function handleBuildRevealTx(procurementId, procStruct) {
     salt:           state.commitmentSalt,
     applicationURI: state.applicationURI,
   });
+  const didRun = await guardIdempotentStep(procurementId, "buildRevealTx", String(txPath));
+  if (!didRun) return false;
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
 
   await transitionProcStatus(procurementId, PROC_STATUS.REVEAL_READY, {
     canonicalPhase: toCanonicalPhase(PROC_STATUS.REVEAL_READY),
@@ -452,6 +482,7 @@ async function handleBuildRevealTx(procurementId, procStruct) {
 }
 
 async function handleWaitShortlist(procurementId) {
+  await ingestFinalizedOperatorReceipt({ procurementId, action: "revealApplication" }).catch(() => {});
   // Monitor handles shortlist detection — when state.shortlisted is set by the
   // monitor, we detect that here and advance to FINALIST_ACCEPT_READY.
   const state = await getProcState(procurementId);
@@ -547,6 +578,9 @@ async function handleBuildFinalistTx(procurementId, procStruct) {
     procurementId,
     linkedJobId: state.linkedJobId,
   });
+  const didRun = await guardIdempotentStep(procurementId, "buildFinalistTx", String(txPath));
+  if (!didRun) return false;
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
 
   await transitionProcStatus(procurementId, PROC_STATUS.FINALIST_ACCEPT_READY, {
     canonicalPhase: toCanonicalPhase(PROC_STATUS.FINALIST_ACCEPT_READY),
@@ -704,6 +738,9 @@ async function handleBuildTrialTx(procurementId, procStruct) {
     linkedJobId: state.linkedJobId,
     trialURI:    state.trialURI,
   });
+  const didRun = await guardIdempotentStep(procurementId, "buildTrialTx", String(txPath));
+  if (!didRun) return false;
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
 
   await transitionProcStatus(procurementId, PROC_STATUS.TRIAL_READY, {
     canonicalPhase: toCanonicalPhase(PROC_STATUS.TRIAL_READY),
@@ -753,6 +790,9 @@ async function handleBuildCompletionTx(procurementId) {
     completionURI: state.completionURI,
     agentSubdomain: AGENT_SUBDOMAIN,
   });
+  const didRun = await guardIdempotentStep(procurementId, "buildCompletionTx", String(txPath));
+  if (!didRun) return false;
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
 
   const nextTxHandoffs = { ...(state.txHandoffs ?? {}), requestJobCompletion: txPath };
   await setProcState(procurementId, { txHandoffs: nextTxHandoffs });
@@ -769,11 +809,27 @@ async function handleBuildCompletionTx(procurementId) {
 }
 
 async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
-  const state = await getProcState(procurementId);
-  const payload = state?.validatorScoreCommitPayload;
+  let state = await getProcState(procurementId);
+  let payload = state?.validatorScoreCommitPayload;
   if (!payload?.preparedTx || !payload?.scoreCommitment) {
-    log(`#${procurementId}: validator score commit payload missing in state.validatorScoreCommitPayload`);
-    return false;
+    const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
+    if (!assignment.assigned) {
+      log(`#${procurementId}: validator assignment not confirmed; skipping score commit`);
+      await setProcState(procurementId, { validatorAssignment: assignment });
+      return false;
+    }
+    const generated = await buildValidatorScoringPayloads({
+      procurementId,
+      linkedJobId: state?.linkedJobId,
+      validatorAddress: AGENT_ADDRESS,
+    });
+    await setProcState(procurementId, {
+      validatorAssignment: assignment,
+      validatorScoreCommitPayload: generated.scoreCommitPayload,
+      validatorScoreRevealPayload: generated.scoreRevealPayload,
+    });
+    state = await getProcState(procurementId);
+    payload = state?.validatorScoreCommitPayload;
   }
   await writeValidatorScoreCommitBundle(procurementId, payload);
   const { path: txPath } = await buildValidatorScoreCommitTx({
@@ -782,6 +838,9 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
     preparedTx: payload.preparedTx,
     scoreCommitment: payload.scoreCommitment,
   });
+  const didRun = await guardIdempotentStep(procurementId, "buildValidatorScoreCommitTx", String(txPath));
+  if (!didRun) return false;
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
   await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY, {
     txHandoffs: { ...(state.txHandoffs ?? {}), scoreCommit: txPath },
   });
@@ -791,8 +850,21 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
 }
 
 async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
-  const state = await getProcState(procurementId);
-  const payload = state?.validatorScoreRevealPayload;
+  let state = await getProcState(procurementId);
+  let payload = state?.validatorScoreRevealPayload;
+  if (!payload?.preparedTx && state?.validatorScoreCommitPayload) {
+    const generated = await buildValidatorScoringPayloads({
+      procurementId,
+      linkedJobId: state?.linkedJobId,
+      validatorAddress: AGENT_ADDRESS,
+    });
+    await setProcState(procurementId, {
+      validatorScoreCommitPayload: generated.scoreCommitPayload,
+      validatorScoreRevealPayload: generated.scoreRevealPayload,
+    });
+    state = await getProcState(procurementId);
+    payload = state?.validatorScoreRevealPayload;
+  }
   if (!payload?.preparedTx) {
     log(`#${procurementId}: validator score reveal payload missing in state.validatorScoreRevealPayload`);
     return false;
@@ -805,6 +877,9 @@ async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
     scoreValue: payload.score,
     salt: payload.salt,
   });
+  const didRun = await guardIdempotentStep(procurementId, "buildValidatorScoreRevealTx", String(txPath));
+  if (!didRun) return false;
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
   await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY, {
     txHandoffs: { ...(state.txHandoffs ?? {}), scoreReveal: txPath },
   });
@@ -859,6 +934,7 @@ export async function orchestrateProcurement(procurementId) {
       }
       case "BUILD_TRIAL_TX":         await handleBuildTrialTx(procurementId, procStruct);          break;
       case "WAIT_SCORING":
+        await ingestFinalizedOperatorReceipt({ procurementId, action: "submitTrial" }).catch(() => {});
         // Detect if trial was submitted on-chain.
         if (AGENT_ADDRESS) {
           const appView = await fetchApplicationView(procurementId, AGENT_ADDRESS);

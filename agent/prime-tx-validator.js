@@ -6,16 +6,23 @@ import agiJobManagerAbi from "../core/AGIJobManager.json" with { type: "json" };
 
 const PRIME_IFACE = new ethers.Interface(primeAbi);
 const JOB_IFACE = new ethers.Interface(agiJobManagerAbi);
+function selectorOrNull(iface, fnName) {
+  try {
+    return iface.getFunction(fnName).selector.toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 const SELECTOR_ALLOWLIST = {
-  commitApplication: new Set([PRIME_IFACE.getFunction("commitApplication").selector.toLowerCase()]),
-  revealApplication: new Set([PRIME_IFACE.getFunction("revealApplication").selector.toLowerCase()]),
-  acceptFinalist: new Set([PRIME_IFACE.getFunction("acceptFinalist").selector.toLowerCase()]),
-  submitTrial: new Set([PRIME_IFACE.getFunction("submitTrial").selector.toLowerCase()]),
+  commitApplication: new Set([selectorOrNull(PRIME_IFACE, "commitApplication")].filter(Boolean)),
+  revealApplication: new Set([selectorOrNull(PRIME_IFACE, "revealApplication")].filter(Boolean)),
+  acceptFinalist: new Set([selectorOrNull(PRIME_IFACE, "acceptFinalist")].filter(Boolean)),
+  submitTrial: new Set([selectorOrNull(PRIME_IFACE, "submitTrial")].filter(Boolean)),
   approve: new Set(["0x095ea7b3"]),
-  requestJobCompletion: new Set([JOB_IFACE.getFunction("requestJobCompletion").selector.toLowerCase()]),
-  scoreCommit: new Set(),
-  scoreReveal: new Set(),
+  requestJobCompletion: new Set([selectorOrNull(JOB_IFACE, "requestJobCompletion")].filter(Boolean)),
+  scoreCommit: new Set([selectorOrNull(PRIME_IFACE, "scoreCommit")].filter(Boolean)),
+  scoreReveal: new Set([selectorOrNull(PRIME_IFACE, "scoreReveal")].filter(Boolean)),
 };
 
 export function validatePrimeUnsignedTxPackage(unsignedPkg) {
@@ -27,7 +34,8 @@ export function validatePrimeUnsignedTxPackage(unsignedPkg) {
   const selector = String(unsignedPkg.calldata ?? "").slice(0, 10).toLowerCase();
   const allowed = SELECTOR_ALLOWLIST[fn];
   if (!allowed) throw new Error(`no selector policy for function=${fn}`);
-  if (allowed.size > 0 && !allowed.has(selector)) throw new Error(`unexpected selector ${selector} for ${fn}`);
+  if (allowed.size === 0) throw new Error(`selector allowlist is empty for ${fn}`);
+  if (!allowed.has(selector)) throw new Error(`unexpected selector ${selector} for ${fn}`);
 
   const to = String(unsignedPkg.target ?? "").toLowerCase();
   if (["commitApplication", "revealApplication", "acceptFinalist", "submitTrial"].includes(fn)) {

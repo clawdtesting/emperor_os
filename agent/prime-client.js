@@ -54,6 +54,27 @@ export function getPrimeContract() {
   return _contract;
 }
 
+export async function fetchValidatorAssignment(procurementId, validatorAddress) {
+  const c = getPrimeContract();
+  const pid = BigInt(procurementId);
+  const addr = String(validatorAddress ?? "").toLowerCase();
+
+  const probes = [
+    async () => Boolean(await c.isAssignedValidator(pid, addr)),
+    async () => Boolean(await c.validatorAssigned(pid, addr)),
+    async () => Boolean(await c.validatorAssignments(pid, addr)),
+  ];
+  for (const probe of probes) {
+    try {
+      const assigned = await probe();
+      return { assigned };
+    } catch {
+      // continue
+    }
+  }
+  return { assigned: false, unknownMethod: true };
+}
+
 // ── Typed read: procurement struct ───────────────────────────────────────────
 
 /**
@@ -206,6 +227,11 @@ export async function scanWinnerDesignatedEvents(fromBlock, toBlock = "latest") 
 
 export async function getCurrentBlock() {
   return getProvider().getBlockNumber();
+}
+
+export async function fetchTransactionReceipt(txHash) {
+  if (!txHash) throw new Error("txHash is required");
+  return getProvider().getTransactionReceipt(txHash);
 }
 
 // ── Utility: paginated getLogs (handles RPC block range limits) ───────────────

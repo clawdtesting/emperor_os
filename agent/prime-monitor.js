@@ -51,6 +51,7 @@ import path from "path";
 const SCAN_BLOCKS = 1000
 const POLL_INTERVAL_MS  = 60_000;   // 1 minute between scans
 const MONITOR_STATE_FILE = path.join(CONFIG.WORKSPACE_ROOT, "prime_monitor_state.json");
+const REORG_SAFETY_BLOCKS = Number(process.env.PRIME_MONITOR_REORG_SAFETY_BLOCKS ?? "24");
 
 // ── Monitor state (persists across restarts) ──────────────────────────────────
 
@@ -60,6 +61,7 @@ async function loadMonitorState() {
     lastProcurementBlock: 24780900,
     lastShortlistBlock:   0,
     lastWinnerBlock:      0,
+    lastObservedHead:     0,
     startedAt:            new Date().toISOString(),
     cycles:               0,
   };
@@ -128,17 +130,26 @@ export async function startPrimeMonitor({ agentAddress, once = false } = {}) {
 
 async function discoverNewProcurements(monitorState, agentAddress) {
   const currentBlock = await getCurrentBlock();
+  const safeToBlock = Math.max(0, currentBlock - REORG_SAFETY_BLOCKS);
+  if (Number(monitorState.lastObservedHead ?? 0) > currentBlock) {
+    const rewindTo = Math.max(0, safeToBlock - SCAN_BLOCKS);
+    monitorState.lastProcurementBlock = rewindTo;
+    monitorState.lastShortlistBlock = rewindTo;
+    monitorState.lastWinnerBlock = rewindTo;
+    log(`Reorg/head rollback detected. Rewinding cursors to ${rewindTo}`);
+  }
+  monitorState.lastObservedHead = currentBlock;
   const fromBlock    = monitorState.lastProcurementBlock > 0
     ? monitorState.lastProcurementBlock + 1
-    : Math.max(0, currentBlock - SCAN_BLOCKS);
+    : Math.max(0, safeToBlock - SCAN_BLOCKS);
 
-  if (fromBlock > currentBlock) {
-    monitorState.lastProcurementBlock = currentBlock;
+  if (fromBlock > safeToBlock) {
+    monitorState.lastProcurementBlock = safeToBlock;
     return;
   }
 
-  log(`Scanning ProcurementCreated events ${fromBlock}→${currentBlock}…`);
-  const events = await scanProcurementCreatedEvents(fromBlock, currentBlock);
+  log(`Scanning ProcurementCreated events ${fromBlock}→${safeToBlock} (head=${currentBlock})…`);
+  const events = await scanProcurementCreatedEvents(fromBlock, safeToBlock);
   log(`Found ${events.length} new ProcurementCreated event(s).`);
 
   for (const evt of events) {
@@ -172,7 +183,7 @@ async function discoverNewProcurements(monitorState, agentAddress) {
     }
   }
 
-  monitorState.lastProcurementBlock = currentBlock;
+  monitorState.lastProcurementBlock = safeToBlock;
 }
 
 // ── Shortlist detection ───────────────────────────────────────────────────────
@@ -181,17 +192,18 @@ async function detectShortlistEvents(monitorState, agentAddress) {
   if (!agentAddress) return;
 
   const currentBlock = await getCurrentBlock();
+  const safeToBlock = Math.max(0, currentBlock - REORG_SAFETY_BLOCKS);
   const fromBlock    = monitorState.lastShortlistBlock > 0
     ? monitorState.lastShortlistBlock + 1
-    : Math.max(0, currentBlock - SCAN_BLOCKS);
+    : Math.max(0, safeToBlock - SCAN_BLOCKS);
 
-  if (fromBlock > currentBlock) {
-    monitorState.lastShortlistBlock = currentBlock;
+  if (fromBlock > safeToBlock) {
+    monitorState.lastShortlistBlock = safeToBlock;
     return;
   }
 
-  log(`Scanning ShortlistFinalized events ${fromBlock}→${currentBlock}…`);
-  const events = await scanShortlistFinalizedEvents(fromBlock, currentBlock);
+  log(`Scanning ShortlistFinalized events ${fromBlock}→${safeToBlock} (head=${currentBlock})…`);
+  const events = await scanShortlistFinalizedEvents(fromBlock, safeToBlock);
 
   const myAddr = agentAddress.toLowerCase();
   for (const evt of events) {
@@ -214,20 +226,21 @@ async function detectShortlistEvents(monitorState, agentAddress) {
     }
   }
 
-  monitorState.lastShortlistBlock = currentBlock;
+  monitorState.lastShortlistBlock = safeToBlock;
 }
 
 async function detectWinnerDesignations(monitorState, agentAddress) {
   if (!agentAddress) return;
   const currentBlock = await getCurrentBlock();
+  const safeToBlock = Math.max(0, currentBlock - REORG_SAFETY_BLOCKS);
   const fromBlock = monitorState.lastWinnerBlock > 0
     ? monitorState.lastWinnerBlock + 1
-    : Math.max(0, currentBlock - SCAN_BLOCKS);
-  if (fromBlock > currentBlock) {
-    monitorState.lastWinnerBlock = currentBlock;
+    : Math.max(0, safeToBlock - SCAN_BLOCKS);
+  if (fromBlock > safeToBlock) {
+    monitorState.lastWinnerBlock = safeToBlock;
     return;
   }
-  const events = await scanWinnerDesignatedEvents(fromBlock, currentBlock);
+  const events = await scanWinnerDesignatedEvents(fromBlock, safeToBlock);
   const myAddr = agentAddress.toLowerCase();
   for (const evt of events) {
     const finalized = isFinalizedBlock(evt.blockNumber, currentBlock);
@@ -242,7 +255,7 @@ async function detectWinnerDesignations(monitorState, agentAddress) {
       winnerReconcile: reconciled,
     });
   }
-  monitorState.lastWinnerBlock = currentBlock;
+  monitorState.lastWinnerBlock = safeToBlock;
 }
 
 // ── Refresh active procurements ───────────────────────────────────────────────

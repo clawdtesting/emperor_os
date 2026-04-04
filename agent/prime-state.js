@@ -105,6 +105,9 @@ export function emptyProcState(procurementId, jobId) {
 
     // Operator review log
     reviewLog:        [],
+    operatorTx:       {},
+    txProvenance:     [],
+    stepJournal:      {},
 
     // Tx handoff paths (relative to proc root dir)
     txHandoffs:       {},
@@ -239,6 +242,52 @@ export async function recordTxHandoff(procurementId, txKind, filePath) {
   };
 
   await setProcState(procurementId, { txHandoffs });
+}
+
+export async function recordOperatorTxHash(procurementId, action, txHash, meta = {}) {
+  const current = await getProcState(procurementId);
+  if (!current) throw new Error(`No state found for procurement ${procurementId}`);
+  const operatorTx = {
+    ...(current.operatorTx ?? {}),
+    [action]: {
+      txHash,
+      status: "submitted",
+      submittedAt: new Date().toISOString(),
+      ...meta,
+    },
+  };
+  return setProcState(procurementId, { operatorTx });
+}
+
+export async function bindFinalizedTxReceipt(procurementId, action, receipt, meta = {}) {
+  const current = await getProcState(procurementId);
+  if (!current) throw new Error(`No state found for procurement ${procurementId}`);
+  const existing = current.operatorTx?.[action] ?? {};
+  const operatorTx = {
+    ...(current.operatorTx ?? {}),
+    [action]: {
+      ...existing,
+      status: "finalized",
+      finalizedAt: new Date().toISOString(),
+      receipt: {
+        transactionHash: receipt.transactionHash,
+        status: receipt.status,
+        blockNumber: Number(receipt.blockNumber),
+      },
+      ...meta,
+    },
+  };
+  const txProvenance = [
+    ...(current.txProvenance ?? []),
+    {
+      action,
+      txHash: receipt.transactionHash,
+      status: receipt.status,
+      blockNumber: Number(receipt.blockNumber),
+      finalizedAt: new Date().toISOString(),
+    },
+  ];
+  return setProcState(procurementId, { operatorTx, txProvenance });
 }
 
 // ── List all tracked procurements ─────────────────────────────────────────────

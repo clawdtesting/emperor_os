@@ -5,6 +5,11 @@ export function isFinalizedBlock(eventBlock, currentBlock, minDepth = FINALITY_D
   return Number(currentBlock) - Number(eventBlock) >= Number(minDepth);
 }
 
+export function isFinalizedReceipt(receipt, currentBlock, minDepth = FINALITY_DEPTH) {
+  if (!receipt || !Number.isFinite(Number(receipt.blockNumber))) return false;
+  return isFinalizedBlock(Number(receipt.blockNumber), Number(currentBlock), minDepth);
+}
+
 export function reconcileWinnerEvidence(evidence = []) {
   if (!Array.isArray(evidence) || evidence.length === 0) return { selected: null, source: null, blockNumber: null };
   const sorted = [...evidence].sort((a, b) => Number(b.blockNumber ?? 0) - Number(a.blockNumber ?? 0));

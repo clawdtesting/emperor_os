@@ -40,6 +40,8 @@ function buildPackage({
   artifactBindings,
   reviewChecklist,
 }) {
+  const generatedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + Number(process.env.PRIME_UNSIGNED_TX_TTL_MS ?? "900000")).toISOString();
   const decodedCall = decodePrimeCalldata(calldata);
 
   return {
@@ -51,7 +53,8 @@ function buildPackage({
     args,
     calldata,
     decodedCall,
-    generatedAt:     new Date().toISOString(),
+    generatedAt,
+    expiresAt,
     phase,
     procurementId:   procurementId != null ? String(procurementId) : null,
     linkedJobId:     linkedJobId   != null ? String(linkedJobId)   : null,
@@ -332,6 +335,7 @@ export async function buildApproveAgialphaTx(opts) {
     calldata:    data,
     decodedCall: `approve(spender=${spender}, amount=${String(amountWei)})`,
     generatedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + Number(process.env.PRIME_UNSIGNED_TX_TTL_MS ?? "900000")).toISOString(),
     phase:       "FINALIST_PREAPPROVE",
     procurementId: String(procurementId),
     linkedJobId: linkedJobId != null ? String(linkedJobId) : null,
@@ -400,6 +404,7 @@ export async function buildRequestJobCompletionTx(opts) {
     calldata,
     decodedCall,
     generatedAt:     new Date().toISOString(),
+    expiresAt:       new Date(Date.now() + Number(process.env.PRIME_UNSIGNED_TX_TTL_MS ?? "900000")).toISOString(),
     phase:           "COMPLETION",
     procurementId:   String(procurementId),
     linkedJobId:     String(linkedJobId),
