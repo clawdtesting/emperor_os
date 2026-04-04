@@ -21,6 +21,7 @@ import {
   fetchApplicationView,
   scanProcurementCreatedEvents,
   scanShortlistFinalizedEvents,
+  scanWinnerDesignatedEvents,
   getCurrentBlock,
 } from "./prime-client.js";
 import {
@@ -41,6 +42,7 @@ import {
 } from "./prime-state.js";
 import { inspectProcurement } from "./prime-inspector.js";
 import { readJson, writeJson } from "./prime-state.js";
+import { isFinalizedBlock, reconcileWinnerEvidence } from "./prime-settlement.js";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -57,6 +59,7 @@ async function loadMonitorState() {
   return data ?? {
     lastProcurementBlock: 24780900,
     lastShortlistBlock:   0,
+    lastWinnerBlock:      0,
     startedAt:            new Date().toISOString(),
     cycles:               0,
   };
@@ -98,6 +101,7 @@ export async function startPrimeMonitor({ agentAddress, once = false } = {}) {
 
       // 2. Scan for shortlist events for active procurements
       await detectShortlistEvents(monitorState, agentAddress);
+      await detectWinnerDesignations(monitorState, agentAddress);
 
       // 3. Refresh all active procurement states
       await refreshActiveProcurements(agentAddress);
@@ -211,6 +215,34 @@ async function detectShortlistEvents(monitorState, agentAddress) {
   }
 
   monitorState.lastShortlistBlock = currentBlock;
+}
+
+async function detectWinnerDesignations(monitorState, agentAddress) {
+  if (!agentAddress) return;
+  const currentBlock = await getCurrentBlock();
+  const fromBlock = monitorState.lastWinnerBlock > 0
+    ? monitorState.lastWinnerBlock + 1
+    : Math.max(0, currentBlock - SCAN_BLOCKS);
+  if (fromBlock > currentBlock) {
+    monitorState.lastWinnerBlock = currentBlock;
+    return;
+  }
+  const events = await scanWinnerDesignatedEvents(fromBlock, currentBlock);
+  const myAddr = agentAddress.toLowerCase();
+  for (const evt of events) {
+    const finalized = isFinalizedBlock(evt.blockNumber, currentBlock);
+    const state = await getProcState(evt.procurementId);
+    if (!state) continue;
+    const evidence = [...(state.winnerEvidence ?? []), { ...evt, finalized }];
+    const reconciled = reconcileWinnerEvidence(evidence);
+    await setProcState(evt.procurementId, {
+      winnerEvidence: evidence,
+      selected: reconciled.selected === myAddr,
+      selectionBlock: reconciled.blockNumber ? String(reconciled.blockNumber) : null,
+      winnerReconcile: reconciled,
+    });
+  }
+  monitorState.lastWinnerBlock = currentBlock;
 }
 
 // ── Refresh active procurements ───────────────────────────────────────────────

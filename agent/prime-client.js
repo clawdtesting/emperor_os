@@ -176,6 +176,32 @@ export async function scanShortlistFinalizedEvents(fromBlock, toBlock = "latest"
   });
 }
 
+export async function scanWinnerDesignatedEvents(fromBlock, toBlock = "latest") {
+  const provider = getProvider();
+  const iface = new ethers.Interface([
+    "event WinnerDesignated(uint256 indexed procurementId,address indexed winner)"
+  ]);
+  const topicHash = iface.getEvent("WinnerDesignated").topicHash;
+  const upper = toBlock === "latest" ? await provider.getBlockNumber() : toBlock;
+  const logs = await getLogsPaginated(provider, {
+    address: PRIME_CONTRACT,
+    topics: [topicHash],
+    fromBlock,
+    toBlock: upper,
+  }, fromBlock, upper);
+
+  return logs.map((log) => {
+    const decoded = iface.parseLog(log);
+    return {
+      procurementId: decoded.args[0].toString(),
+      winner: String(decoded.args[1]).toLowerCase(),
+      blockNumber: log.blockNumber,
+      transactionHash: log.transactionHash,
+      source: "event:WinnerDesignated",
+    };
+  });
+}
+
 // ── Utility: current block ────────────────────────────────────────────────────
 
 export async function getCurrentBlock() {

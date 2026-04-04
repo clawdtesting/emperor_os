@@ -1,6 +1,44 @@
 // /home/ubuntu/emperor_OS/.openclaw/workspace/agent/mcp.js
 const DEFAULT_TIMEOUT_MS = 30_000;
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const HEX_0X = /^0x[0-9a-fA-F]+$/;
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function requireTxShape(tx, label) {
+  assert(tx && typeof tx === "object", `${label} missing`);
+  assert(typeof tx.to === "string" && tx.to.length > 0, `${label}.to missing`);
+  assert(typeof tx.data === "string" && HEX_0X.test(tx.data), `${label}.data must be hex`);
+  if (tx.value != null) {
+    const asString = String(tx.value);
+    assert(/^([0-9]+|0x[0-9a-fA-F]+)$/.test(asString), `${label}.value invalid`);
+  }
+}
+
+function validateWriteToolResponse(tool, result) {
+  if (tool === "upload_to_ipfs") {
+    assert(result && typeof result === "object", "[MCP:upload_to_ipfs] expected object");
+    assert(typeof result.ipfsUri === "string" && result.ipfsUri.startsWith("ipfs://"),
+      "[MCP:upload_to_ipfs] missing valid ipfsUri");
+    return result;
+  }
+
+  if (tool === "request_job_completion") {
+    requireTxShape(result, "[MCP:request_job_completion]");
+    return result;
+  }
+
+  if (tool === "apply_for_job") {
+    assert(result && typeof result === "object", "[MCP:apply_for_job] expected object");
+    requireTxShape(result.approve, "[MCP:apply_for_job] approve");
+    requireTxShape(result.apply, "[MCP:apply_for_job] apply");
+    return result;
+  }
+
+  return result;
+}
 
 function getEndpoint() {
   const endpoint = process.env.AGI_ALPHA_MCP;
@@ -153,7 +191,8 @@ export async function callMcp(tool, args = {}, options = {}) {
 
   while (attempt <= retries) {
     try {
-      return await rawCallMcp(tool, args, timeoutMs);
+      const raw = await rawCallMcp(tool, args, timeoutMs);
+      return validateWriteToolResponse(tool, raw);
     } catch (err) {
       lastErr = err;
       const retryable =

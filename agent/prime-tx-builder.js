@@ -78,6 +78,17 @@ async function writeTxFile(dir, filename, pkg) {
   return p;
 }
 
+function normalizePreparedTx(preparedTx) {
+  const tx = preparedTx?.tx ?? preparedTx?.transaction ?? preparedTx;
+  if (!tx || typeof tx !== "object") throw new Error("prepared tx missing");
+  if (!tx.to || !tx.data) throw new Error("prepared tx must include to + data");
+  return {
+    to: String(tx.to),
+    data: String(tx.data),
+    value: String(tx.value ?? "0"),
+  };
+}
+
 // ── commitApplication ─────────────────────────────────────────────────────────
 
 /**
@@ -362,13 +373,12 @@ export async function buildRequestJobCompletionTx(opts) {
   const require            = createRequire(import.meta.url);
   const { dirname }        = await import("path");
 
-  const abiPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "abi", "AGIJobManager.json");
+  const abiPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "core", "AGIJobManager.json");
   const abi     = require(abiPath);
   const iface   = new ethers.Interface(abi);
   const calldata = iface.encodeFunctionData("requestJobCompletion", [
     BigInt(linkedJobId),
     completionURI,
-    agentSubdomain,
   ]);
   const decodedCall = (() => {
     try {
@@ -386,7 +396,6 @@ export async function buildRequestJobCompletionTx(opts) {
     args: {
       jobId:         String(linkedJobId),
       completionURI,
-      subdomain:     agentSubdomain,
     },
     calldata,
     decodedCall,
@@ -428,5 +437,68 @@ export async function buildRequestJobCompletionTx(opts) {
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "completion");
   const filePath = await writeTxFile(dir, "unsigned_request_completion_tx.json", pkg);
 
+  return { path: filePath, package: pkg };
+}
+
+export async function buildValidatorScoreCommitTx(opts) {
+  const { procurementId, linkedJobId, scoreCommitment, preparedTx } = opts;
+  const tx = normalizePreparedTx(preparedTx);
+  const pkg = buildPackage({
+    procurementId,
+    linkedJobId,
+    phase: "VALIDATOR_SCORE_COMMIT",
+    contractName: "AGIJobDiscoveryPrime",
+    contractAddress: tx.to,
+    functionName: "scoreCommit",
+    args: { procurementId: String(procurementId), scoreCommitment },
+    calldata: tx.data,
+    preconditions: [
+      "Validator role is confirmed for this procurement",
+      "Score commit window is open",
+      "Commitment was computed deterministically from score + salt",
+    ],
+    artifactBindings: [
+      { file: "scoring/score_commit_payload.json", role: "score commitment payload" },
+    ],
+    reviewChecklist: [
+      "Confirm score commitment matches local payload",
+      "Confirm score commit window is open",
+      "Confirm target is AGIJobDiscoveryPrime",
+    ],
+  });
+  const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "scoring");
+  const filePath = await writeTxFile(dir, "unsigned_score_commit_tx.json", pkg);
+  return { path: filePath, package: pkg };
+}
+
+export async function buildValidatorScoreRevealTx(opts) {
+  const { procurementId, linkedJobId, scoreValue, salt, preparedTx } = opts;
+  const tx = normalizePreparedTx(preparedTx);
+  const pkg = buildPackage({
+    procurementId,
+    linkedJobId,
+    phase: "VALIDATOR_SCORE_REVEAL",
+    contractName: "AGIJobDiscoveryPrime",
+    contractAddress: tx.to,
+    functionName: "scoreReveal",
+    args: { procurementId: String(procurementId), score: scoreValue, salt },
+    calldata: tx.data,
+    preconditions: [
+      "Validator score reveal window is open",
+      "salt matches score_commit_payload.json",
+      "Recomputed commitment matches score commit",
+    ],
+    artifactBindings: [
+      { file: "scoring/score_commit_payload.json", role: "commitment source" },
+      { file: "scoring/score_reveal_payload.json", role: "reveal payload" },
+    ],
+    reviewChecklist: [
+      "Confirm score + salt are correct",
+      "Confirm reveal window is open",
+      "Confirm target is AGIJobDiscoveryPrime",
+    ],
+  });
+  const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "scoring");
+  const filePath = await writeTxFile(dir, "unsigned_score_reveal_tx.json", pkg);
   return { path: filePath, package: pkg };
 }
