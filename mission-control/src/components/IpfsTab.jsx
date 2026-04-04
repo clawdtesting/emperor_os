@@ -182,7 +182,7 @@ function BriefDisplay({ spec, uri }) {
 }
 
 // ── Saved brief row ───────────────────────────────────────────────────────────
-function SavedRow({ entry, onLoad, onRename, onDelete }) {
+function SavedRow({ entry, onLoad, onRename, onDelete, nested = false }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(entry.alias)
 
@@ -197,7 +197,12 @@ function SavedRow({ entry, onLoad, onRename, onDelete }) {
   const date = new Date(entry.savedAt).toLocaleDateString()
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-800 bg-slate-900 group hover:border-slate-700 transition-colors">
+    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border group transition-colors ${
+      nested
+        ? 'border-slate-800/60 bg-slate-900/50 hover:border-slate-700/60'
+        : 'border-slate-800 bg-slate-900 hover:border-slate-700'
+    }`}>
+      {nested && <span className="text-slate-700 text-xs shrink-0">↳</span>}
       {editing ? (
         <input
           autoFocus
@@ -208,11 +213,8 @@ function SavedRow({ entry, onLoad, onRename, onDelete }) {
           className="flex-1 text-xs bg-slate-800 border border-blue-500 rounded px-2 py-1 text-slate-200 focus:outline-none"
         />
       ) : (
-        <button
-          onClick={() => onLoad(entry)}
-          className="flex-1 min-w-0 text-left"
-        >
-          <div className="text-xs text-slate-200 truncate font-medium">{entry.alias}</div>
+        <button onClick={() => onLoad(entry)} className="flex-1 min-w-0 text-left">
+          <div className={`text-xs truncate font-medium ${nested ? 'text-slate-400' : 'text-slate-200'}`}>{entry.alias}</div>
           <div className="text-xs text-slate-600 font-mono mt-0.5">{cidShort} · {date}</div>
         </button>
       )}
@@ -251,11 +253,21 @@ export function IpfsTab() {
   // Keep saved list in sync with localStorage
   useEffect(() => { persistSaved(saved) }, [saved])
 
-  function saveEntry(uri, spec) {
+  function saveEntry(uri, spec, parentId = null) {
     setSaved(prev => {
       if (prev.some(e => e.uri === uri)) return prev // already stored
       const alias = spec?.properties?.title || spec?.name || uri
-      return [{ id: crypto.randomUUID(), uri, alias, spec, savedAt: new Date().toISOString() }, ...prev]
+      const entry = { id: crypto.randomUUID(), uri, alias, spec, parentId, savedAt: new Date().toISOString() }
+      if (parentId) {
+        // Insert immediately after the parent
+        const idx = prev.findIndex(e => e.id === parentId)
+        if (idx !== -1) {
+          const next = [...prev]
+          next.splice(idx + 1, 0, entry)
+          return next
+        }
+      }
+      return [entry, ...prev]
     })
   }
 
@@ -264,7 +276,8 @@ export function IpfsTab() {
   }
 
   function deleteEntry(id) {
-    setSaved(prev => prev.filter(e => e.id !== id))
+    // Also delete all children of this entry
+    setSaved(prev => prev.filter(e => e.id !== id && e.parentId !== id))
   }
 
   function loadEntry(entry) {
@@ -291,7 +304,19 @@ export function IpfsTab() {
       const result = await fetchFromIpfs(uri)
       const spec = normalizeToSpec(result, uri)
       setPrimaryBrief({ uri, spec })
-      saveEntry(uri, spec)
+
+      // Save primary first so we have its id for children
+      let parentId = null
+      setSaved(prev => {
+        if (prev.some(e => e.uri === uri)) {
+          parentId = prev.find(e => e.uri === uri).id
+          return prev
+        }
+        const alias = spec?.properties?.title || spec?.name || uri
+        const entry = { id: crypto.randomUUID(), uri, alias, spec, parentId: null, savedAt: new Date().toISOString() }
+        parentId = entry.id
+        return [entry, ...prev]
+      })
 
       const nested = extractIpfsLinks(result.raw).filter(l => l !== uri)
       if (nested.length > 0) {
@@ -299,7 +324,7 @@ export function IpfsTab() {
           nested.map(async nestedUri => {
             const res = await fetchFromIpfs(nestedUri)
             const nestedSpec = normalizeToSpec(res, nestedUri)
-            saveEntry(nestedUri, nestedSpec)
+            saveEntry(nestedUri, nestedSpec, parentId)
             return { uri: nestedUri, spec: nestedSpec }
           })
         )
@@ -352,15 +377,33 @@ export function IpfsTab() {
             </button>
           </div>
           <div className="space-y-1.5">
-            {saved.map(entry => (
-              <SavedRow
-                key={entry.id}
-                entry={entry}
-                onLoad={loadEntry}
-                onRename={renameEntry}
-                onDelete={deleteEntry}
-              />
-            ))}
+            {saved.filter(e => !e.parentId).map(parent => {
+              const children = saved.filter(e => e.parentId === parent.id)
+              return (
+                <div key={parent.id}>
+                  <SavedRow
+                    entry={parent}
+                    onLoad={loadEntry}
+                    onRename={renameEntry}
+                    onDelete={deleteEntry}
+                  />
+                  {children.length > 0 && (
+                    <div className="ml-3 mt-1 pl-3 border-l border-slate-800 space-y-1">
+                      {children.map(child => (
+                        <SavedRow
+                          key={child.id}
+                          entry={child}
+                          onLoad={loadEntry}
+                          onRename={renameEntry}
+                          onDelete={deleteEntry}
+                          nested
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
