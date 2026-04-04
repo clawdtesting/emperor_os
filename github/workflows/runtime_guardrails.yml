@@ -1,0 +1,17 @@
+name: runtime guardrails
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  no-signing-primitives:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Guard runtime signing/broadcast primitives
+        run: node scripts/ci/guard_no_signing_runtime.js

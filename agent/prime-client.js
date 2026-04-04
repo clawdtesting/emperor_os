@@ -307,8 +307,18 @@ export function generateSalt() {
  * @returns {{ to: string, data: string, value: string }}
  */
 export function encodePrimeCall(functionName, args) {
-  const iface = new ethers.Interface(loadAbi());
-  const data  = iface.encodeFunctionData(functionName, args);
+  let iface = new ethers.Interface(loadAbi());
+  let data;
+  try {
+    data = iface.encodeFunctionData(functionName, args);
+  } catch (err) {
+    const fallback = new ethers.Interface([
+      "function scoreCommit(uint256 procurementId, bytes32 scoreCommitment)",
+      "function scoreReveal(uint256 procurementId, uint256 score, bytes32 salt)",
+    ]);
+    data = fallback.encodeFunctionData(functionName, args);
+    iface = fallback;
+  }
   return {
     to:    PRIME_CONTRACT,
     data,

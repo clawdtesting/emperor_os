@@ -814,14 +814,15 @@ async function handleBuildCompletionTx(procurementId) {
 
 async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
+  const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
+  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
+  if (!assignment.assigned) {
+    log(`#${procurementId}: validator assignment not chain-confirmed; score commit remains locked`);
+    return false;
+  }
+
   let payload = state?.validatorScoreCommitPayload;
   if (!payload?.preparedTx || !payload?.scoreCommitment) {
-    const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
-    if (!assignment.assigned) {
-      log(`#${procurementId}: validator assignment not confirmed; skipping score commit`);
-      await setProcState(procurementId, { validatorAssignment: assignment });
-      return false;
-    }
     const generated = await buildValidatorScoringPayloads({
       procurementId,
       linkedJobId: state?.linkedJobId,
@@ -855,6 +856,13 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
 
 async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
+  const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
+  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
+  if (!assignment.assigned) {
+    log(`#${procurementId}: validator assignment not chain-confirmed; score reveal remains locked`);
+    return false;
+  }
+
   let payload = state?.validatorScoreRevealPayload;
   if (!payload?.preparedTx && state?.validatorScoreCommitPayload) {
     const generated = await buildValidatorScoringPayloads({
@@ -873,6 +881,19 @@ async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
     log(`#${procurementId}: validator score reveal payload missing in state.validatorScoreRevealPayload`);
     return false;
   }
+
+  const committedPayload = state?.validatorScoreCommitPayload ?? await readJson(path.join(procSubdir(procurementId, "scoring"), "score_commit_payload.json"), null);
+  const expected = String(committedPayload?.scoreCommitment ?? "").toLowerCase();
+  const got = String(payload?.commitmentCheck?.recomputedCommitment ?? payload?.expectedCommitment ?? "").toLowerCase();
+  const continuityOk = Boolean(payload?.commitmentCheck?.verified) && expected !== "" && got === expected;
+  if (!continuityOk) {
+    await setProcState(procurementId, {
+      lastError: `Validator reveal continuity check failed: expected ${expected || "<missing>"}, got ${got || "<missing>"}`,
+    });
+    log(`#${procurementId}: validator reveal blocked — commitment continuity check failed`);
+    return false;
+  }
+
   await writeValidatorScoreRevealBundle(procurementId, payload);
   const { path: txPath } = await buildValidatorScoreRevealTx({
     procurementId,
@@ -1099,6 +1120,7 @@ async function writeReadyPacket(procurementId, action, unsignedTxPath) {
     unsignedTxPath,
     chainSnapshotHash: sha256Json(chainSnapshot),
     txPackageHash: sha256Json(txPkg),
+    reviewRootHash: txPkg.reviewRootHash ?? sha256Json({ chainSnapshot, txPkg }),
     preconditions,
   };
   await writeJson(path.join(root, `${action}_ready_packet.json`), packet);

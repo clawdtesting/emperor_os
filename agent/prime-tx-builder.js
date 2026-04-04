@@ -14,6 +14,7 @@
 
 import path from "path";
 import { promises as fs } from "fs";
+import { createHash } from "crypto";
 import { encodePrimeCall, decodePrimeCalldata, PRIME_CONTRACT, CHAIN_ID, AGIALPHA_TOKEN, encodeErc20Approve } from "./prime-client.js";
 import { CONFIG } from "./config.js";
 import { ensureProcSubdir } from "./prime-state.js";
@@ -72,6 +73,32 @@ function buildPackage({
   };
 }
 
+async function computeReviewRootHash(procurementId, artifactBindings, calldata) {
+  const procRoot = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`);
+  const pieces = [];
+  for (const binding of artifactBindings ?? []) {
+    const rel = String(binding?.file ?? "");
+    const abs = path.join(procRoot, rel);
+    try {
+      const content = await fs.readFile(abs);
+      const digest = createHash("sha256").update(content).digest("hex");
+      pieces.push(`${rel}:${digest}`);
+    } catch {
+      pieces.push(`${rel}:MISSING`);
+    }
+  }
+  pieces.sort();
+  pieces.push(`calldata:${createHash("sha256").update(String(calldata ?? ""), "utf8").digest("hex")}`);
+  return createHash("sha256").update(pieces.join("|"), "utf8").digest("hex");
+}
+
+async function withReviewRootHash(procurementId, pkg) {
+  return {
+    ...pkg,
+    reviewRootHash: await computeReviewRootHash(procurementId, pkg.artifactBindings, pkg.calldata),
+  };
+}
+
 async function writeTxFile(dir, filename, pkg) {
   await fs.mkdir(dir, { recursive: true });
   const p = path.join(dir, filename);
@@ -118,7 +145,7 @@ export async function buildCommitApplicationTx(opts) {
 
   const { to, data } = encodePrimeCall("commitApplication", args);
 
-  const pkg = buildPackage({
+  const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase:            "COMMIT",
@@ -153,7 +180,7 @@ export async function buildCommitApplicationTx(opts) {
       "Confirm chainId is 1 (Ethereum Mainnet)",
       "Confirm commit window has not expired",
     ],
-  });
+  }));
 
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "application");
   const filePath = await writeTxFile(dir, "unsigned_commit_tx.json", pkg);
@@ -179,7 +206,7 @@ export async function buildRevealApplicationTx(opts) {
 
   const { to, data } = encodePrimeCall("revealApplication", args);
 
-  const pkg = buildPackage({
+  const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase:           "REVEAL",
@@ -215,7 +242,7 @@ export async function buildRevealApplicationTx(opts) {
       "Confirm target contract is AGIJobDiscoveryPrime",
       "Confirm chainId is 1",
     ],
-  });
+  }));
 
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "reveal");
   const filePath = await writeTxFile(dir, "unsigned_reveal_tx.json", pkg);
@@ -234,7 +261,7 @@ export async function buildAcceptFinalistTx(opts) {
   const args = [BigInt(procurementId)];
   const { to, data } = encodePrimeCall("acceptFinalist", args);
 
-  const pkg = buildPackage({
+  const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase:           "FINALIST_ACCEPT",
@@ -264,7 +291,7 @@ export async function buildAcceptFinalistTx(opts) {
       "Confirm target contract is AGIJobDiscoveryPrime",
       "Confirm chainId is 1",
     ],
-  });
+  }));
 
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "finalist");
   const filePath = await writeTxFile(dir, "unsigned_accept_finalist_tx.json", pkg);
@@ -283,7 +310,7 @@ export async function buildSubmitTrialTx(opts) {
   const args = [BigInt(procurementId), trialURI];
   const { to, data } = encodePrimeCall("submitTrial", args);
 
-  const pkg = buildPackage({
+  const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase:           "TRIAL",
@@ -314,7 +341,7 @@ export async function buildSubmitTrialTx(opts) {
       "Confirm target contract is AGIJobDiscoveryPrime",
       "Confirm chainId is 1",
     ],
-  });
+  }));
 
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "trial");
   const filePath = await writeTxFile(dir, "unsigned_submit_trial_tx.json", pkg);
@@ -325,7 +352,7 @@ export async function buildSubmitTrialTx(opts) {
 export async function buildApproveAgialphaTx(opts) {
   const { procurementId, linkedJobId, spender, amountWei } = opts;
   const { data } = encodeErc20Approve(spender, BigInt(amountWei), AGIALPHA_TOKEN);
-  const pkg = {
+  const pkg = await withReviewRootHash(procurementId, {
     schema:      "emperor-os/prime-unsigned-tx/v1",
     chainId:     CHAIN_ID,
     target:      AGIALPHA_TOKEN,
@@ -344,13 +371,17 @@ export async function buildApproveAgialphaTx(opts) {
       "Current AGIALPHA allowance is below required top-up",
       "Operator reviewed token and spender addresses",
     ],
+    artifactBindings: [
+      { file: "finalist/stake_requirements.json", role: "required stake analysis" },
+      { file: "finalist/stake_preflight.json", role: "balance + allowance preflight" },
+    ],
     reviewChecklist: [
       "Confirm token address is AGIALPHA ERC20",
       "Confirm spender is AGIJobDiscoveryPrime contract",
       "Confirm amount covers finalist top-up only",
       "Sign with Ledger via MetaMask",
     ],
-  };
+  });
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "finalist");
   const filePath = await writeTxFile(dir, "unsigned_approve_agialpha_tx.json", pkg);
   return { path: filePath, package: pkg };
@@ -391,7 +422,7 @@ export async function buildRequestJobCompletionTx(opts) {
     } catch { return `requestJobCompletion(${linkedJobId}, ${completionURI}, ${agentSubdomain})`; }
   })();
 
-  const pkg = {
+  const pkg = await withReviewRootHash(procurementId, {
     schema:          "emperor-os/prime-unsigned-tx/v1",
     chainId:         CHAIN_ID,
     target:          JOB_MGR_CONTRACT,
@@ -437,7 +468,7 @@ export async function buildRequestJobCompletionTx(opts) {
       noSigningInRuntime:    true,
       noBroadcastInRuntime:  true,
     },
-  };
+  });
 
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "completion");
   const filePath = await writeTxFile(dir, "unsigned_request_completion_tx.json", pkg);
@@ -448,7 +479,7 @@ export async function buildRequestJobCompletionTx(opts) {
 export async function buildValidatorScoreCommitTx(opts) {
   const { procurementId, linkedJobId, scoreCommitment, preparedTx } = opts;
   const tx = normalizePreparedTx(preparedTx);
-  const pkg = buildPackage({
+  const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase: "VALIDATOR_SCORE_COMMIT",
@@ -470,7 +501,7 @@ export async function buildValidatorScoreCommitTx(opts) {
       "Confirm score commit window is open",
       "Confirm target is AGIJobDiscoveryPrime",
     ],
-  });
+  }));
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "scoring");
   const filePath = await writeTxFile(dir, "unsigned_score_commit_tx.json", pkg);
   return { path: filePath, package: pkg };
@@ -479,7 +510,7 @@ export async function buildValidatorScoreCommitTx(opts) {
 export async function buildValidatorScoreRevealTx(opts) {
   const { procurementId, linkedJobId, scoreValue, salt, preparedTx } = opts;
   const tx = normalizePreparedTx(preparedTx);
-  const pkg = buildPackage({
+  const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase: "VALIDATOR_SCORE_REVEAL",
@@ -502,7 +533,7 @@ export async function buildValidatorScoreRevealTx(opts) {
       "Confirm reveal window is open",
       "Confirm target is AGIJobDiscoveryPrime",
     ],
-  });
+  }));
   const dir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "scoring");
   const filePath = await writeTxFile(dir, "unsigned_score_reveal_tx.json", pkg);
   return { path: filePath, package: pkg };

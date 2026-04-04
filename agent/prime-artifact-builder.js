@@ -496,12 +496,18 @@ export async function writeCompletionBundle(procurementId, {
 
 export async function writeValidatorScoreCommitBundle(procurementId, {
   scoreCommitment,
+  score,
+  validatorAddress,
+  scoringInputHash,
   saltHash,
   notes,
 }) {
   const dir = await ensureProcSubdir(procurementId, "scoring");
   await writeFile(path.join(dir, "score_commit_payload.json"), {
     procurementId: String(procurementId),
+    validatorAddress: validatorAddress ?? null,
+    scoringInputHash: scoringInputHash ?? null,
+    score: Number.isFinite(score) ? Number(score) : null,
     scoreCommitment,
     saltHash: saltHash ?? null,
     notes: notes ?? null,
@@ -523,12 +529,16 @@ export async function writeValidatorScoreCommitBundle(procurementId, {
 export async function writeValidatorScoreRevealBundle(procurementId, {
   score,
   salt,
+  expectedCommitment,
+  commitmentCheck,
 }) {
   const dir = await ensureProcSubdir(procurementId, "scoring");
   await writeFile(path.join(dir, "score_reveal_payload.json"), {
     procurementId: String(procurementId),
     score,
     salt,
+    expectedCommitment: expectedCommitment ?? null,
+    commitmentCheck: commitmentCheck ?? null,
     generatedAt: new Date().toISOString(),
   });
   await writeFile(path.join(dir, "review_manifest_score_reveal.json"), buildReviewManifest({

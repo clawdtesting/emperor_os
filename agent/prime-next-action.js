@@ -288,13 +288,13 @@ export function computeNextAction({ procState, procStruct, appView, nowSecs }) {
       };
 
     case PROC_STATUS.WAITING_SCORE_PHASE:
-      if (procState?.validatorRole === true && chainPhase === CHAIN_PHASE.SCORE_COMMIT) {
+      if (procState?.validatorAssignment?.assigned === true && chainPhase === CHAIN_PHASE.SCORE_COMMIT) {
         return {
           ...base, status: localStatus,
           action: "BUILD_VALIDATOR_SCORE_COMMIT_TX",
           summary: "Validator role active. Build unsigned scoreCommit tx package.",
           blockedReason: null,
-          preconditions: ["validator score inputs present", "score commit window open"],
+          preconditions: ["validator assignment chain-confirmed", "validator score inputs present", "score commit window open"],
         };
       }
       return {
