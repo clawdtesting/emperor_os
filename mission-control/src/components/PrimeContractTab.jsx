@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { resolveEns, shortAddr } from '../utils/ens'
+import { PrimeProcurementHelperCard } from './prime/PrimeProcurementHelperCard'
+import { normalizeProcurementTiming } from '../features/prime/windowStatus'
 
 const PRIME_CONTRACT = '0xd5ef1dde7ac60488f697ff2a7967a52172a78f29'
 const PREMIUM_JOB_CREATED_TOPIC = '0xcd958add2ab89c161b8e05f40140e87d03e664bd32eea370e4aec86096bcb3f6'
 const PROCUREMENT_CREATED_TOPIC = '0xd88f0bdc06a889b3707026296f02b1cb95e0b68fc3b0cf11cb82bb0ecc805d53'
 const DEFAULT_PREMIUM_TX = '0xe90422f666b87e4962dd976015c18ee7a592dc40ddd6070b0f000a9404f93d1b'
+const NEXT_ACTION_SIG = '0xf47fbed6'
+// NOTE: selector verified from ABI signature `procurements(uint256)` via external contract tooling.
+const PROCUREMENTS_SIG = '0x85ad3150'
 
 const READ_FUNCTIONS = [
   { key: 'owner', label: 'Owner', sig: '0x8da5cb5b', type: 'address' },
@@ -41,6 +46,23 @@ function toHexBlock(n) {
 function shortCid(uri) {
   const cid = uri?.replace('ipfs://', '') || ''
   return cid.length > 20 ? cid.slice(0, 8) + '...' + cid.slice(-6) : cid
+}
+
+function decodeDynamicString(raw) {
+  const offset = Number.parseInt(raw.slice(2, 66), 16)
+  const lenIndex = 2 + (offset * 2)
+  const strLen = Number.parseInt(raw.slice(lenIndex, lenIndex + 64), 16)
+  const strHex = raw.slice(lenIndex + 64, lenIndex + 64 + strLen * 2)
+  const bytes = strHex.match(/.{1,2}/g) || []
+  return bytes.map(b => String.fromCharCode(Number.parseInt(b, 16))).join('')
+}
+
+function decodeUintAtWord(raw, wordIndex) {
+  const start = 2 + (wordIndex * 64)
+  const end = start + 64
+  const chunk = raw.slice(start, end)
+  if (!chunk) return null
+  return Number(BigInt(`0x${chunk}`))
 }
 
 function getJobField(job, keys) {
@@ -161,21 +183,6 @@ function EventJobBrief({ job }) {
 }
 
 
-function describeNextAction(code) {
-  const map = {
-    WC: 'Commit window phase',
-    WR: 'Reveal window phase',
-    WS: 'Shortlist action phase',
-    WA: 'Finalist acceptance phase',
-    WT: 'Trial submission phase',
-    WSC: 'Score commit phase',
-    WSR: 'Score reveal phase',
-    WW: 'Winner finalization phase',
-    DONE: 'No further action available',
-  }
-  return map[code] || 'Unknown action code from contract'
-}
-
 async function rpcRequest(method, params = []) {
   if (!window?.ethereum) throw new Error('Wallet RPC not detected')
   return window.ethereum.request({ method, params })
@@ -191,7 +198,7 @@ export function PrimeContractTab({ wallet, jobs = [] }) {
   const [values, setValues] = useState({})
   const [procurementId, setProcurementId] = useState('')
   const [nextAction, setNextAction] = useState('—')
-  const [nextActionDesc, setNextActionDesc] = useState('')
+  const [procurementTiming, setProcurementTiming] = useState(null)
   const [txHash, setTxHash] = useState(DEFAULT_PREMIUM_TX)
   const [txEvents, setTxEvents] = useState([])
   const [scanEvents, setScanEvents] = useState([])
@@ -209,20 +216,31 @@ export function PrimeContractTab({ wallet, jobs = [] }) {
     const id = Number(rawId)
     if (!Number.isFinite(id) || id < 0) {
       setError('Enter a valid procurement ID')
-      setNextActionDesc('')
+      setProcurementTiming(null)
       return
     }
     try {
       const hexId = id.toString(16).padStart(64, '0')
-      const raw = await rpcCall(`0xf47fbed6${hexId}`)
-      const offset = Number.parseInt(raw.slice(2, 66), 16)
-      const lenIndex = 2 + (offset * 2)
-      const strLen = Number.parseInt(raw.slice(lenIndex, lenIndex + 64), 16)
-      const strHex = raw.slice(lenIndex + 64, lenIndex + 64 + strLen * 2)
-      const bytes = strHex.match(/.{1,2}/g) || []
-      const code = bytes.map(b => String.fromCharCode(Number.parseInt(b, 16))).join('') || '—'
+      const raw = await rpcCall(`${NEXT_ACTION_SIG}${hexId}`)
+      const code = decodeDynamicString(raw) || '—'
       setNextAction(code)
-      setNextActionDesc(describeNextAction(code))
+
+      // Deadline-aware helper reads procurement timing from on-chain struct.
+      // If this call fails or the contract ABI differs, the helper card gracefully falls back to unknown window status.
+      try {
+        const procRaw = await rpcCall(`${PROCUREMENTS_SIG}${hexId}`)
+        const timing = normalizeProcurementTiming({
+          commitDeadline: decodeUintAtWord(procRaw, 2),
+          revealDeadline: decodeUintAtWord(procRaw, 3),
+          finalistAcceptDeadline: decodeUintAtWord(procRaw, 4),
+          trialDeadline: decodeUintAtWord(procRaw, 5),
+          scoreCommitDeadline: decodeUintAtWord(procRaw, 6),
+          scoreRevealDeadline: decodeUintAtWord(procRaw, 7),
+        })
+        setProcurementTiming(timing)
+      } catch {
+        setProcurementTiming(null)
+      }
     } catch (e) {
       setError(e.message || 'Failed reading next action')
     }
@@ -408,9 +426,13 @@ export function PrimeContractTab({ wallet, jobs = [] }) {
           </button>
         </div>
         <div className="mt-2 text-xs text-slate-400">
-          Next action code: <span className="text-slate-200 font-mono">{nextAction}</span>
-          {nextActionDesc && <span className="ml-2 text-slate-500">({nextActionDesc})</span>}
+          Contract helper: <span className="text-slate-200 font-mono">nextActionForProcurement</span>
         </div>
+        <PrimeProcurementHelperCard
+          procurementId={procurementId}
+          rawCode={nextAction}
+          procurementTiming={procurementTiming}
+        />
       </div>
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2">
