@@ -196,8 +196,45 @@ app.get('/api/debug-mcp', async (req, res) => {
 // ── Real jobs from AGI Alpha ──────────────────────────────────────────────────
 app.get('/api/jobs', async (req, res) => {
   try {
-    const data = await callMcp('list_jobs')
-    res.json(Array.isArray(data) ? data : data?.jobs || data?.result || [])
+    const managerData = await callMcp('list_jobs')
+    const managerJobs = (Array.isArray(managerData) ? managerData : managerData?.jobs || managerData?.result || []).map(job => ({
+      ...job,
+      source: 'agijobmanager',
+    }))
+
+    const primeToolCandidates = [
+      'list_prime_jobs',
+      'list_prime_procurements',
+      'list_procurements',
+      'list_discovery_jobs',
+      'list_prime_discovery_jobs',
+    ]
+
+    let primeJobs = []
+    for (const tool of primeToolCandidates) {
+      try {
+        const primeData = await callMcp(tool)
+        const primeList = Array.isArray(primeData) ? primeData : primeData?.jobs || primeData?.procurements || primeData?.result || []
+        if (!Array.isArray(primeList) || !primeList.length) continue
+
+        primeJobs = primeList.map((entry, i) => {
+          const procurementId = entry?.procurementId ?? entry?.id ?? entry?.procurement_id ?? i
+          const jobId = entry?.jobId ?? entry?.job_id ?? `P-${procurementId}`
+          return {
+            ...entry,
+            source: 'agiprimediscovery',
+            procurementId: String(procurementId),
+            jobId: String(jobId),
+            status: entry?.status || entry?.phase || entry?.stage || 'Prime',
+            payout: entry?.payout ?? entry?.payoutAGIALPHA ?? '—',
+            specURI: entry?.specURI || entry?.applicationURI || entry?.uri || '',
+          }
+        })
+        break
+      } catch {}
+    }
+
+    res.json([...managerJobs, ...primeJobs])
   } catch (e) {
     console.error('MCP list_jobs failed:', e.message)
     res.json([])

@@ -22,18 +22,19 @@ export function useJobs() {
     addEvent('fetch', 'Polling agialpha.com/api/mcp...')
     try {
       const data = await fetchJobs()
+      const getJobKey = (job) => `${job?.source || 'agijobmanager'}:${job?.jobId ?? job?.procurementId ?? 'unknown'}`
       setJobs(prev => {
         if (isFirstFetch.current) {
           // Silently register all existing jobs on first load — don't spam "new"
           isFirstFetch.current = false
-          data.forEach(j => seenIds.current.add(j.jobId))
+          data.forEach(j => seenIds.current.add(getJobKey(j)))
           addEvent('fetch', `Fetched ${data.length} job(s)`)
           return data
         }
-        const newJobs = data.filter(j => !seenIds.current.has(j.jobId))
+        const newJobs = data.filter(j => !seenIds.current.has(getJobKey(j)))
         newJobs.forEach(j => {
-          seenIds.current.add(j.jobId)
-          addEvent('new', `Job #${j.jobId} — ${j.payout} — ${j.status}`)
+          seenIds.current.add(getJobKey(j))
+          addEvent('new', `[${j.source || 'agijobmanager'}] Job #${j.jobId} — ${j.payout} — ${j.status}`)
         })
         if (!newJobs.length && prev.length) {
           addEvent('fetch', `${data.length} jobs — no changes`)
