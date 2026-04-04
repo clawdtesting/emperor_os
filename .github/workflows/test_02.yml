@@ -32,4 +32,5 @@ jobs:
           git config user.email "agent@empireos"
           git add tests/test_02/results.json tests/test_02/deliverable.svg
           git diff --cached --quiet || git commit -m "test_02: IPFS results"
+          git pull --rebase origin main
           git push origin main
