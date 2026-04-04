@@ -1,6 +1,6 @@
 // /home/ubuntu/emperor_OS/.openclaw/workspace/agent/validate.js
 import { CONFIG } from "./config.js";
-import { listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { uploadToIpfs } from "./mcp.js";
 import { getJobArtifactPaths, readText, writeJson } from "./artifact-manager.js";
 import { sha256Text, verifyIpfsTextHash } from "./ipfs-verify.js";
@@ -77,6 +77,15 @@ export async function validate() {
 
   for (const job of ready) {
     try {
+      const claim = await claimJobStageIdempotency(
+        job.jobId,
+        "validate",
+        `validate:${job.jobId}:${job.artifactPath ?? "na"}:${job.deliverableIpfs?.ipfsUri ?? "na"}`
+      );
+      if (!claim.claimed) {
+        console.log(`[validate] idempotency skip for ${job.jobId}`);
+        continue;
+      }
       const artifactPaths = getJobArtifactPaths(job.jobId);
 
       if (!job.deliverableIpfs?.ipfsUri) {

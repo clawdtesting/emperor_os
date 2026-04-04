@@ -1,6 +1,7 @@
 import { getJob } from "./mcp.js";
-import { listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { normalizeJob } from "./job-normalize.js";
+import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
 
 const TERMINAL_FAILURE_STATUSES = new Set([
   "cancelled",
@@ -21,24 +22,50 @@ export async function reconcileCompletion() {
 
   for (const job of pending) {
     try {
+      const claim = await claimJobStageIdempotency(
+        job.jobId,
+        "reconcile_completion",
+        `reconcile_completion:${job.jobId}:${job.updatedAt ?? "na"}`
+      );
+      if (!claim.claimed) continue;
       const remote = normalizeJob(await getJob(Number(job.jobId)));
       const remoteStatus = String(remote?.status ?? "").toLowerCase();
 
       if (remoteStatus === "completed") {
+        const receipt = await ingestFinalizedJobReceipt({ jobId: job.jobId, action: "completion" });
+        if (!receipt.ok) {
+          await setJobState(job.jobId, {
+            completionBlockedReason: `missing finalized completion receipt: ${receipt.reason}`,
+            completionReceiptCheck: receipt,
+          });
+          console.log(`[reconcile_completion] completed blocked ${job.jobId}: ${receipt.reason}`);
+          continue;
+        }
         await setJobState(job.jobId, {
           status: "completed",
           completedAt: new Date().toISOString(),
-          reconciledFromRemote: remote.raw
+          reconciledFromRemote: remote.raw,
+          completionReceiptRef: receipt,
         });
         console.log(`[reconcile_completion] completed: ${job.jobId}`);
         continue;
       }
 
       if (remoteStatus === "submitted") {
+        const receipt = await ingestFinalizedJobReceipt({ jobId: job.jobId, action: "completion" });
+        if (!receipt.ok) {
+          await setJobState(job.jobId, {
+            completionBlockedReason: `missing finalized completion receipt: ${receipt.reason}`,
+            completionReceiptCheck: receipt,
+          });
+          console.log(`[reconcile_completion] submitted blocked ${job.jobId}: ${receipt.reason}`);
+          continue;
+        }
         await setJobState(job.jobId, {
           status: "submitted",
           reconciledAt: new Date().toISOString(),
-          reconciledFromRemote: remote.raw
+          reconciledFromRemote: remote.raw,
+          completionReceiptRef: receipt,
         });
         console.log(`[reconcile_completion] submitted: ${job.jobId}`);
         continue;

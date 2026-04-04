@@ -47,6 +47,9 @@ export function validatePrimeUnsignedTxPackage(unsignedPkg) {
   if (fn === "requestJobCompletion") {
     if (to !== String(CONFIG.CONTRACT).toLowerCase()) throw new Error("requestJobCompletion target mismatch");
   }
+  const expiresAtMs = Date.parse(String(unsignedPkg.expiresAt ?? ""));
+  if (!Number.isFinite(expiresAtMs)) throw new Error("unsigned package missing valid expiresAt");
+  if (expiresAtMs <= Date.now()) throw new Error(`unsigned package expired at ${unsignedPkg.expiresAt}`);
 
   return { ok: true, selector, functionName: fn, target: unsignedPkg.target };
 }

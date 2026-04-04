@@ -229,6 +229,12 @@ export async function getCurrentBlock() {
   return getProvider().getBlockNumber();
 }
 
+export async function getBlockHash(blockNumber) {
+  if (!Number.isFinite(Number(blockNumber))) return null;
+  const block = await getProvider().getBlock(Number(blockNumber));
+  return block?.hash ?? null;
+}
+
 export async function fetchTransactionReceipt(txHash) {
   if (!txHash) throw new Error("txHash is required");
   return getProvider().getTransactionReceipt(txHash);

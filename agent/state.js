@@ -59,6 +59,8 @@ export async function setJobState(jobId, patch) {
     {
       jobId,
       status: "queued",
+      operatorTx: {},
+      stageIdempotency: {},
       attempts: {
         apply: 0,
         execute: 0,
@@ -80,6 +82,63 @@ export async function setJobState(jobId, patch) {
 
   await writeJson(jobStatePath(jobId), next);
   return next;
+}
+
+export async function claimJobStageIdempotency(jobId, stage, key) {
+  const state = await getJobState(jobId);
+  if (!state) return { claimed: false, reason: "missing-job-state" };
+  const existing = state.stageIdempotency?.[stage];
+  if (existing?.key === key) {
+    return { claimed: false, reason: "duplicate-key", existing };
+  }
+  await setJobState(jobId, {
+    stageIdempotency: {
+      ...(state.stageIdempotency ?? {}),
+      [stage]: {
+        key,
+        claimedAt: new Date().toISOString(),
+      }
+    }
+  });
+  return { claimed: true };
+}
+
+export async function recordOperatorTxHash(jobId, action, txHash, meta = {}) {
+  const state = await getJobState(jobId);
+  if (!state) throw new Error(`job ${jobId} state not found`);
+  return setJobState(jobId, {
+    operatorTx: {
+      ...(state.operatorTx ?? {}),
+      [action]: {
+        txHash,
+        status: "submitted",
+        submittedAt: new Date().toISOString(),
+        ...meta,
+      }
+    }
+  });
+}
+
+export async function bindFinalizedOperatorReceipt(jobId, action, receipt, meta = {}) {
+  const state = await getJobState(jobId);
+  if (!state) throw new Error(`job ${jobId} state not found`);
+  const existing = state.operatorTx?.[action] ?? {};
+  return setJobState(jobId, {
+    operatorTx: {
+      ...(state.operatorTx ?? {}),
+      [action]: {
+        ...existing,
+        status: "finalized",
+        finalizedAt: new Date().toISOString(),
+        receiptRef: {
+          txHash: receipt.transactionHash,
+          blockNumber: Number(receipt.blockNumber),
+          status: Number(receipt.status),
+        },
+        ...meta,
+      }
+    }
+  });
 }
 
 export async function listAllJobStates() {

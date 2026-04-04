@@ -397,18 +397,16 @@ async function handleBuildCommitTx(procurementId, procStruct) {
 }
 
 async function handleWaitRevealWindow(procurementId, procStruct) {
-  await ingestFinalizedOperatorReceipt({ procurementId, action: "commitApplication" }).catch(() => {});
-  // Detect if commit has landed on-chain since last check.
-  if (!AGENT_ADDRESS) return false;
-  const appView = await fetchApplicationView(procurementId, AGENT_ADDRESS);
-  if (Number(appView?.applicationPhase ?? 0) >= 1) {
+  const receipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "commitApplication" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
+  if (receipt.ok) {
     await transitionProcStatus(procurementId, PROC_STATUS.COMMIT_SUBMITTED, {
-      commitTxHash: appView.commitment, // not the tx hash but confirms it's on chain
+      commitTxHash: receipt.txHash,
+      commitReceiptRef: receipt,
     });
-    log(`#${procurementId}: on-chain commit confirmed → COMMIT_SUBMITTED`);
+    log(`#${procurementId}: finalized commit receipt ingested → COMMIT_SUBMITTED`);
     return true;
   }
-  log(`#${procurementId}: COMMIT_READY — waiting for operator to sign commit tx`);
+  log(`#${procurementId}: COMMIT_READY — waiting for finalized commit receipt (${receipt.reason})`);
   return false;
 }
 
@@ -482,7 +480,18 @@ async function handleBuildRevealTx(procurementId, procStruct) {
 }
 
 async function handleWaitShortlist(procurementId) {
-  await ingestFinalizedOperatorReceipt({ procurementId, action: "revealApplication" }).catch(() => {});
+  const receipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "revealApplication" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
+  if (receipt.ok) {
+    const current = await getProcState(procurementId);
+    if (current.status === PROC_STATUS.REVEAL_READY) {
+      await transitionProcStatus(procurementId, PROC_STATUS.REVEAL_SUBMITTED, {
+        revealTxHash: receipt.txHash,
+        revealReceiptRef: receipt,
+      });
+      log(`#${procurementId}: finalized reveal receipt ingested → REVEAL_SUBMITTED`);
+      return true;
+    }
+  }
   // Monitor handles shortlist detection — when state.shortlisted is set by the
   // monitor, we detect that here and advance to FINALIST_ACCEPT_READY.
   const state = await getProcState(procurementId);
@@ -505,17 +514,11 @@ async function handleWaitShortlist(procurementId) {
 
   // Check if reveal was submitted (on-chain phase >= 2) but shortlist not yet finalized.
   if (onChainPhase >= 2) {
-    // Confirm reveal is on chain; advance REVEAL_SUBMITTED if still REVEAL_READY.
-    if (state.status === PROC_STATUS.REVEAL_READY) {
-      await transitionProcStatus(procurementId, PROC_STATUS.REVEAL_SUBMITTED);
-      log(`#${procurementId}: → REVEAL_SUBMITTED (on-chain reveal confirmed)`);
-      return true;
-    }
     log(`#${procurementId}: REVEAL_SUBMITTED — waiting for ShortlistFinalized event`);
     return false;
   }
 
-  log(`#${procurementId}: REVEAL_READY — waiting for operator to sign reveal tx`);
+  log(`#${procurementId}: REVEAL_READY — waiting for finalized reveal receipt (${receipt.reason ?? "missing"})`);
   return false;
 }
 
@@ -552,6 +555,7 @@ async function handleBuildFinalistTx(procurementId, procStruct) {
       amountWei: requiredTopUpWei.toString(),
     });
     approveTxPath = approve.path;
+    await runPrimePreSignChecks({ procurementId, unsignedTxPath: approveTxPath, fromAddress: AGENT_ADDRESS });
   }
 
   // Write finalist bundle.
@@ -909,6 +913,28 @@ async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
   return true;
 }
 
+async function handleReceiptDrivenReadyTransitions(procurementId, status) {
+  const map = {
+    [PROC_STATUS.COMMIT_READY]: { action: "commitApplication", next: PROC_STATUS.COMMIT_SUBMITTED, field: "commitReceiptRef" },
+    [PROC_STATUS.REVEAL_READY]: { action: "revealApplication", next: PROC_STATUS.REVEAL_SUBMITTED, field: "revealReceiptRef" },
+    [PROC_STATUS.FINALIST_ACCEPT_READY]: { action: "acceptFinalist", next: PROC_STATUS.FINALIST_ACCEPT_SUBMITTED, field: "acceptReceiptRef" },
+    [PROC_STATUS.TRIAL_READY]: { action: "submitTrial", next: PROC_STATUS.TRIAL_SUBMITTED, field: "trialReceiptRef" },
+    [PROC_STATUS.COMPLETION_READY]: { action: "requestJobCompletion", next: PROC_STATUS.COMPLETION_SUBMITTED, field: "completionReceiptRef" },
+    [PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY]: { action: "scoreCommit", next: PROC_STATUS.VALIDATOR_SCORE_COMMIT_SUBMITTED, field: "scoreCommitReceiptRef" },
+    [PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY]: { action: "scoreReveal", next: PROC_STATUS.VALIDATOR_SCORE_REVEAL_SUBMITTED, field: "scoreRevealReceiptRef" },
+  };
+  const rule = map[status];
+  if (!rule) return false;
+  const receipt = await ingestFinalizedOperatorReceipt({ procurementId, action: rule.action }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
+  if (!receipt.ok) {
+    log(`#${procurementId}: ${status} awaiting finalized receipt for ${rule.action} (${receipt.reason})`);
+    return false;
+  }
+  await transitionProcStatus(procurementId, rule.next, { [rule.field]: receipt });
+  log(`#${procurementId}: receipt ingested for ${rule.action} → ${rule.next}`);
+  return true;
+}
+
 // ── Per-procurement orchestration cycle ──────────────────────────────────────
 
 export async function orchestrateProcurement(procurementId) {
@@ -939,6 +965,9 @@ export async function orchestrateProcurement(procurementId) {
 
   try {
     switch (action) {
+      case "NONE":
+        await handleReceiptDrivenReadyTransitions(procurementId, state.status);
+        break;
       case "INSPECT":                await handleInspect(procurementId);                           break;
       case "EVALUATE_FIT":           await handleEvaluateFit(procurementId, procStruct, jobSpec);  break;
       case "DRAFT_APPLICATION":      await handleDraftApplication(procurementId, procStruct, jobSpec); break;
@@ -955,17 +984,18 @@ export async function orchestrateProcurement(procurementId) {
       }
       case "BUILD_TRIAL_TX":         await handleBuildTrialTx(procurementId, procStruct);          break;
       case "WAIT_SCORING":
-        await ingestFinalizedOperatorReceipt({ procurementId, action: "submitTrial" }).catch(() => {});
+        const trialReceipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "submitTrial" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
         // Detect if trial was submitted on-chain.
         if (AGENT_ADDRESS) {
           const appView = await fetchApplicationView(procurementId, AGENT_ADDRESS);
           if (Number(appView?.applicationPhase ?? 0) >= 4 &&
-              state.status === PROC_STATUS.TRIAL_READY) {
+              state.status === PROC_STATUS.TRIAL_READY &&
+              trialReceipt.ok) {
             await transitionProcStatus(procurementId, PROC_STATUS.TRIAL_SUBMITTED);
             await transitionProcStatus(procurementId, PROC_STATUS.WAITING_SCORE_PHASE);
             log(`#${procurementId}: → WAITING_SCORE_PHASE (trial on-chain confirmed)`);
           } else {
-            log(`#${procurementId}: TRIAL_READY — waiting for operator to sign submitTrial tx`);
+            log(`#${procurementId}: TRIAL_READY — waiting for finalized submitTrial receipt (${trialReceipt.reason ?? "missing"})`);
           }
         }
         break;

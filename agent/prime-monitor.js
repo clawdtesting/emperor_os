@@ -23,6 +23,7 @@ import {
   scanShortlistFinalizedEvents,
   scanWinnerDesignatedEvents,
   getCurrentBlock,
+  getBlockHash,
 } from "./prime-client.js";
 import {
   deriveChainPhase,
@@ -64,6 +65,7 @@ async function loadMonitorState() {
     lastObservedHead:     0,
     startedAt:            new Date().toISOString(),
     cycles:               0,
+    cursorAnchors:        {},
   };
 }
 
@@ -131,6 +133,7 @@ export async function startPrimeMonitor({ agentAddress, once = false } = {}) {
 async function discoverNewProcurements(monitorState, agentAddress) {
   const currentBlock = await getCurrentBlock();
   const safeToBlock = Math.max(0, currentBlock - REORG_SAFETY_BLOCKS);
+  await reconcileReorgCursors(monitorState);
   if (Number(monitorState.lastObservedHead ?? 0) > currentBlock) {
     const rewindTo = Math.max(0, safeToBlock - SCAN_BLOCKS);
     monitorState.lastProcurementBlock = rewindTo;
@@ -184,6 +187,7 @@ async function discoverNewProcurements(monitorState, agentAddress) {
   }
 
   monitorState.lastProcurementBlock = safeToBlock;
+  await updateCursorAnchor(monitorState, "procurement", safeToBlock);
 }
 
 // ── Shortlist detection ───────────────────────────────────────────────────────
@@ -227,6 +231,7 @@ async function detectShortlistEvents(monitorState, agentAddress) {
   }
 
   monitorState.lastShortlistBlock = safeToBlock;
+  await updateCursorAnchor(monitorState, "shortlist", safeToBlock);
 }
 
 async function detectWinnerDesignations(monitorState, agentAddress) {
@@ -256,6 +261,30 @@ async function detectWinnerDesignations(monitorState, agentAddress) {
     });
   }
   monitorState.lastWinnerBlock = safeToBlock;
+  await updateCursorAnchor(monitorState, "winner", safeToBlock);
+}
+
+async function updateCursorAnchor(monitorState, key, blockNumber) {
+  if (!Number.isFinite(Number(blockNumber)) || Number(blockNumber) <= 0) return;
+  const blockHash = await getBlockHash(Number(blockNumber));
+  monitorState.cursorAnchors = {
+    ...(monitorState.cursorAnchors ?? {}),
+    [key]: { blockNumber: Number(blockNumber), blockHash, checkedAt: new Date().toISOString() },
+  };
+}
+
+async function reconcileReorgCursors(monitorState) {
+  const anchors = monitorState.cursorAnchors ?? {};
+  for (const [key, anchor] of Object.entries(anchors)) {
+    if (!anchor?.blockNumber || !anchor?.blockHash) continue;
+    const currentHash = await getBlockHash(Number(anchor.blockNumber));
+    if (currentHash && currentHash === anchor.blockHash) continue;
+    const rewindTo = Math.max(0, Number(anchor.blockNumber) - REORG_SAFETY_BLOCKS - SCAN_BLOCKS);
+    if (key === "procurement") monitorState.lastProcurementBlock = rewindTo;
+    if (key === "shortlist") monitorState.lastShortlistBlock = rewindTo;
+    if (key === "winner") monitorState.lastWinnerBlock = rewindTo;
+    log(`Reorg detected at ${key} cursor block ${anchor.blockNumber}. Rewinding to ${rewindTo}`);
+  }
 }
 
 // ── Refresh active procurements ───────────────────────────────────────────────

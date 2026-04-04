@@ -3,7 +3,7 @@ import "dotenv/config";
 import { buildBrief } from "./build-brief.js";
 import { buildPrompt } from "./templates.js";
 import { validateOutput } from "./validate.js";
-import { listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson, writeText } from "./artifact-manager.js";
 
@@ -63,6 +63,15 @@ export async function execute() {
 
   for (const job of assigned) {
     try {
+      const claim = await claimJobStageIdempotency(
+        job.jobId,
+        "execute",
+        `execute:${job.jobId}:${job.assignedAt ?? job.updatedAt ?? "na"}`
+      );
+      if (!claim.claimed) {
+        console.log(`[execute] idempotency skip for ${job.jobId}`);
+        continue;
+      }
       await setJobState(job.jobId, {
         status: "working",
         workingAt: new Date().toISOString()

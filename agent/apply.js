@@ -1,5 +1,5 @@
 import { applyForJob } from "./mcp.js";
-import { listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 import { buildUnsignedApplyTxPackage } from "./tx-builder.js";
@@ -22,6 +22,13 @@ export async function apply() {
   const job = pickBest(candidates);
   if (!job) {
     console.log("[apply] no candidate selected");
+    return;
+  }
+
+  const stageKey = `apply:${job.jobId}:${job.score ?? 0}:${job.updatedAt ?? "na"}`;
+  const claim = await claimJobStageIdempotency(job.jobId, "apply", stageKey);
+  if (!claim.claimed) {
+    console.log(`[apply] idempotency skip for job ${job.jobId} (${claim.reason})`);
     return;
   }
 

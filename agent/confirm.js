@@ -1,7 +1,8 @@
 import { getJob } from "./mcp.js";
-import { listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { normalizeJob, isAssignedToAddress } from "./job-normalize.js";
+import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
 
 function isPending(job) {
   return ["application_pending_review", "assignment_pending", "applied"].includes(job.status);
@@ -19,6 +20,12 @@ export async function confirm() {
   }
 
   for (const localJob of pending) {
+    const claim = await claimJobStageIdempotency(
+      localJob.jobId,
+      "confirm",
+      `confirm:${localJob.jobId}:${localJob.status}:${localJob.updatedAt ?? "na"}`
+    );
+    if (!claim.claimed) continue;
     let remote;
     try {
       remote = normalizeJob(await getJob(Number(localJob.jobId)));
@@ -30,11 +37,22 @@ export async function confirm() {
     const assignedToUs = isAssignedToAddress(remote, CONFIG.AGENT_ADDRESS);
 
     if (assignedToUs) {
+      const receipt = await ingestFinalizedJobReceipt({ jobId: localJob.jobId, action: "apply" });
+      if (!receipt.ok) {
+        await setJobState(localJob.jobId, {
+          status: "assignment_pending",
+          assignmentBlockedReason: `missing finalized apply receipt: ${receipt.reason}`,
+          assignmentReceiptCheck: receipt,
+        });
+        console.log(`[confirm] assignment blocked ${localJob.jobId}: ${receipt.reason}`);
+        continue;
+      }
       await setJobState(localJob.jobId, {
         status: "assigned",
         assignedAt: new Date().toISOString(),
         assignedAgent: remote.assignedAgent,
-        confirmedFromRemote: remote.raw
+        confirmedFromRemote: remote.raw,
+        assignmentReceiptRef: receipt,
       });
       console.log(`[confirm] assigned to us: ${localJob.jobId}`);
       continue;

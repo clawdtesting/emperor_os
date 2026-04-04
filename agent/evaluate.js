@@ -1,4 +1,4 @@
-import { listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { evaluateJobStrategy } from "./strategy.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 
@@ -12,6 +12,12 @@ export async function evaluate() {
   }
 
   for (const job of queued) {
+    const claim = await claimJobStageIdempotency(
+      job.jobId,
+      "evaluate",
+      `evaluate:${job.jobId}:${job.updatedAt ?? "na"}`
+    );
+    if (!claim.claimed) continue;
     const decision = evaluateJobStrategy(job);
     await ensureJobArtifactDir(job.jobId);
     const artifactPaths = getJobArtifactPaths(job.jobId);

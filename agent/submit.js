@@ -1,7 +1,8 @@
 // /home/ubuntu/emperor_OS/.openclaw/workspace/agent/submit.js
 import path from "path";
+import { createHash } from "crypto";
 import { uploadToIpfs, requestJobCompletion } from "./mcp.js";
-import { listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 import { buildUnsignedTxPackage } from "./tx-builder.js";
@@ -84,6 +85,12 @@ export async function submit() {
 
   for (const job of ready) {
     try {
+      const stageKey = `submit:${job.jobId}:${job.deliverableIpfs?.ipfsUri ?? "na"}:${job.executionValidationPath ?? "na"}:${job.publicationValidationPath ?? "na"}`;
+      const claim = await claimJobStageIdempotency(job.jobId, "submit", stageKey);
+      if (!claim.claimed) {
+        console.log(`[submit] idempotency skip for job ${job.jobId} (${claim.reason})`);
+        continue;
+      }
       const artifactPaths = getJobArtifactPaths(job.jobId);
       if (!job.executionValidationPath || !job.publicationValidationPath) {
         throw new Error(
@@ -131,6 +138,18 @@ export async function submit() {
       await writeJson(artifactPaths.unsignedCompletion, unsignedCompletion);
 
       const jobCompletionSha256 = await sha256FromJsonFile(artifactPaths.jobCompletion);
+      const provenanceBundle = {
+        schema: "emperor-os/completion-provenance/v1",
+        jobId: String(job.jobId),
+        deliverableUri: job.deliverableIpfs.ipfsUri,
+        completionUri: completionUpload.ipfsUri,
+        jobCompletionSha256,
+        executionValidationPath: job.executionValidationPath,
+        publicationValidationPath: job.publicationValidationPath,
+      };
+      const provenanceBundleHash = createHash("sha256")
+        .update(JSON.stringify(provenanceBundle), "utf8")
+        .digest("hex");
 
       await runPreSignChecks({
         unsignedPackage: unsignedCompletion,
@@ -167,6 +186,8 @@ export async function submit() {
         completionMetadataIpfs: completionUpload,
         unsignedCompletionPath: artifactPaths.unsignedCompletion,
         signingManifestPath,
+        completionProvenanceBundle: provenanceBundle,
+        completionProvenanceBundleHash: provenanceBundleHash,
         submittedAt: new Date().toISOString(),
         attempts: {
           ...job.attempts,
