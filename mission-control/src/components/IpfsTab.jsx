@@ -14,9 +14,9 @@ async function fetchFromIpfs(uri) {
       if (res.ok) {
         const text = await res.text()
         try {
-          return { type: 'json', data: JSON.parse(text) }
+          return { type: 'json', data: JSON.parse(text), raw: text }
         } catch {
-          return { type: 'text', data: text }
+          return { type: 'text', data: text, raw: text }
         }
       }
     } catch { continue }
@@ -24,24 +24,51 @@ async function fetchFromIpfs(uri) {
   throw new Error('All IPFS gateways failed — try again or check the CID')
 }
 
-function extractIpfsLinks(data) {
-  const links = new Set()
-  function scan(obj) {
-    if (typeof obj === 'string') {
-      const matches = obj.match(/ipfs:\/\/[a-zA-Z0-9]+/g)
-      if (matches) matches.forEach(m => links.add(m))
-    } else if (Array.isArray(obj)) {
-      obj.forEach(scan)
-    } else if (obj && typeof obj === 'object') {
-      Object.values(obj).forEach(scan)
-    }
-  }
-  scan(data)
-  return [...links]
+// Extract all ipfs:// links from a raw string or nested object
+function extractIpfsLinks(source) {
+  const raw = typeof source === 'string' ? source : JSON.stringify(source)
+  const matches = raw.match(/ipfs:\/\/[a-zA-Z0-9]+/g)
+  return [...new Set(matches || [])]
 }
 
-function normalizeToSpec(data, uri) {
-  if (!data || typeof data !== 'object') return { name: uri, properties: { title: uri } }
+// Parse plain-text / markdown into spec fields
+function textToSpec(text, uri) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+
+  // First markdown heading or first non-empty line → title
+  const headingLine = lines.find(l => /^#+\s/.test(l))
+  const title = headingLine
+    ? headingLine.replace(/^#+\s+/, '')
+    : (lines[0]?.length < 120 ? lines[0] : null) || uri
+
+  // Everything after the title line → details
+  const startIdx = headingLine
+    ? lines.indexOf(headingLine) + 1
+    : 1
+  const details = lines.slice(startIdx).join('\n').trim()
+
+  return {
+    name: title,
+    properties: {
+      title,
+      summary: '',
+      details,
+      category: '',
+      tags: [],
+      deliverables: [],
+      acceptanceCriteria: [],
+      requirements: [],
+      payoutAGIALPHA: null,
+      durationSeconds: null,
+    },
+  }
+}
+
+function normalizeToSpec(result, uri) {
+  if (result.type === 'text') return textToSpec(result.data, uri)
+
+  const data = result.data
+  if (!data || typeof data !== 'object') return textToSpec(String(data ?? ''), uri)
 
   // Already a valid job spec
   if (data?.properties?.schema?.startsWith('agijobmanager')) return data
@@ -203,18 +230,16 @@ export function IpfsTab() {
 
     try {
       const result = await fetchFromIpfs(uri)
-      const data = result.type === 'json' ? result.data : {}
-      const spec = normalizeToSpec(data, uri)
+      const spec = normalizeToSpec(result, uri)
       setPrimaryBrief({ uri, spec })
 
-      // Find and fetch nested IPFS links (excluding the one we just fetched)
-      const nested = extractIpfsLinks(data).filter(l => l !== uri)
+      // Find and fetch nested IPFS links inside the raw content (excluding self)
+      const nested = extractIpfsLinks(result.raw).filter(l => l !== uri)
       if (nested.length > 0) {
         const results = await Promise.allSettled(
           nested.map(async nestedUri => {
             const res = await fetchFromIpfs(nestedUri)
-            const nestedData = res.type === 'json' ? res.data : {}
-            return { uri: nestedUri, spec: normalizeToSpec(nestedData, nestedUri) }
+            return { uri: nestedUri, spec: normalizeToSpec(res, nestedUri) }
           })
         )
         setNestedBriefs(results.filter(r => r.status === 'fulfilled').map(r => r.value))
