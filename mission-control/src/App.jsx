@@ -13,12 +13,15 @@ import { useWallet } from './hooks/useWallet'
 
 function compareJobIdDesc(a, b) {
   try {
-    const aId = BigInt(String(a.jobId ?? 0))
-    const bId = BigInt(String(b.jobId ?? 0))
+    const aId = BigInt(String(a.sortId ?? a.jobId ?? 0).replace(/^P-/, ''))
+    const bId = BigInt(String(b.sortId ?? b.jobId ?? 0).replace(/^P-/, ''))
     if (bId === aId) return 0
     return bId > aId ? 1 : -1
   } catch {
-    return Number(b.jobId ?? 0) - Number(a.jobId ?? 0)
+    const bNum = Number(String(b.sortId ?? b.jobId ?? 0).replace(/^P-/, ''))
+    const aNum = Number(String(a.sortId ?? a.jobId ?? 0).replace(/^P-/, ''))
+    if (Number.isFinite(bNum) && Number.isFinite(aNum)) return bNum - aNum
+    return String(b.jobId ?? '').localeCompare(String(a.jobId ?? ''))
   }
 }
 
@@ -66,13 +69,15 @@ export default function App() {
           <MetricCard label="Disputed" value={loading ? '—' : disputed.length} color="text-red-400" />
         </div>
 
-        <div className="flex gap-1 mb-4 border-b border-slate-800">
+        <div className="grid md:grid-cols-[180px,1fr] gap-4">
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-2 h-fit">
+        <div className="flex flex-col gap-1">
           {['jobs', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'workflows', 'events', 'test'].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-2 text-xs capitalize transition-colors border-b-2 -mb-px ${
-                tab === t ? 'text-white border-blue-500' : 'text-slate-500 border-transparent hover:text-slate-300'
+              className={`w-full text-left px-3 py-2 text-xs capitalize rounded transition-colors ${
+                tab === t ? 'text-white bg-blue-600/25 border border-blue-500/50' : 'text-slate-500 border border-transparent hover:text-slate-300 hover:bg-slate-800'
               }`}
             >
               {t}
@@ -82,13 +87,19 @@ export default function App() {
             </button>
           ))}
         </div>
-
+        </div>
+        <div>
         {tab === 'jobs' && (
           <div className="space-y-2">
             {loading && <div className="text-slate-600 text-xs text-center py-8">Loading...</div>}
             {error && <div className="text-red-400 text-xs p-3 bg-red-950/30 rounded-lg border border-red-900">{error}</div>}
             {jobsDesc.map(j => (
-              <JobCard key={j.jobId} job={j} selected={selected?.jobId === j.jobId} onClick={() => handleSelectJob(j)} />
+              <JobCard
+                key={`${j.source || 'agijobmanager'}-${j.jobId}`}
+                job={j}
+                selected={selected?.jobId === j.jobId && selected?.source === j.source}
+                onClick={() => handleSelectJob(j)}
+              />
             ))}
           </div>
         )}
@@ -116,6 +127,8 @@ export default function App() {
         )}
 
         {tab === 'test' && <TestTab />}
+        </div>
+        </div>
       </div>
     </div>
   )

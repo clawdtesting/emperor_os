@@ -70,18 +70,25 @@ export function JobCard({ job, selected, onClick }) {
       }`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-xs text-slate-500 font-mono">#{job.jobId}</span>
+        <span className="text-xs text-slate-500 font-mono">
+          #{job.jobId}
+          {job.source === 'agiprimediscovery' && <span className="ml-1 text-[10px] text-fuchsia-400">prime</span>}
+        </span>
         <StatusBadge status={job.status} />
       </div>
-      <a
-        href={`https://ipfs.io/ipfs/${job.specURI?.replace('ipfs://', '')}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={e => e.stopPropagation()}
-        className="block text-xs font-mono text-blue-500 hover:text-blue-400 mb-2 truncate"
-      >
-        {shortCid(job.specURI)}
-      </a>
+      {job.specURI ? (
+        <a
+          href={`https://ipfs.io/ipfs/${job.specURI?.replace('ipfs://', '')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="block text-xs font-mono text-blue-500 hover:text-blue-400 mb-2 truncate"
+        >
+          {shortCid(job.specURI)}
+        </a>
+      ) : (
+        <div className="block text-xs font-mono text-slate-600 mb-2 truncate">no spec URI</div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs mb-3">
         <div className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5">
           <div className="text-[10px] uppercase tracking-wider text-slate-500">Payout</div>
