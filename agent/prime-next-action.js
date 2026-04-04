@@ -80,6 +80,15 @@ export function computeNextAction({ procState, procStruct, appView, nowSecs }) {
       };
 
     case PROC_STATUS.INSPECTED:
+      if (procState?.fitEvaluatedAt) {
+        return {
+          ...base, status: localStatus,
+          action: "NONE",
+          summary: "Fit evaluation generated. Awaiting operator decision and explicit status transition.",
+          blockedReason: "Operator must set FIT_APPROVED or NOT_A_FIT.",
+          preconditions: [],
+        };
+      }
       return {
         ...base, status: localStatus,
         action: "EVALUATE_FIT",

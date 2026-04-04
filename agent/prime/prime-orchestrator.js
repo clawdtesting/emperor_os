@@ -64,12 +64,14 @@ import {
   buildAcceptFinalistTx,
   buildSubmitTrialTx,
   buildApproveAgialphaTx,
+  buildRequestJobCompletionTx,
 } from "../prime-tx-builder.js";
 import {
   assertCommitGate,
   assertRevealGate,
   assertFinalistAcceptGate,
   assertTrialSubmitGate,
+  assertCompletionGate,
 } from "../prime-review-gates.js";
 import { activateBridge } from "../prime-execution-bridge.js";
 import { createRetrievalPacket, extractSteppingStone, extractSearchKeywords } from "../prime-retrieval.js";
@@ -196,20 +198,17 @@ async function handleEvaluateFit(procurementId, procStruct, jobSpec) {
     logError(`#${procurementId}: writeInspectionExtras`, err);
   }
 
-  if (fitEvaluation.decision === "FAIL") {
-    await transitionProcStatus(procurementId, PROC_STATUS.NOT_A_FIT, {
-      fitDecisionAt: new Date().toISOString(),
-      fitApproved: false,
-    });
-    log(`#${procurementId}: → NOT_A_FIT (score=${fitEvaluation.score.toFixed(3)} — ${fitEvaluation.reason})`);
-  } else {
-    await transitionProcStatus(procurementId, PROC_STATUS.FIT_APPROVED, {
-      fitDecisionAt: new Date().toISOString(),
-      fitApproved: true,
-    });
-    log(`#${procurementId}: → FIT_APPROVED (score=${fitEvaluation.score.toFixed(3)})`);
-  }
-  return true;
+  await setProcState(procurementId, {
+    fitEvaluatedAt: new Date().toISOString(),
+    fitRecommendedDecision: fitEvaluation.decision,
+    fitRecommendationReason: fitEvaluation.reason,
+  });
+
+  log(
+    `#${procurementId}: fit evaluated (${fitEvaluation.decision}, score=${fitEvaluation.score.toFixed(3)}). ` +
+    `Awaiting operator transition to FIT_APPROVED or NOT_A_FIT.`
+  );
+  return false;
 }
 
 async function handleDraftApplication(procurementId, procStruct, jobSpec) {
@@ -264,7 +263,11 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
     await publishAndVerify(applicationMarkdown, `application_${procurementId}.md`);
 
   if (!fetchback.verified) {
-    log(`#${procurementId}: WARNING — IPFS fetchback verification failed for application. Proceeding anyway.`);
+    await setProcState(procurementId, {
+      lastError: "Application IPFS fetchback verification failed; halted before state transition."
+    });
+    log(`#${procurementId}: ERROR — IPFS fetchback verification failed for application. Halting.`);
+    return false;
   }
 
   // Generate salt + compute commitment.
@@ -627,7 +630,11 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
   });
 
   if (!fetchback.verified) {
-    log(`#${procurementId}: WARNING — IPFS fetchback verification failed. Proceeding with TRIAL_READY anyway.`);
+    await setProcState(procurementId, {
+      lastError: "Trial IPFS fetchback verification failed; halted before TRIAL_READY."
+    });
+    log(`#${procurementId}: ERROR — IPFS fetchback verification failed. Halting.`);
+    return false;
   }
 
   // Update state.
@@ -710,7 +717,7 @@ async function handleExecuteJob(procurementId) {
   const state = await getProcState(procurementId);
 
   try {
-    await activateBridge(procurementId, state.linkedJobId);
+    await activateBridge({ procurementId, agentAddress: AGENT_ADDRESS });
     await transitionProcStatus(procurementId, PROC_STATUS.JOB_EXECUTION_IN_PROGRESS);
     log(`#${procurementId}: → JOB_EXECUTION_IN_PROGRESS`);
     return true;
@@ -718,6 +725,43 @@ async function handleExecuteJob(procurementId) {
     logError(`#${procurementId}: activateBridge`, err);
     return false;
   }
+}
+
+async function handleBuildCompletionTx(procurementId) {
+  log(`#${procurementId}: building completion tx`);
+  const state = await getProcState(procurementId);
+
+  if (!state?.linkedJobId || !state?.completionURI) {
+    log(`#${procurementId}: completion tx blocked — linkedJobId or completionURI missing`);
+    return false;
+  }
+
+  try {
+    await assertCompletionGate({ procurementId });
+  } catch (err) {
+    log(`#${procurementId}: completion gate failed — ${err.message}`);
+    return false;
+  }
+
+  const { path: txPath } = await buildRequestJobCompletionTx({
+    procurementId,
+    linkedJobId: state.linkedJobId,
+    completionURI: state.completionURI,
+    agentSubdomain: AGENT_SUBDOMAIN,
+  });
+
+  const nextTxHandoffs = { ...(state.txHandoffs ?? {}), requestJobCompletion: txPath };
+  await setProcState(procurementId, { txHandoffs: nextTxHandoffs });
+  if (state.status !== PROC_STATUS.COMPLETION_READY) {
+    await transitionProcStatus(procurementId, PROC_STATUS.COMPLETION_READY, {
+      canonicalPhase: toCanonicalPhase(PROC_STATUS.COMPLETION_READY),
+    });
+  }
+  await writeReadyPacket(procurementId, "requestJobCompletion", txPath);
+
+  log(`#${procurementId}: → COMPLETION_READY`);
+  log(`  OPERATOR ACTION: review and sign ${txPath}`);
+  return true;
 }
 
 // ── Per-procurement orchestration cycle ──────────────────────────────────────
@@ -788,7 +832,7 @@ export async function orchestrateProcurement(procurementId) {
         }
         break;
       case "BUILD_COMPLETION_TX":
-        log(`#${procurementId}: COMPLETION_READY — refer to prime-execution-bridge for completion tx`);
+        await handleBuildCompletionTx(procurementId);
         break;
       case "TERMINAL":
         // Nothing to do — already terminal.
@@ -881,7 +925,7 @@ async function writeReadyPacket(procurementId, action, unsignedTxPath) {
   const chainSnapshotPath = path.join(root, "chain_snapshot.json");
   const chainSnapshot = await readJson(chainSnapshotPath, {});
   const txPkg = await readJson(unsignedTxPath, {});
-  const preconditions = (txPkg.preconditions ?? []).map(p => ({ check: p, passed: true }));
+  const preconditions = (txPkg.preconditions ?? []).map(p => ({ check: p, passed: null }));
   const packet = {
     procurementId: String(procurementId),
     action,

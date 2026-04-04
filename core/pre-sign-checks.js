@@ -15,6 +15,16 @@ export async function runPreSignChecks({
   expectedJobCompletionUri = null,
   expectedJobCompletionSha256 = null
 }) {
+  const expiresAt = unsignedPackage?.expiresAt ? Date.parse(unsignedPackage.expiresAt) : null;
+  if (expiresAt != null) {
+    if (!Number.isFinite(expiresAt)) {
+      throw new Error(`Invalid expiresAt timestamp: ${unsignedPackage.expiresAt}`);
+    }
+    if (Date.now() > expiresAt) {
+      throw new Error(`Unsigned package expired at ${unsignedPackage.expiresAt}`);
+    }
+  }
+
   const decode = await validateUnsignedTxPackage(unsignedPackage, reviewContext);
   const simulation = await simulateUnsignedTx(unsignedPackage, fromAddress);
 
