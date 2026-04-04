@@ -288,6 +288,15 @@ export function computeNextAction({ procState, procStruct, appView, nowSecs }) {
       };
 
     case PROC_STATUS.WAITING_SCORE_PHASE:
+      if (procState?.validatorRole === true && chainPhase === CHAIN_PHASE.SCORE_COMMIT) {
+        return {
+          ...base, status: localStatus,
+          action: "BUILD_VALIDATOR_SCORE_COMMIT_TX",
+          summary: "Validator role active. Build unsigned scoreCommit tx package.",
+          blockedReason: null,
+          preconditions: ["validator score inputs present", "score commit window open"],
+        };
+      }
       return {
         ...base, status: localStatus,
         action: "WAIT_SCORING",
@@ -304,6 +313,21 @@ export function computeNextAction({ procState, procStruct, appView, nowSecs }) {
         blockedReason: null,
         preconditions: ["score reveal phase complete"],
       };
+
+    case PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY:
+      return { ...base, status: localStatus, action: "NONE", summary: "Validator score commit tx ready for operator signature.", blockedReason: "Operator must sign scoring/unsigned_score_commit_tx.json.", preconditions: [] };
+    case PROC_STATUS.VALIDATOR_SCORE_COMMIT_SUBMITTED:
+      return {
+        ...base, status: localStatus,
+        action: chainPhase === CHAIN_PHASE.SCORE_REVEAL ? "BUILD_VALIDATOR_SCORE_REVEAL_TX" : "WAIT_SCORING",
+        summary: "Waiting for score reveal window.",
+        blockedReason: null,
+        preconditions: [],
+      };
+    case PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY:
+      return { ...base, status: localStatus, action: "NONE", summary: "Validator score reveal tx ready for operator signature.", blockedReason: "Operator must sign scoring/unsigned_score_reveal_tx.json.", preconditions: [] };
+    case PROC_STATUS.VALIDATOR_SCORE_REVEAL_SUBMITTED:
+      return { ...base, status: localStatus, action: "WAIT_SCORING", summary: "Validator scoring submitted. Waiting for winner designation.", blockedReason: null, preconditions: [] };
 
     case PROC_STATUS.SELECTED:
       return {

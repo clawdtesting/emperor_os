@@ -494,6 +494,56 @@ export async function writeCompletionBundle(procurementId, {
   return { dir };
 }
 
+export async function writeValidatorScoreCommitBundle(procurementId, {
+  scoreCommitment,
+  saltHash,
+  notes,
+}) {
+  const dir = await ensureProcSubdir(procurementId, "scoring");
+  await writeFile(path.join(dir, "score_commit_payload.json"), {
+    procurementId: String(procurementId),
+    scoreCommitment,
+    saltHash: saltHash ?? null,
+    notes: notes ?? null,
+    generatedAt: new Date().toISOString(),
+  });
+  await writeFile(path.join(dir, "review_manifest_score_commit.json"), buildReviewManifest({
+    procurementId,
+    phase: "score_commit",
+    files: ["score_commit_payload.json", "unsigned_score_commit_tx.json"],
+    checklist: [
+      "Confirm validator score commit payload fields are correct.",
+      "Confirm score commit window is currently open.",
+      "Sign unsigned_score_commit_tx.json with MetaMask + Ledger.",
+    ],
+  }));
+  return { dir };
+}
+
+export async function writeValidatorScoreRevealBundle(procurementId, {
+  score,
+  salt,
+}) {
+  const dir = await ensureProcSubdir(procurementId, "scoring");
+  await writeFile(path.join(dir, "score_reveal_payload.json"), {
+    procurementId: String(procurementId),
+    score,
+    salt,
+    generatedAt: new Date().toISOString(),
+  });
+  await writeFile(path.join(dir, "review_manifest_score_reveal.json"), buildReviewManifest({
+    procurementId,
+    phase: "score_reveal",
+    files: ["score_commit_payload.json", "score_reveal_payload.json", "unsigned_score_reveal_tx.json"],
+    checklist: [
+      "Confirm score reveal payload matches prior commitment.",
+      "Confirm score reveal window is currently open.",
+      "Sign unsigned_score_reveal_tx.json with MetaMask + Ledger.",
+    ],
+  }));
+  return { dir };
+}
+
 // ── Review manifest builder ───────────────────────────────────────────────────
 
 function buildReviewManifest({ procurementId, phase, files, checklist, warnings = [] }) {

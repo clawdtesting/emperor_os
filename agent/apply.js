@@ -2,7 +2,7 @@ import { applyForJob } from "./mcp.js";
 import { listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson } from "./artifact-manager.js";
-import { buildUnsignedTxPackage } from "./tx-builder.js";
+import { buildUnsignedApplyTxPackage } from "./tx-builder.js";
 
 function pickBest(scoredJobs) {
   return [...scoredJobs].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0] ?? null;
@@ -34,13 +34,10 @@ export async function apply() {
   await ensureJobArtifactDir(job.jobId);
   const artifactPaths = getJobArtifactPaths(job.jobId);
 
-  const unsignedApply = buildUnsignedTxPackage({
-    kind: "requestJobApplication",
+  const unsignedApply = buildUnsignedApplyTxPackage({
     jobId: job.jobId,
     preparedTx,
-    extra: {
-      agentSubdomain: CONFIG.AGENT_SUBDOMAIN
-    }
+    agentSubdomain: CONFIG.AGENT_SUBDOMAIN,
   });
 
   await writeJson(artifactPaths.unsignedApply, unsignedApply);

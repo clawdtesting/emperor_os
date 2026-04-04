@@ -57,6 +57,8 @@ import {
   writeFinalistBundle,
   writeTrialBundle,
   writeCompletionBundle,
+  writeValidatorScoreCommitBundle,
+  writeValidatorScoreRevealBundle,
 } from "../prime-artifact-builder.js";
 import {
   buildCommitApplicationTx,
@@ -65,6 +67,8 @@ import {
   buildSubmitTrialTx,
   buildApproveAgialphaTx,
   buildRequestJobCompletionTx,
+  buildValidatorScoreCommitTx,
+  buildValidatorScoreRevealTx,
 } from "../prime-tx-builder.js";
 import {
   assertCommitGate,
@@ -764,6 +768,51 @@ async function handleBuildCompletionTx(procurementId) {
   return true;
 }
 
+async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
+  const state = await getProcState(procurementId);
+  const payload = state?.validatorScoreCommitPayload;
+  if (!payload?.preparedTx || !payload?.scoreCommitment) {
+    log(`#${procurementId}: validator score commit payload missing in state.validatorScoreCommitPayload`);
+    return false;
+  }
+  await writeValidatorScoreCommitBundle(procurementId, payload);
+  const { path: txPath } = await buildValidatorScoreCommitTx({
+    procurementId,
+    linkedJobId: state.linkedJobId,
+    preparedTx: payload.preparedTx,
+    scoreCommitment: payload.scoreCommitment,
+  });
+  await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY, {
+    txHandoffs: { ...(state.txHandoffs ?? {}), scoreCommit: txPath },
+  });
+  await writeReadyPacket(procurementId, "scoreCommit", txPath);
+  log(`#${procurementId}: → VALIDATOR_SCORE_COMMIT_READY`);
+  return true;
+}
+
+async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
+  const state = await getProcState(procurementId);
+  const payload = state?.validatorScoreRevealPayload;
+  if (!payload?.preparedTx) {
+    log(`#${procurementId}: validator score reveal payload missing in state.validatorScoreRevealPayload`);
+    return false;
+  }
+  await writeValidatorScoreRevealBundle(procurementId, payload);
+  const { path: txPath } = await buildValidatorScoreRevealTx({
+    procurementId,
+    linkedJobId: state.linkedJobId,
+    preparedTx: payload.preparedTx,
+    scoreValue: payload.score,
+    salt: payload.salt,
+  });
+  await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY, {
+    txHandoffs: { ...(state.txHandoffs ?? {}), scoreReveal: txPath },
+  });
+  await writeReadyPacket(procurementId, "scoreReveal", txPath);
+  log(`#${procurementId}: → VALIDATOR_SCORE_REVEAL_READY`);
+  return true;
+}
+
 // ── Per-procurement orchestration cycle ──────────────────────────────────────
 
 export async function orchestrateProcurement(procurementId) {
@@ -826,6 +875,12 @@ export async function orchestrateProcurement(procurementId) {
       case "CHECK_WINNER":
         log(`#${procurementId}: WAITING_SCORE_PHASE — monitoring for winner designation`);
         break;
+      case "BUILD_VALIDATOR_SCORE_COMMIT_TX":
+        await handleBuildValidatorScoreCommitTx(procurementId, procStruct);
+        break;
+      case "BUILD_VALIDATOR_SCORE_REVEAL_TX":
+        await handleBuildValidatorScoreRevealTx(procurementId, procStruct);
+        break;
       case "EXECUTE_JOB":
         if (state.status === PROC_STATUS.SELECTED) {
           await handleExecuteJob(procurementId);
@@ -856,6 +911,8 @@ async function printOrchestratorReport() {
     PROC_STATUS.FINALIST_ACCEPT_READY,
     PROC_STATUS.TRIAL_READY,
     PROC_STATUS.COMPLETION_READY,
+    PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY,
+    PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY,
   ]);
 
   const handoffs = active.filter(s => HANDOFF_STATUSES.has(s.status));
@@ -872,6 +929,8 @@ async function printOrchestratorReport() {
         [PROC_STATUS.FINALIST_ACCEPT_READY]: "acceptFinalist",
         [PROC_STATUS.TRIAL_READY]:           "submitTrial",
         [PROC_STATUS.COMPLETION_READY]:      "requestJobCompletion",
+        [PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY]: "scoreCommit",
+        [PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY]: "scoreReveal",
       }[s.status];
       const txPath = s.txHandoffs?.[txKey] ?? "(path not recorded)";
       console.log(`  #${s.procurementId} ${s.status}`);

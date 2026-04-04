@@ -1,5 +1,6 @@
 // agi-agent/procurement_agent.js
 // AGIJobDiscoveryPrime commit-reveal application flow for Emperor_OS
+throw new Error("Legacy procurement_agent is disabled in production runtime. Use agent/prime/* unsigned-handoff pipeline.");
 //
 // Handles: discover → evaluate → commit → reveal → acceptFinalist → submitTrial
 //
