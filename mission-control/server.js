@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { spawn } from 'child_process'
-import { readdirSync, readFileSync, existsSync, statSync } from 'fs'
+import { readdirSync, readFileSync, existsSync, statSync, mkdirSync, writeFileSync, appendFileSync, renameSync } from 'fs'
 import { dirname, resolve, join } from 'path'
 import { fileURLToPath } from 'url'
 import { createServer } from 'http'
@@ -17,6 +17,249 @@ const TESTS_DIR     = resolve(__dirname, '..', 'tests')
 const WORKSPACE_ROOT = resolve(__dirname, '..')
 const ARTIFACTS_DIR = join(WORKSPACE_ROOT, 'artifacts')
 const AGENT_STATE_DIR = join(WORKSPACE_ROOT, 'agent', 'state', 'jobs')
+const PROC_ARTIFACTS_DIR = join(WORKSPACE_ROOT, 'agent', 'artifacts')
+const NOTIF_STATE_DIR = resolve(__dirname, 'state')
+const NOTIF_STATE_FILE = join(NOTIF_STATE_DIR, 'notifications.json')
+const NOTIF_LOG_FILE = join(NOTIF_STATE_DIR, 'actions.log.jsonl')
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
+const MC_URL = process.env.MISSION_CONTROL_URL || 'http://100.104.194.128:3000'
+
+mkdirSync(NOTIF_STATE_DIR, { recursive: true })
+
+// ── Notification / Action Engine ──────────────────────────────────────────────
+
+function readJsonSafe(file, fallback) {
+  try { return JSON.parse(readFileSync(file, 'utf8')) }
+  catch { return fallback }
+}
+
+function atomicWriteJson(file, data) {
+  const tmp = file + '.tmp'
+  writeFileSync(tmp, JSON.stringify(data, null, 2))
+  renameSync(tmp, file)
+}
+
+function loadNotifState() {
+  return readJsonSafe(NOTIF_STATE_FILE, {
+    lastNotified: {},
+    actions: [],
+    dismissed: {},
+    lastScanAt: null,
+  })
+}
+
+function saveNotifState(state) {
+  state.lastScanAt = new Date().toISOString()
+  const tmp = NOTIF_STATE_FILE + '.tmp'
+  writeFileSync(tmp, JSON.stringify(state, null, 2))
+  renameSync(tmp, NOTIF_STATE_FILE)
+}
+
+function appendActionLog(entry) {
+  appendFileSync(NOTIF_LOG_FILE, JSON.stringify(entry) + '\n')
+}
+
+function urgencyLabel(secsUntilDeadline) {
+  if (secsUntilDeadline == null || secsUntilDeadline < 0) return { level: 'info', label: 'INFO', color: 'text-slate-400' }
+  if (secsUntilDeadline < 3600) return { level: 'urgent', label: 'URGENT', color: 'text-red-400' }
+  if (secsUntilDeadline < 4 * 3600) return { level: 'warning', label: 'WARNING', color: 'text-amber-400' }
+  return { level: 'info', label: 'INFO', color: 'text-slate-400' }
+}
+
+function formatDuration(secs) {
+  if (secs == null) return '—'
+  const s = Math.abs(secs)
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+  return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`
+}
+
+function timeAgo(iso) {
+  if (!iso) return '—'
+  const mins = Math.round((Date.now() - Date.parse(iso)) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.round(hrs / 24)}d ago`
+}
+
+async function sendTelegramMessage(text) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return false
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+      signal: AbortSignal.timeout(10000),
+    })
+    const ok = res.ok
+    if (!ok) console.error('[telegram] send failed:', res.status, await res.text().catch(() => ''))
+    return ok
+  } catch (err) {
+    console.error('[telegram] error:', err.message)
+    return false
+  }
+}
+
+function buildTelegramMessage(action) {
+  const urgency = urgencyLabel(action.secsUntilDeadline)
+  const icon = urgency.level === 'urgent' ? '\uD83D\uDD34' : urgency.level === 'warning' ? '\uD83D\uDFE1' : '\u2699\uFE0F'
+  const deadlineText = action.secsUntilDeadline != null
+    ? (action.secsUntilDeadline < 0 ? `Deadline passed ${formatDuration(action.secsUntilDeadline)} ago` : `${formatDuration(action.secsUntilDeadline)} remaining`)
+    : ''
+
+  const sourceLabel = action.sourceType === 'procurement' ? `Proc #${action.sourceId}` : `Job #${action.sourceId}`
+  const deepLink = action.sourceType === 'procurement'
+    ? `${MC_URL}/?tab=ops&proc=${action.sourceId}`
+    : `${MC_URL}/?tab=ops`
+
+  let msg = `${icon} <b>${sourceLabel}</b> \u2014 ${action.action}\n`
+  msg += `${action.summary}\n`
+  if (deadlineText) msg += `\u23F1 ${deadlineText}\n`
+  if (action.blockedReason) msg += `\u26A0\uFE0F ${action.blockedReason}\n`
+  msg += `\nReview \u2192 ${deepLink}`
+  return msg
+}
+
+async function scanProcurementActions() {
+  const actions = []
+  if (!existsSync(PROC_ARTIFACTS_DIR)) return actions
+
+  const dirs = readdirSync(PROC_ARTIFACTS_DIR).filter(d => d.startsWith('proc_') && statSync(join(PROC_ARTIFACTS_DIR, d)).isDirectory())
+
+  for (const dir of dirs) {
+    const procId = dir.replace('proc_', '')
+    const statePath = join(PROC_ARTIFACTS_DIR, dir, 'state.json')
+    const nextActionPath = join(PROC_ARTIFACTS_DIR, dir, 'next_action.json')
+
+    const state = readJsonSafe(statePath, null)
+    const nextAction = readJsonSafe(nextActionPath, null)
+
+    if (!state && !nextAction) continue
+
+    const action = nextAction?.action || 'UNKNOWN'
+    const status = state?.status || 'unknown'
+    const secsUntilDeadline = nextAction?.secsUntilDeadline
+    const blockedReason = nextAction?.blockedReason
+    const summary = nextAction?.summary || status
+
+    actions.push({
+      sourceType: 'procurement',
+      sourceId: procId,
+      status,
+      action,
+      summary,
+      secsUntilDeadline,
+      blockedReason,
+      urgency: urgencyLabel(secsUntilDeadline),
+      updatedAt: state?.lastChainSync || nextAction?.generatedAt || null,
+    })
+  }
+
+  return actions
+}
+
+async function scanJobActions() {
+  const actions = []
+  if (!existsSync(AGENT_STATE_DIR)) return actions
+
+  const files = readdirSync(AGENT_STATE_DIR).filter(f => f.endsWith('.json'))
+
+  for (const file of files) {
+    const state = readJsonSafe(join(AGENT_STATE_DIR, file), null)
+    if (!state) continue
+
+    const jobId = state.jobId || file.replace('.json', '')
+    const status = state.status || 'unknown'
+
+    const needsAttention = ['assigned', 'in_progress', 'needs_review', 'completion_ready'].includes(status.toLowerCase())
+
+    if (!needsAttention) continue
+
+    actions.push({
+      sourceType: 'job',
+      sourceId: jobId,
+      status,
+      action: status.toUpperCase(),
+      summary: `Job ${jobId} is ${status}`,
+      secsUntilDeadline: state.deadlineSecs || null,
+      blockedReason: null,
+      urgency: urgencyLabel(state.deadlineSecs),
+      updatedAt: state.updatedAt || state.lastSync || null,
+    })
+  }
+
+  return actions
+}
+
+async function scanAndNotify() {
+  const state = loadNotifState()
+  const now = new Date().toISOString()
+
+  try {
+    const [procActions, jobActions] = await Promise.all([
+      scanProcurementActions(),
+      scanJobActions(),
+    ])
+
+    const allActions = [...procActions, ...jobActions]
+    let newActions = []
+
+    for (const action of allActions) {
+      const key = `${action.sourceType}:${action.sourceId}`
+      const lastNotified = state.lastNotified[key]
+
+      if (!lastNotified || lastNotified.status !== action.status || lastNotified.action !== action.action) {
+        const actionId = `${key}:${action.status}:${Date.now()}`
+        const entry = {
+          id: actionId,
+          key,
+          sourceType: action.sourceType,
+          sourceId: action.sourceId,
+          previousStatus: lastNotified?.status || null,
+          newStatus: action.status,
+          action: action.action,
+          summary: action.summary,
+          secsUntilDeadline: action.secsUntilDeadline,
+          blockedReason: action.blockedReason,
+          urgency: action.urgency.level,
+          createdAt: now,
+          dismissed: false,
+        }
+
+        state.actions.push(entry)
+        state.lastNotified[key] = { status: action.status, action: action.action, at: now }
+        newActions.push(entry)
+        appendActionLog(entry)
+
+        const tgMsg = buildTelegramMessage(action)
+        const sent = await sendTelegramMessage(tgMsg)
+        console.log(`[notify] ${action.sourceType} #${action.sourceId}: ${action.status} \u2192 ${action.action} (telegram: ${sent ? 'sent' : 'failed'})`)
+      }
+    }
+
+    if (newActions.length > 0) {
+      const msg = `data: ${JSON.stringify({ type: 'actions', actions: newActions })}\n\n`
+      sseClients.forEach(c => c.write(msg))
+    }
+
+    if (state.actions.length > 500) {
+      state.actions = state.actions.slice(-500)
+    }
+
+    saveNotifState(state)
+  } catch (err) {
+    console.error('[notify] scan error:', err.message)
+  }
+}
 
 async function callMcp(tool, args = {}) {
   const res = await fetch(MCP_ENDPOINT, {
@@ -436,6 +679,48 @@ app.post('/api/test-run', (req, res) => {
   proc.on('error', err  => { send('error', { message: err.message });               res.end() })
   req.on('close',  ()   => proc.kill())
 })
+
+// ── Actions / Notifications API ───────────────────────────────────────────────
+
+app.get('/api/actions', (req, res) => {
+  const state = loadNotifState()
+  const filter = req.query.filter
+  let actions = state.actions
+
+  if (filter === 'urgent') {
+    actions = actions.filter(a => a.urgency === 'urgent' && !state.dismissed[a.id])
+  } else if (filter === 'pending') {
+    actions = actions.filter(a => !state.dismissed[a.id])
+  } else if (filter === 'dismissed') {
+    actions = actions.filter(a => state.dismissed[a.id])
+  } else {
+    actions = actions.filter(a => !state.dismissed[a.id])
+  }
+
+  res.json({
+    actions: actions.reverse(),
+    total: state.actions.length,
+    dismissed: Object.keys(state.dismissed).length,
+    lastScanAt: state.lastScanAt,
+  })
+})
+
+app.post('/api/actions/:id/dismiss', (req, res) => {
+  const state = loadNotifState()
+  const id = req.params.id
+  if (!state.actions.find(a => a.id === id)) {
+    return res.status(404).json({ error: 'action not found' })
+  }
+  state.dismissed[id] = { dismissedAt: new Date().toISOString() }
+  saveNotifState(state)
+  res.json({ ok: true, dismissed: id })
+})
+
+// ── Start notification scanner (after sseClients is available) ────────────────
+const SCAN_INTERVAL_MS = 30_000
+console.log('[notify] starting scanner (interval: ' + (SCAN_INTERVAL_MS / 1000) + 's)')
+scanAndNotify()
+setInterval(scanAndNotify, SCAN_INTERVAL_MS)
 
 // ── Serve React frontend (production build) ───────────────────────────────────
 const DIST = resolve(__dirname, 'dist')
