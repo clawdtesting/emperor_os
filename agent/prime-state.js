@@ -7,6 +7,7 @@
 // State survives restarts. All writes are atomic (tmp + rename).
 // No signing. No broadcasting. Pure file I/O.
 
+import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -72,15 +73,18 @@ export function emptyProcState(procurementId, jobId) {
     status:          PROC_STATUS.DISCOVERED,
     statusHistory:   [{ status: PROC_STATUS.DISCOVERED, at: now }],
 
+    // State integrity hash chain — each write appends the hash of the previous state
+    stateHash:       null,
+
     // Operator decisions
-    fitApproved:     null,      // true | false | null (pending)
+    fitApproved:     null,
     fitDecisionAt:   null,
 
     // Application material
-    applicationURI:  null,      // ipfs://... (pinned application markdown)
-    commitmentSalt:  null,      // bytes32 hex
-    commitmentHash:  null,      // bytes32 hex
-    commitTxHash:    null,      // on-chain tx hash after operator broadcasts
+    applicationURI:  null,
+    commitmentSalt:  null,
+    commitmentHash:  null,
+    commitTxHash:    null,
     revealTxHash:    null,
 
     // Finalist material
@@ -90,8 +94,8 @@ export function emptyProcState(procurementId, jobId) {
 
     // Trial material
     trialArtifactDir: null,
-    trialURI:        null,      // ipfs://... (pinned trial)
-    trialFetchback:  null,      // verification result
+    trialURI:        null,
+    trialFetchback:  null,
     trialTxHash:     null,
 
     // Selection / winner
@@ -146,9 +150,20 @@ export async function getOrCreateProcState(procurementId, jobId) {
   return fresh;
 }
 
+function computeStateHash(data) {
+  return createHash("sha256").update(JSON.stringify(data)).digest("hex");
+}
+
+function attachStateHash(state) {
+  state.stateHash = computeStateHash(state);
+  return state;
+}
+
 /**
  * Applies a patch to the current procurement state.
- * Does NOT validate transitions — use transitionProcStatus for that.
+ * If the patch includes a `status` field, transition validation is enforced
+ * — the new status must be a valid next state from the current status.
+ * Use forceSetProcState() only for explicit operator recovery.
  * @param {string|number} procurementId
  * @param {Partial<ProcState>} patch
  * @returns {Promise<ProcState>}
@@ -161,8 +176,52 @@ export async function setProcState(procurementId, patch) {
     ...patch,
     updatedAt: now,
   };
+
+  if ("status" in patch && patch.status !== current.status) {
+    assertValidTransition(current.status, patch.status);
+    next.statusHistory = [
+      ...(current.statusHistory ?? []),
+      { status: patch.status, at: now },
+    ];
+  }
+
   await ensureDir(procRootDir(procurementId));
-  await writeJson(procStatePath(procurementId), next);
+  await writeJson(procStatePath(procurementId), attachStateHash(next));
+  return next;
+}
+
+/**
+ * Forces a state patch WITHOUT transition validation.
+ * ONLY for explicit operator recovery. Logs the override.
+ * @param {string|number} procurementId
+ * @param {Partial<ProcState>} patch
+ * @param {string} [reason] - operator note for audit trail
+ * @returns {Promise<ProcState>}
+ */
+export async function forceSetProcState(procurementId, patch, reason = "operator override") {
+  const now     = new Date().toISOString();
+  const current = await getProcState(procurementId) ?? emptyProcState(procurementId);
+  const next    = {
+    ...current,
+    ...patch,
+    updatedAt: now,
+    forceOverrideNote: {
+      reason,
+      previousStatus: current.status,
+      newStatus: patch.status ?? current.status,
+      at: now,
+    },
+  };
+
+  if ("status" in patch && patch.status !== current.status) {
+    next.statusHistory = [
+      ...(current.statusHistory ?? []),
+      { status: patch.status, at: now, forced: true },
+    ];
+  }
+
+  await ensureDir(procRootDir(procurementId));
+  await writeJson(procStatePath(procurementId), attachStateHash(next));
   return next;
 }
 
@@ -192,7 +251,7 @@ export async function transitionProcStatus(procurementId, newStatus, extra = {})
     updatedAt: now,
   };
 
-  await writeJson(procStatePath(procurementId), next);
+  await writeJson(procStatePath(procurementId), attachStateHash(next));
   return next;
 }
 

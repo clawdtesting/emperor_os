@@ -9,7 +9,8 @@ const FALLBACK_ABI_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 const CONTRACTS = {
   AGI_JOB_MANAGER: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
-  AGIALPHA_TOKEN: "0xA61a3B3a130a9c20768EEBF97E21515A6046a1fA"
+  AGIALPHA_TOKEN: "0xA61a3B3a130a9c20768EEBF97E21515A6046a1fA",
+  AGI_JOB_DISCOVERY_PRIME: "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29"
 };
 
 function normalizeAddress(address) {
@@ -45,19 +46,23 @@ export async function loadAbiRegistry() {
 
   const agiJobManagerAbi = await readAbiJson("AGIJobManager.json");
   const erc20Abi = await readAbiJson("ERC20.json");
+  const primeAbi = await readAbiJson("AGIJobDiscoveryPrime.json");
 
   cache = {
     addresses: {
       AGI_JOB_MANAGER: normalizeAddress(CONTRACTS.AGI_JOB_MANAGER),
-      AGIALPHA_TOKEN: normalizeAddress(CONTRACTS.AGIALPHA_TOKEN)
+      AGIALPHA_TOKEN: normalizeAddress(CONTRACTS.AGIALPHA_TOKEN),
+      AGI_JOB_DISCOVERY_PRIME: normalizeAddress(CONTRACTS.AGI_JOB_DISCOVERY_PRIME)
     },
     abis: {
       AGI_JOB_MANAGER: agiJobManagerAbi,
-      AGIALPHA_TOKEN: erc20Abi
+      AGIALPHA_TOKEN: erc20Abi,
+      AGI_JOB_DISCOVERY_PRIME: primeAbi
     },
     interfaces: {
       AGI_JOB_MANAGER: new Interface(agiJobManagerAbi),
-      AGIALPHA_TOKEN: new Interface(erc20Abi)
+      AGIALPHA_TOKEN: new Interface(erc20Abi),
+      AGI_JOB_DISCOVERY_PRIME: new Interface(primeAbi)
     }
   };
 
@@ -68,7 +73,8 @@ export async function getAllowedContracts() {
   const registry = await loadAbiRegistry();
   return new Set([
     registry.addresses.AGI_JOB_MANAGER,
-    registry.addresses.AGIALPHA_TOKEN
+    registry.addresses.AGIALPHA_TOKEN,
+    registry.addresses.AGI_JOB_DISCOVERY_PRIME
   ]);
 }
 
@@ -88,6 +94,13 @@ export async function getInterfaceForAddress(address) {
       contractKey: "AGIALPHA_TOKEN",
       address: registry.addresses.AGIALPHA_TOKEN,
       iface: registry.interfaces.AGIALPHA_TOKEN
+    };
+  }
+  if (normalized === registry.addresses.AGI_JOB_DISCOVERY_PRIME) {
+    return {
+      contractKey: "AGI_JOB_DISCOVERY_PRIME",
+      address: registry.addresses.AGI_JOB_DISCOVERY_PRIME,
+      iface: registry.interfaces.AGI_JOB_DISCOVERY_PRIME
     };
   }
 

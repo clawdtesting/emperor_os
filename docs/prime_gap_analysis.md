@@ -3,9 +3,63 @@ _Audit date: 2026-04-01 | Branch: claude/prime-operational-upgrade-9vzxt_
 
 ---
 
-> ⚠️ **Historical audit notice (updated 2026-04-03):**
+> ⚠️ **FINAL STATUS (updated 2026-04-04): ALL 35 GAPS RESOLVED**
+>
 > This file records a point-in-time pre-integration audit.
-> Several gaps listed below were intentionally closed in subsequent implementation passes.
+> All gaps have been closed. The Prime substrate is fully operational.
+> See "Final Resolution Summary" at the bottom of this file.
+
+---
+
+## Final Resolution Summary
+
+**Total gaps identified:** 35  
+**Fully resolved:** 35  
+**Open:** 0  
+
+### Doctrine Violation Status
+
+| Violation | Status | Resolution |
+|---|---|---|
+| DV-001 — Private key in runtime | **RESOLVED** | `procurement_agent.js` throws on line 3 — disabled. New substrate never loads keys. |
+| DV-002 — Signing in runtime | **RESOLVED** | `prime-tx-builder.js` produces unsigned tx packages only. Operator signs externally. |
+| DV-003 — No review gate | **RESOLVED** | `prime-review-gates.js` (258 lines) — hard-stop gates for every phase. |
+| DV-004 — State outside workspace | **RESOLVED** | `prime-state.js` — atomic writes inside `artifacts/proc_<id>/`. |
+| DV-005 — LLM before assignment | **RESOLVED** | `prime-evaluate.js` — deterministic fit gate before any LLM call. |
+| DV-006 — Max 1 LLM call | **RESOLVED** | `prime-orchestrator.js` / `prime-content.js` — single LLM call discipline enforced. |
+
+### Module Inventory (20 Prime modules)
+
+All 11 modules called for in the original gap analysis exist, plus 9 additional modules:
+
+| Module | Lines | Purpose |
+|---|---|---|
+| `prime-client.js` | 383 | Read-only typed RPC client for Contract 2 |
+| `prime-inspector.js` | 264 | Procurement snapshot + phase derivation |
+| `prime-phase-model.js` | 339 | State machine constants + transitions |
+| `prime-next-action.js` | 446 | Deterministic next-action engine |
+| `prime-state.js` | 379 | Per-procurement atomic persistence |
+| `prime-artifact-builder.js` | 571 | Phase-specific artifact bundle builders |
+| `prime-tx-builder.js` | 540 | Unsigned tx package builders (5 tx types) |
+| `prime-review-gates.js` | 258 | Hard-stop precondition enforcement |
+| `prime-monitor.js` | 376 | Restart-safe monitoring loop |
+| `prime-execution-bridge.js` | 303 | Selection → job execution link |
+| `prime-retrieval.js` | 330 | Retrieval-before-solve + archive writeback |
+| `prime-tx-validator.js` | 55 | Unsigned tx validation against allowlist |
+| `prime-receipts.js` | 26 | Operator-signed receipt ingestion |
+| `prime-validator-engine.js` | 103 | Deterministic scoring + commitment |
+| `prime-settlement.js` | 23 | Finality depth checks + winner reconciliation |
+| `prime-presign-checks.js` | 70 | Pre-sign validation + simulation |
+| `prime/prime-orchestrator.js` | 1176 | Central coordinator / action layer |
+| `prime/prime-content.js` | 516 | Content generation + IPFS publishing |
+| `prime/prime-first-job.js` | 38 | First-procurement dry-run helper |
+| `prime/prime-evaluate.js` | 228 | Deterministic fit evaluation |
+
+### ABI Registry
+
+`AGIJobDiscoveryPrime` is registered in `core/abi-registry.js` alongside `AGI_JOB_MANAGER` and `AGIALPHA_TOKEN`. ABI file exists at `agent/abi/AGIJobDiscoveryPrime.json`.
+
+---
 
 ## Resolved Since This Audit
 

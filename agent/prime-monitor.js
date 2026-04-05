@@ -37,6 +37,7 @@ import {
   getOrCreateProcState,
   getProcState,
   setProcState,
+  transitionProcStatus,
   listActiveProcurements,
   writeProcCheckpoint,
   procRootDir,
@@ -308,9 +309,7 @@ async function refreshActiveProcurements(agentAddress) {
       const chainPhase = deriveChainPhase(procStruct, now);
 
       if (didMissRequiredWindow(state.status, chainPhase)) {
-        await setProcState(procurementId, {
-          status: PROC_STATUS.MISSED_WINDOW,
-          canonicalPhase: toCanonicalPhase(PROC_STATUS.MISSED_WINDOW),
+        await transitionProcStatus(procurementId, PROC_STATUS.MISSED_WINDOW, {
           missedWindowAt: new Date().toISOString(),
           missedWindowReason: `Required action window missed while in ${state.status} during ${chainPhase}`,
         });

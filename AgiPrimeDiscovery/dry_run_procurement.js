@@ -294,16 +294,6 @@ async function run() {
     console.log(`Payout: ${procurement.payout} AGIALPHA | Duration: ${procurement.duration / 86400} days`)
     console.log(`Min agents: ${procurement.minAgents} | Max finalists: ${procurement.maxFinalists} | Validators: ${procurement.validatorCount}`)
   }
-  } else {
-    procurement = GENESIS_PROCUREMENT
-    usingMock   = false
-    specContent = GENESIS_SPEC
-    console.log(`\nNo procurement in commit window — using Genesis Prime procurement #${procurement.procurementId}`)
-    console.log(`Genesis spec: "AGI Job · Genesis Prime · PRESS RELEASE — Announce AGIJobDiscoveryPrime"`)
-    console.log(`Real tx: 0xe90422f666b87e4962dd976015c18ee7a592dc40ddd6070b0f000a9404f93d1b`)
-    console.log(`Payout: ${procurement.payout} AGIALPHA | Duration: ${procurement.duration / 86400} days`)
-    console.log(`Min agents: ${procurement.minAgents} | Max finalists: ${procurement.maxFinalists} | Validators: ${procurement.validatorCount}`)
-  }
 
   // ── STEP 2: Evaluate ──────────────────────────────────────────────────────
   sep('STEP 2 — evaluate() [REAL Claude call]')
