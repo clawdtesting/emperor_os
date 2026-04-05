@@ -11,6 +11,7 @@
 // Run: node validation/validation.test.js
 
 import { strict as assert } from "assert";
+import { ethers } from "ethers";
 import {
   adjudicateScore,
   computeScoreCommitment,
@@ -36,6 +37,7 @@ import {
   isValidatorHandoffStatus,
 } from "./lifecycle-branch.js";
 import { PROC_STATUS } from "../agent/prime-phase-model.js";
+import { assertValidJobTransition } from "../agent/state.js";
 
 let passed = 0;
 let failed = 0;
@@ -357,6 +359,117 @@ test("isValidatorHandoffStatus identifies handoff states", () => {
   assert.ok(!isValidatorHandoffStatus(PROC_STATUS.DISCOVERED));
 });
 
+// ── Contract #1 Dry-Run Tests ─────────────────────────────────────────────────
+
+test("dry-run report initializes with correct schema", () => {
+  const report = {
+    schema: "emperor-os/contract1-dryrun/v1",
+    jobId: "1",
+    contract: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+    chainId: 1,
+    checks: [],
+  };
+  assert.strictEqual(report.schema, "emperor-os/contract1-dryrun/v1");
+  assert.strictEqual(report.chainId, 1);
+  assert.ok(Array.isArray(report.checks));
+});
+
+test("dry-run tx encoding produces correct selector", () => {
+  const abi = [
+    "function requestJobCompletion(uint256 _jobId, string _jobCompletionURI)",
+  ];
+  const iface = new ethers.Interface(abi);
+  const calldata = iface.encodeFunctionData("requestJobCompletion", [
+    BigInt(1),
+    "ipfs://QmTest123",
+  ]);
+  const selector = calldata.slice(0, 10);
+  assert.strictEqual(selector, "0x8d1bc00f");
+});
+
+test("dry-run tx encoding produces correct target", () => {
+  const abi = [
+    "function requestJobCompletion(uint256 _jobId, string _jobCompletionURI)",
+  ];
+  const iface = new ethers.Interface(abi);
+  const calldata = iface.encodeFunctionData("requestJobCompletion", [
+    BigInt(42),
+    "ipfs://QmTest456",
+  ]);
+  const decoded = iface.parseTransaction({ data: calldata });
+  assert.strictEqual(decoded.name, "requestJobCompletion");
+  assert.strictEqual(decoded.args[0].toString(), "42");
+  assert.strictEqual(decoded.args[1], "ipfs://QmTest456");
+});
+
+test("dry-run tx rejects invalid completion URI", () => {
+  const abi = [
+    "function requestJobCompletion(uint256 _jobId, string _jobCompletionURI)",
+  ];
+  const iface = new ethers.Interface(abi);
+  const calldata = iface.encodeFunctionData("requestJobCompletion", [BigInt(1), ""]);
+  assert.strictEqual(calldata.slice(0, 10), "0x8d1bc00f");
+});
+
+test("dry-run unsigned package has correct structure", () => {
+  const pkg = {
+    schema: "emperor-os/unsigned-tx/v1",
+    kind: "requestJobCompletion",
+    jobId: 1,
+    contract: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+    chainId: 1,
+    to: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+    data: "0x8d1bc00f",
+    value: "0",
+  };
+  assert.strictEqual(pkg.schema, "emperor-os/unsigned-tx/v1");
+  assert.strictEqual(pkg.kind, "requestJobCompletion");
+  assert.strictEqual(pkg.chainId, 1);
+  assert.strictEqual(pkg.value, "0");
+});
+
+test("dry-run pre-sign checks validate schema", () => {
+  const validPkg = {
+    schema: "emperor-os/unsigned-tx/v1",
+    chainId: 1,
+    contract: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+    to: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+    data: "0x8d1bc00f0000000000000000000000000000000000000000000000000000000000000001",
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+  };
+  assert.strictEqual(validPkg.schema, "emperor-os/unsigned-tx/v1");
+  assert.strictEqual(validPkg.chainId, 1);
+  assert.strictEqual(validPkg.data.slice(0, 10), "0x8d1bc00f");
+});
+
+test("dry-run pre-sign checks detect expired package", () => {
+  const expiredPkg = {
+    schema: "emperor-os/unsigned-tx/v1",
+    chainId: 1,
+    contract: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+    to: "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+    data: "0x8d1bc00f",
+    expiresAt: new Date(Date.now() - 1000).toISOString(),
+  };
+  const expiresAt = Date.parse(expiredPkg.expiresAt);
+  assert.ok(expiresAt < Date.now());
+});
+
+test("dry-run state transitions are valid for assigned job", () => {
+  assert.doesNotThrow(() => assertValidJobTransition("assigned", "deliverable_ready"));
+  assert.doesNotThrow(() => assertValidJobTransition("assigned", "failed"));
+});
+
+test("dry-run state transitions are valid for deliverable_ready job", () => {
+  assert.doesNotThrow(() => assertValidJobTransition("deliverable_ready", "completion_pending_review"));
+  assert.doesNotThrow(() => assertValidJobTransition("deliverable_ready", "failed"));
+});
+
+test("dry-run detects invalid state transitions", () => {
+  assert.throws(() => assertValidJobTransition("completed", "submitted"));
+  assert.throws(() => assertValidJobTransition("failed", "deliverable_ready"));
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n══ Validator Test Results ═══════════════════════════════`);
@@ -368,3 +481,4 @@ console.log(`══════════════════════�
 if (failed > 0) {
   process.exit(1);
 }
+

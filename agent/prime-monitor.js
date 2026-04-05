@@ -331,6 +331,7 @@ async function updateCursorAnchor(monitorState, key, blockNumber) {
 
 async function reconcileReorgCursors(monitorState) {
   const anchors = monitorState.cursorAnchors ?? {};
+  let reorgDetected = false;
   for (const [key, anchor] of Object.entries(anchors)) {
     if (!anchor?.blockNumber || !anchor?.blockHash) continue;
     const currentHash = await getBlockHash(Number(anchor.blockNumber));
@@ -340,7 +341,65 @@ async function reconcileReorgCursors(monitorState) {
     if (key === "shortlist") monitorState.lastShortlistBlock = rewindTo;
     if (key === "winner") monitorState.lastWinnerBlock = rewindTo;
     log(`Reorg detected at ${key} cursor block ${anchor.blockNumber}. Rewinding to ${rewindTo}`);
+    reorgDetected = true;
   }
+  if (reorgDetected) {
+    monitorState.lastReorgAt = new Date().toISOString();
+    monitorState.reorgCount = (monitorState.reorgCount ?? 0) + 1;
+  }
+}
+
+async function checkProcurementReorgIntegrity(procurementId, state) {
+  if (!state?.lastChainSync) return { ok: true };
+  const syncBlock = state.lastChainSyncBlock ?? null;
+  if (!syncBlock) return { ok: true };
+
+  try {
+    const currentHash = await getBlockHash(Number(syncBlock));
+    const storedHash = state.lastChainSyncBlockHash ?? null;
+    if (storedHash && currentHash && currentHash !== storedHash) {
+      return {
+        ok: false,
+        reason: "reorg",
+        syncBlock,
+        storedHash,
+        currentHash,
+        message: `Procurement #${procurementId} synced at block ${syncBlock} which has been reorged`,
+      };
+    }
+  } catch {
+    return { ok: true, reason: "hash-check-failed" };
+  }
+  return { ok: true };
+}
+  if (reorgDetected) {
+    monitorState.lastReorgAt = new Date().toISOString();
+    monitorState.reorgCount = (monitorState.reorgCount ?? 0) + 1;
+  }
+}
+
+async function checkProcurementReorgIntegrity(procurementId, state) {
+  if (!state?.lastChainSync) return { ok: true };
+  const syncBlock = state.lastChainSyncBlock ?? null;
+  if (!syncBlock) return { ok: true };
+
+  try {
+    const currentHash = await getBlockHash(Number(syncBlock));
+    const storedHash = state.lastChainSyncBlockHash ?? null;
+    if (storedHash && currentHash && currentHash !== storedHash) {
+      return {
+        ok: false,
+        reason: "reorg",
+        syncBlock,
+        storedHash,
+        currentHash,
+        message: `Procurement #${procurementId} synced at block ${syncBlock} which has been reorged`,
+      };
+    }
+  } catch {
+    return { ok: true, reason: "hash-check-failed" };
+  }
+  return { ok: true };
 }
 
 // ── Refresh active procurements ───────────────────────────────────────────────
@@ -355,6 +414,31 @@ async function refreshActiveProcurements(agentAddress) {
   for (const state of active) {
     const { procurementId } = state;
     try {
+      // Check if this procurement's sync block has been reorged
+      const reorgCheck = await checkProcurementReorgIntegrity(procurementId, state);
+      if (!reorgCheck.ok) {
+        log(`  #${procurementId} REORG DETECTED — ${reorgCheck.message}. Rolling back state.`);
+        // Roll back submitted states that may have been based on reorged chain data
+        const rollbackMap = {
+          [PROC_STATUS.COMMIT_SUBMITTED]: PROC_STATUS.COMMIT_READY,
+          [PROC_STATUS.REVEAL_SUBMITTED]: PROC_STATUS.REVEAL_READY,
+          [PROC_STATUS.FINALIST_ACCEPT_SUBMITTED]: PROC_STATUS.FINALIST_ACCEPT_READY,
+          [PROC_STATUS.TRIAL_SUBMITTED]: PROC_STATUS.TRIAL_READY,
+          [PROC_STATUS.COMPLETION_SUBMITTED]: PROC_STATUS.COMPLETION_READY,
+        };
+        const rollbackTo = rollbackMap[state.status];
+        if (rollbackTo) {
+          await setProcState(procurementId, {
+            status: rollbackTo,
+            reorgRolledBackAt: new Date().toISOString(),
+            reorgPreviousStatus: state.status,
+            reorgSyncBlock: reorgCheck.syncBlock,
+          });
+          log(`  #${procurementId}: rolled back ${state.status} → ${rollbackTo}`);
+        }
+        continue;
+      }
+
       // Fetch fresh chain data
       const procStruct = await fetchProcurement(procurementId);
       const appView    = agentAddress ? await fetchApplicationView(procurementId, agentAddress) : null;
@@ -378,6 +462,8 @@ async function refreshActiveProcurements(agentAddress) {
       }
 
       // Persist chain snapshot + next action
+      const currentBlock = await getCurrentBlock();
+      const blockHash = await getBlockHash(currentBlock);
       await writeProcCheckpoint(procurementId, "chain_snapshot.json", {
         procurementId:  String(procurementId),
         snapshotAt:     new Date().toISOString(),
@@ -385,12 +471,18 @@ async function refreshActiveProcurements(agentAddress) {
         procurement:    procStruct,
         applicationView: appView ?? null,
         deadlineWarnings: warnings,
+        syncBlock:      currentBlock,
+        syncBlockHash:  blockHash,
       });
 
       await writeProcCheckpoint(procurementId, "next_action.json", nextAction);
 
-      // Update state lastChainSync
-      await setProcState(procurementId, { lastChainSync: new Date().toISOString() });
+      // Update state lastChainSync with block hash for reorg detection
+      await setProcState(procurementId, {
+        lastChainSync: new Date().toISOString(),
+        lastChainSyncBlock: currentBlock,
+        lastChainSyncBlockHash: blockHash,
+      });
 
       log(`  #${procurementId} refreshed — status=${state.status} action=${nextAction.action}` +
           (nextAction.blockedReason ? ` BLOCKED: ${nextAction.blockedReason}` : ""));
