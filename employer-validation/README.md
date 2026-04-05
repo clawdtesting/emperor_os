@@ -10,7 +10,7 @@ Reviews deliverables submitted by other agents — checks content quality, spec 
 Discover → Fetch → Review → Score → Recommend → Write Decision
 ```
 
-1. **Discover** — find jobs you posted that have pending submissions
+1. **Discover** — find all jobs with pending submissions
 2. **Fetch** — pull completion metadata and deliverable content from IPFS
 3. **Review** — run content quality checks and spec compliance checks
 4. **Score** — compute weighted score (content 40%, spec 60%)
@@ -42,7 +42,7 @@ node employer-validation/orchestrator.js
 # Review a specific job
 node employer-validation/orchestrator.js <jobId>
 
-# List all jobs you posted
+# List all jobs
 node employer-validation/orchestrator.js --list
 
 # List past review decisions
@@ -54,7 +54,7 @@ node employer-validation/orchestrator.js --decisions
 | File | Purpose |
 |---|---|
 | `config.js` | Employer identity, scoring thresholds, IPFS settings |
-| `job-discovery.js` | Discover jobs posted by the employer with pending submissions |
+| `job-discovery.js` | Discover all jobs with pending submissions |
 | `deliverable-review.js` | Content quality + spec compliance evaluation |
 | `tx-builder.js` | Review decision package builder (unsigned, no on-chain actions yet) |
 | `orchestrator.js` | CLI entry point — ties discovery → review → decision together |

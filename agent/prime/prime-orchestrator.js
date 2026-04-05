@@ -865,13 +865,6 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
     return false;
   }
 
-  const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
-  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
-  if (!assignment.assigned) {
-    log(`#${procurementId}: validator assignment not chain-confirmed; score commit remains locked`);
-    return false;
-  }
-
   let payload = state?.validatorScoreCommitPayload;
   if (!payload?.preparedTx || !payload?.scoreCommitment) {
     const generated = await buildValidatorScoringPayloads({
@@ -1029,21 +1022,55 @@ export async function orchestrateProcurement(procurementId) {
       case "NONE":
         await handleReceiptDrivenReadyTransitions(procurementId, state.status);
         break;
-      case "INSPECT":                await handleInspect(procurementId);                           break;
-      case "EVALUATE_FIT":           await handleEvaluateFit(procurementId, procStruct, jobSpec);  break;
-      case "DRAFT_APPLICATION":      await handleDraftApplication(procurementId, procStruct, jobSpec); break;
-      case "BUILD_COMMIT_TX":        await handleBuildCommitTx(procurementId, procStruct);         break;
-      case "WAIT_REVEAL_WINDOW":     await handleWaitRevealWindow(procurementId, procStruct);      break;
-      case "BUILD_REVEAL_TX":        await handleBuildRevealTx(procurementId, procStruct);         break;
+      case "INSPECT": {
+        const idemKey = `inspect:${state.procurementId}`;
+        const didRun = await guardIdempotentStep(procurementId, "inspect", idemKey);
+        if (!didRun) break;
+        await handleInspect(procurementId);
+        break;
+      }
+      case "EVALUATE_FIT": {
+        const idemKey = `evaluate:${state.procurementId}:${procStruct?.payout ?? "na"}`;
+        const didRun = await guardIdempotentStep(procurementId, "evaluateFit", idemKey);
+        if (!didRun) break;
+        await handleEvaluateFit(procurementId, procStruct, jobSpec);
+        break;
+      }
+      case "DRAFT_APPLICATION": {
+        const idemKey = `draft:${state.procurementId}`;
+        const didRun = await guardIdempotentStep(procurementId, "draftApplication", idemKey);
+        if (!didRun) break;
+        await handleDraftApplication(procurementId, procStruct, jobSpec);
+        break;
+      }
+      case "BUILD_COMMIT_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_COMMIT_TX")) break;
+        await handleBuildCommitTx(procurementId, procStruct);
+        break;
+      case "WAIT_REVEAL_WINDOW":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_REVEAL_TX")) break;
+        await handleWaitRevealWindow(procurementId, procStruct);
+        break;
+      case "BUILD_REVEAL_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_REVEAL_TX")) break;
+        await handleBuildRevealTx(procurementId, procStruct);
+        break;
       case "WAIT_SHORTLIST":         await handleWaitShortlist(procurementId);                     break;
       case "CHECK_SHORTLIST":        await handleWaitShortlist(procurementId);                     break;
-      case "BUILD_FINALIST_TX":      await handleBuildFinalistTx(procurementId, procStruct);       break;
+      case "BUILD_FINALIST_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_FINALIST_TX")) break;
+        await handleBuildFinalistTx(procurementId, procStruct);
+        break;
       case "BUILD_TRIAL": {
+        if (!guardDeadline(procurementId, procStruct, "BUILD_TRIAL")) break;
         const built = await handleBuildTrial(procurementId, procStruct, jobSpec);
         if (built) await handleBuildTrialTx(procurementId, procStruct);
         break;
       }
-      case "BUILD_TRIAL_TX":         await handleBuildTrialTx(procurementId, procStruct);          break;
+      case "BUILD_TRIAL_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_TRIAL_TX")) break;
+        await handleBuildTrialTx(procurementId, procStruct);
+        break;
       case "WAIT_SCORING":
         const trialReceipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "submitTrial" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
         // Detect if trial was submitted on-chain.
