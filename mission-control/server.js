@@ -1,8 +1,8 @@
 import express from 'express'
 import cors from 'cors'
 import { spawn } from 'child_process'
-import { readdirSync, readFileSync, existsSync } from 'fs'
-import { dirname, resolve } from 'path'
+import { readdirSync, readFileSync, existsSync, statSync } from 'fs'
+import { dirname, resolve, join } from 'path'
 import { fileURLToPath } from 'url'
 import { createServer } from 'http'
 
@@ -14,6 +14,9 @@ const __dirname     = dirname(fileURLToPath(import.meta.url))
 const MCP_ENDPOINT  = process.env.AGI_ALPHA_MCP || 'https://agialpha.com/api/mcp'
 const PIPELINES_DIR = '/home/ubuntu/.openclaw/workspace/pipelines'
 const TESTS_DIR     = resolve(__dirname, '..', 'tests')
+const WORKSPACE_ROOT = resolve(__dirname, '..')
+const ARTIFACTS_DIR = join(WORKSPACE_ROOT, 'artifacts')
+const AGENT_STATE_DIR = join(WORKSPACE_ROOT, 'agent', 'state', 'jobs')
 
 async function callMcp(tool, args = {}) {
   const res = await fetch(MCP_ENDPOINT, {

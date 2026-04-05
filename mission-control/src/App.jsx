@@ -10,6 +10,7 @@ import { WalletPanel } from './components/WalletPanel'
 import { JobRequestTab } from './components/JobRequestTab'
 import { PrimeContractTab } from './components/PrimeContractTab'
 import { IpfsTab } from './components/IpfsTab'
+import OperationsLane from './components/OperationsLane'
 import { useWallet } from './hooks/useWallet'
 
 function compareJobIdDesc(a, b) {
@@ -73,7 +74,7 @@ export default function App() {
         <div className="grid md:grid-cols-[180px,1fr] gap-4">
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-2 h-fit">
         <div className="flex flex-col gap-1">
-          {['jobs', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'workflows', 'events', 'test', 'ipfs'].filter(Boolean).map(t => (
+          {['jobs', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'ops', 'workflows', 'events', 'test', 'ipfs'].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -117,6 +118,12 @@ export default function App() {
 
         {tab === 'wallet' && <WalletPanel wallet={wallet} />}
         {tab === 'prime' && <PrimeContractTab wallet={wallet} jobs={jobs} />}
+
+        {tab === 'ops' && (
+          <div className="bg-slate-900 rounded-lg border border-slate-800">
+            <OperationsLane />
+          </div>
+        )}
 
         {tab === 'workflows' && <GitHubFlows />}
 
