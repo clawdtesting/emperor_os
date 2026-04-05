@@ -102,7 +102,7 @@ async function withReviewRootHash(procurementId, pkg) {
 async function writeTxFile(dir, filename, pkg) {
   await fs.mkdir(dir, { recursive: true });
   const p = path.join(dir, filename);
-  const tmp = `${p}.tmp`;
+  const tmp = `${p}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
   await fs.writeFile(tmp, JSON.stringify(pkg, null, 2), "utf8");
   await fs.rename(tmp, p);
   return p;

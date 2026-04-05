@@ -43,7 +43,7 @@ export async function readJson(filePath, fallback = null) {
 }
 
 export async function writeJson(filePath, data) {
-  const tmp = `${filePath}.tmp`;
+  const tmp = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
   await fs.rename(tmp, filePath);
 }

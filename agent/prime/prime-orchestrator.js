@@ -49,6 +49,7 @@ import {
   procSubdir,
   ensureProcSubdir,
   writeProcCheckpoint,
+  assertStateIntegrity,
 } from "../prime-state.js";
 import {
   writeInspectionExtras,
@@ -363,6 +364,7 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
 async function handleBuildCommitTx(procurementId, procStruct) {
   log(`#${procurementId}: building commit tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   // Gate check.
   try {
@@ -413,6 +415,7 @@ async function handleWaitRevealWindow(procurementId, procStruct) {
 async function handleBuildRevealTx(procurementId, procStruct) {
   log(`#${procurementId}: building reveal tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
   const chainPhase = deriveChainPhase(procStruct);
 
   if (chainPhase !== CHAIN_PHASE.REVEAL_OPEN) {
@@ -525,6 +528,8 @@ async function handleWaitShortlist(procurementId) {
 async function handleBuildFinalistTx(procurementId, procStruct) {
   log(`#${procurementId}: building finalist accept tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
+  assertStateIntegrity(state);
 
   // Gate check.
   try {
@@ -723,6 +728,7 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
 async function handleBuildTrialTx(procurementId, procStruct) {
   log(`#${procurementId}: building submitTrial tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   if (!state.trialURI) {
     log(`#${procurementId}: trial not yet published — run BUILD_TRIAL first`);
@@ -760,6 +766,7 @@ async function handleBuildTrialTx(procurementId, procStruct) {
 async function handleExecuteJob(procurementId) {
   log(`#${procurementId}: activating execution bridge (SELECTED → JOB_EXECUTION_IN_PROGRESS)`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   try {
     await activateBridge({ procurementId, agentAddress: AGENT_ADDRESS });
@@ -775,6 +782,7 @@ async function handleExecuteJob(procurementId) {
 async function handleBuildCompletionTx(procurementId) {
   log(`#${procurementId}: building completion tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   if (!state?.linkedJobId || !state?.completionURI) {
     log(`#${procurementId}: completion tx blocked — linkedJobId or completionURI missing`);
@@ -814,6 +822,8 @@ async function handleBuildCompletionTx(procurementId) {
 
 async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
+  assertStateIntegrity(state);
+  assertStateIntegrity(state);
   const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
   await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
   if (!assignment.assigned) {
@@ -856,6 +866,7 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
 
 async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
+  assertStateIntegrity(state);
   const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
   await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
   if (!assignment.assigned) {

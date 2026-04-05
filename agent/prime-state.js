@@ -5,6 +5,7 @@
 //   .openclaw/workspace/artifacts/proc_<procurementId>/state.json
 //
 // State survives restarts. All writes are atomic (tmp + rename).
+// State integrity is verified via SHA-256 hash on every read.
 // No signing. No broadcasting. Pure file I/O.
 
 import { createHash } from "crypto";
@@ -48,7 +49,7 @@ export async function readJson(filePath, fallback = null) {
 }
 
 export async function writeJson(filePath, data) {
-  const tmp = `${filePath}.tmp`;
+  const tmp = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
   await fs.rename(tmp, filePath);
 }
@@ -64,75 +65,84 @@ export async function writeJson(filePath, data) {
 export function emptyProcState(procurementId, jobId) {
   const now = new Date().toISOString();
   return {
-    // Core identity
     procurementId:   String(procurementId),
     linkedJobId:     jobId ? String(jobId) : null,
     employer:        null,
-
-    // Local phase tracking
     status:          PROC_STATUS.DISCOVERED,
     statusHistory:   [{ status: PROC_STATUS.DISCOVERED, at: now }],
-
-    // State integrity hash chain — each write appends the hash of the previous state
     stateHash:       null,
-
-    // Operator decisions
     fitApproved:     null,
     fitDecisionAt:   null,
-
-    // Application material
     applicationURI:  null,
     commitmentSalt:  null,
     commitmentHash:  null,
     commitTxHash:    null,
     revealTxHash:    null,
-
-    // Finalist material
     shortlisted:     null,
     shortlistBlock:  null,
     acceptTxHash:    null,
-
-    // Trial material
     trialArtifactDir: null,
     trialURI:        null,
     trialFetchback:  null,
     trialTxHash:     null,
-
-    // Selection / winner
     selected:         null,
     selectionBlock:   null,
-
-    // Linked job execution
     jobExecutionStarted: null,
     completionURI:    null,
     completionTxHash: null,
-
-    // Operator review log
     reviewLog:        [],
     operatorTx:       {},
     txProvenance:     [],
     stepJournal:      {},
-
-    // Tx handoff paths (relative to proc root dir)
     txHandoffs:       {},
-
-    // Timestamps
     createdAt:        now,
     updatedAt:        now,
     lastChainSync:    null,
   };
 }
 
+// ── State integrity ───────────────────────────────────────────────────────────
+
+function computeStateHash(data) {
+  const { stateHash, stateIntegrityError, ...rest } = data;
+  return createHash("sha256").update(JSON.stringify(rest)).digest("hex");
+}
+
+function attachStateHash(state) {
+  state.stateHash = computeStateHash(state);
+  return state;
+}
+
+function verifyStateHash(state) {
+  if (!state || !state.stateHash) return { valid: false, reason: "no stateHash present" };
+  const expected = computeStateHash(state);
+  if (expected !== state.stateHash) {
+    return { valid: false, reason: `hash mismatch: expected ${expected}, got ${state.stateHash}` };
+  }
+  return { valid: true };
+}
+
 // ── Read / write ──────────────────────────────────────────────────────────────
 
 /**
  * Loads the current state for a procurement.
- * Returns null if no state file exists.
+ * Verifies state integrity via SHA-256 hash. Returns null if no state file exists.
+ * If hash verification fails, returns state with `stateIntegrityError` set.
  * @param {string|number} procurementId
  * @returns {Promise<ProcState|null>}
  */
 export async function getProcState(procurementId) {
-  return readJson(procStatePath(procurementId), null);
+  const state = await readJson(procStatePath(procurementId), null);
+  if (!state) return null;
+
+  const integrity = verifyStateHash(state);
+  if (!integrity.valid) {
+    state.stateIntegrityError = {
+      detectedAt: new Date().toISOString(),
+      reason: integrity.reason,
+    };
+  }
+  return state;
 }
 
 /**
@@ -146,17 +156,8 @@ export async function getOrCreateProcState(procurementId, jobId) {
   if (existing) return existing;
   const fresh = emptyProcState(procurementId, jobId);
   await ensureDir(procRootDir(procurementId));
-  await writeJson(procStatePath(procurementId), fresh);
+  await writeJson(procStatePath(procurementId), attachStateHash(fresh));
   return fresh;
-}
-
-function computeStateHash(data) {
-  return createHash("sha256").update(JSON.stringify(data)).digest("hex");
-}
-
-function attachStateHash(state) {
-  state.stateHash = computeStateHash(state);
-  return state;
 }
 
 /**
@@ -257,13 +258,6 @@ export async function transitionProcStatus(procurementId, newStatus, extra = {})
 
 // ── Review log ────────────────────────────────────────────────────────────────
 
-/**
- * Appends an operator review entry to the procurement state.
- * @param {string|number} procurementId
- * @param {string} phase   - e.g. "commit", "reveal", "finalist", "trial"
- * @param {string} outcome - "approved" | "rejected" | "deferred"
- * @param {string} [note]  - optional operator note
- */
 export async function appendReviewLog(procurementId, phase, outcome, note = "") {
   const current = await getProcState(procurementId);
   if (!current) throw new Error(`No state found for procurement ${procurementId}`);
@@ -282,12 +276,6 @@ export async function appendReviewLog(procurementId, phase, outcome, note = "") 
 
 // ── Tx handoff registration ───────────────────────────────────────────────────
 
-/**
- * Records the path of a generated unsigned tx handoff file in state.
- * @param {string|number} procurementId
- * @param {string} txKind   - e.g. "commitApplication", "revealApplication", etc.
- * @param {string} filePath - absolute or relative path to the unsigned tx JSON
- */
 export async function recordTxHandoff(procurementId, txKind, filePath) {
   const current = await getProcState(procurementId);
   if (!current) throw new Error(`No state found for procurement ${procurementId}`);
@@ -351,10 +339,6 @@ export async function bindFinalizedTxReceipt(procurementId, action, receipt, met
 
 // ── List all tracked procurements ─────────────────────────────────────────────
 
-/**
- * Lists all proc_<id> directories and loads their state.json.
- * @returns {Promise<ProcState[]>} sorted by updatedAt descending
- */
 export async function listAllProcStates() {
   const artifactsDir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts");
   let entries;
@@ -382,10 +366,6 @@ export async function listAllProcStates() {
   return states;
 }
 
-/**
- * Lists procurements that are in active (non-terminal) states.
- * @returns {Promise<ProcState[]>}
- */
 export async function listActiveProcurements() {
   const all = await listAllProcStates();
   return all.filter(s => {
@@ -402,37 +382,36 @@ export async function listActiveProcurements() {
 
 // ── Checkpoint helpers ────────────────────────────────────────────────────────
 
-/**
- * Writes a named checkpoint file inside the proc artifact directory.
- * Useful for "chain_snapshot.json", "deadlines.json", "next_action.json".
- * @param {string|number} procurementId
- * @param {string} filename  - just the filename, no path
- * @param {object} data
- */
 export async function writeProcCheckpoint(procurementId, filename, data) {
   const dir = procRootDir(procurementId);
   await ensureDir(dir);
   await writeJson(path.join(dir, filename), data);
 }
 
-/**
- * Reads a named checkpoint file.
- * @param {string|number} procurementId
- * @param {string} filename
- * @param {*} fallback
- */
 export async function readProcCheckpoint(procurementId, filename, fallback = null) {
   return readJson(path.join(procRootDir(procurementId), filename), fallback);
 }
 
 // ── Sub-directory ensure helpers ─────────────────────────────────────────────
 
-/**
- * Ensures a phase sub-directory exists under the proc artifact dir.
- * e.g. ensureProcSubdir(id, "application") → .../proc_<id>/application/
- */
 export async function ensureProcSubdir(procurementId, sub) {
   const dir = procSubdir(procurementId, sub);
   await ensureDir(dir);
   return dir;
+}
+
+/**
+ * Throws if the procurement state has an integrity error.
+ * Call this before any irreversible action (tx building, status transitions).
+ * @param {ProcState} state
+ * @throws {Error}
+ */
+export function assertStateIntegrity(state) {
+  if (state?.stateIntegrityError) {
+    throw new Error(
+      `State integrity compromised for procurement ${state.procurementId}: ` +
+      `${state.stateIntegrityError.reason}. ` +
+      `Do not proceed until state is restored from backup or re-inspected.`
+    );
+  }
 }
