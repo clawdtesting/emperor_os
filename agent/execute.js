@@ -7,46 +7,33 @@ import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state
 import { CONFIG, requireEnv } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson, writeText } from "./artifact-manager.js";
 
-async function callOpenAI(prompt) {
-  requireEnv("OPENAI_API_KEY", CONFIG.OPENAI_API_KEY);
+async function callClaude(prompt) {
+  requireEnv("ANTHROPIC_API_KEY", CONFIG.ANTHROPIC_API_KEY);
 
-  const res = await fetch("https://api.openai.com/v1/responses", {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${CONFIG.OPENAI_API_KEY}`
+      "x-api-key": CONFIG.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify({
-      model: CONFIG.OPENAI_MODEL,
-      input: prompt
+      model: CONFIG.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      max_tokens: 8192,
+      messages: [{ role: "user", content: prompt }]
     })
   });
 
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`OpenAI HTTP ${res.status}: ${txt.slice(0, 500)}`);
+    throw new Error(`Anthropic HTTP ${res.status}: ${txt.slice(0, 500)}`);
   }
 
   const data = await res.json();
-
-  let text = "";
-
-  if (typeof data.output_text === "string" && data.output_text.trim()) {
-    text = data.output_text.trim();
-  } else if (Array.isArray(data.output)) {
-    for (const item of data.output) {
-      if (!item || !Array.isArray(item.content)) continue;
-      for (const c of item.content) {
-        if (c?.type === "output_text" && typeof c.text === "string") {
-          text += c.text;
-        }
-      }
-    }
-    text = text.trim();
-  }
+  const text = data.content?.[0]?.text?.trim();
 
   if (!text) {
-    throw new Error("OpenAI response contained no output text");
+    throw new Error("Anthropic response contained no output text");
   }
 
   return text;
@@ -97,7 +84,7 @@ export async function execute() {
       await writeJson(artifactPaths.normalizedSpec, normalizedSpec);
 
       const prompt = await buildPrompt(brief);
-      const markdown = await callOpenAI(prompt);
+      const markdown = await callClaude(prompt);
 
       const validation = validateOutput(markdown, brief);
       await writeJson(artifactPaths.executionValidation, validation);
