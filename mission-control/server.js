@@ -12,9 +12,9 @@ app.use(express.json())
 
 const __dirname     = dirname(fileURLToPath(import.meta.url))
 const MCP_ENDPOINT  = process.env.AGI_ALPHA_MCP || 'https://agialpha.com/api/mcp'
-const PIPELINES_DIR = '/home/ubuntu/.openclaw/workspace/pipelines'
-const TESTS_DIR     = resolve(__dirname, '..', 'tests')
 const WORKSPACE_ROOT = resolve(__dirname, '..')
+const PIPELINES_DIR = join(WORKSPACE_ROOT, 'pipelines')
+const TESTS_DIR     = resolve(__dirname, '..', 'tests')
 const ARTIFACTS_DIR = join(WORKSPACE_ROOT, 'artifacts')
 const AGENT_STATE_DIR = join(WORKSPACE_ROOT, 'agent', 'state', 'jobs')
 const PROC_ARTIFACTS_DIR = join(WORKSPACE_ROOT, 'agent', 'artifacts')

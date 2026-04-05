@@ -30,3 +30,17 @@ export async function createJobRequest(payload) {
   if (!res.ok) throw new Error(data?.error || 'Failed to create job request')
   return data
 }
+
+export async function fetchActions(filter = 'pending') {
+  const res = await fetch(BASE + '/api/actions?filter=' + filter)
+  if (!res.ok) throw new Error('HTTP ' + res.status)
+  return res.json()
+}
+
+export async function dismissAction(id) {
+  const res = await fetch(BASE + '/api/actions/' + id + '/dismiss', {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error('HTTP ' + res.status)
+  return res.json()
+}
