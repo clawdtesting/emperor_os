@@ -99,7 +99,8 @@ export function aggregateScores(scoreRecords, method = "trimmed_mean") {
 }
 
 export function detectCollusionPatterns(scoreRecords) {
-  if (!VALIDATOR_CONFIG.COLLUSION_DETECTION_ENABLED) {
+  const collusionDetectionEnabled = String(process.env.VALIDATOR_COLLUSION_DETECTION ?? "true").toLowerCase() === "true";
+  if (!collusionDetectionEnabled) {
     return { patterns: [], enabled: false };
   }
 

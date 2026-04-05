@@ -239,6 +239,184 @@ export async function assertCompletionGate({ procurementId }) {
   if (failures.length > 0) throw new GateError("COMPLETION_GATE", failures);
 }
 
+// ── VALIDATOR SCORE COMMIT GATE ───────────────────────────────────────────────
+
+/**
+ * Gate before building/signing the validator scoreCommit tx.
+ */
+export async function assertValidatorScoreCommitGate({ procurementId, procStruct, nowSecs }) {
+  const failures = [];
+  const now = nowSecs ?? Math.floor(Date.now() / 1000);
+  const id = String(procurementId);
+
+  // Chain phase check
+  const chainPhase = deriveChainPhase(procStruct, now);
+  if (chainPhase !== CHAIN_PHASE.SCORE_COMMIT) {
+    failures.push(`Chain phase is ${chainPhase}, not SCORE_COMMIT. Score commit window is not open.`);
+  }
+
+  // Required artifacts
+  const scoringDir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "scoring");
+  await requireFile(failures, path.join(scoringDir, "validator_assignment.json"), "scoring/validator_assignment.json");
+  await requireFile(failures, path.join(scoringDir, "evidence_bundle.json"), "scoring/evidence_bundle.json");
+  await requireFile(failures, path.join(scoringDir, "adjudication_result.json"), "scoring/adjudication_result.json");
+  await requireFile(failures, path.join(scoringDir, "score_commit_payload.json"), "scoring/score_commit_payload.json");
+
+  // Required fields
+  await requireJsonField(failures, path.join(scoringDir, "validator_assignment.json"), "assigned", "validator_assignment.assigned");
+  await requireJsonFieldValue(failures, path.join(scoringDir, "validator_assignment.json"), "assigned", true, "validator_assignment.assigned");
+  await requireJsonField(failures, path.join(scoringDir, "score_commit_payload.json"), "scoreCommitment", "score_commit_payload.scoreCommitment");
+
+  // State check
+  const stateFile = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "state.json");
+  await requireFile(failures, stateFile, "state.json");
+  await requireJsonFieldValue(failures, stateFile, "validatorRole", true, "state.validatorRole");
+
+  if (failures.length > 0) throw new GateError("VALIDATOR_SCORE_COMMIT_GATE", failures);
+}
+
+// ── VALIDATOR SCORE REVEAL GATE ───────────────────────────────────────────────
+
+/**
+ * Gate before building/signing the validator scoreReveal tx.
+ */
+export async function assertValidatorScoreRevealGate({ procurementId, procStruct, nowSecs }) {
+  const failures = [];
+  const now = nowSecs ?? Math.floor(Date.now() / 1000);
+  const id = String(procurementId);
+
+  // Chain phase check
+  const chainPhase = deriveChainPhase(procStruct, now);
+  if (chainPhase !== CHAIN_PHASE.SCORE_REVEAL) {
+    failures.push(`Chain phase is ${chainPhase}, not SCORE_REVEAL. Score reveal window is not open.`);
+  }
+
+  // Required artifacts
+  const scoringDir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "scoring");
+  await requireFile(failures, path.join(scoringDir, "score_commit_payload.json"), "scoring/score_commit_payload.json");
+  await requireFile(failures, path.join(scoringDir, "score_reveal_payload.json"), "scoring/score_reveal_payload.json");
+
+  // Required fields
+  await requireJsonField(failures, path.join(scoringDir, "score_commit_payload.json"), "scoreCommitment", "score_commit_payload.scoreCommitment");
+  await requireJsonField(failures, path.join(scoringDir, "score_reveal_payload.json"), "salt", "score_reveal_payload.salt");
+  await requireJsonField(failures, path.join(scoringDir, "score_reveal_payload.json"), "score", "score_reveal_payload.score");
+
+  // Verify commitment continuity
+  try {
+    const commitPayload = await readJson(path.join(scoringDir, "score_commit_payload.json"));
+    const revealPayload = await readJson(path.join(scoringDir, "score_reveal_payload.json"));
+    if (commitPayload && revealPayload) {
+      const { verifyScoreReveal } = await import("../validation/scoring-adjudicator.js");
+      const check = verifyScoreReveal({
+        score: revealPayload.score,
+        salt: revealPayload.salt,
+        expectedCommitment: commitPayload.scoreCommitment,
+      });
+      if (!check.verified) {
+        failures.push("Commitment continuity check failed: reveal does not match prior commit.");
+      }
+    }
+  } catch (err) {
+    failures.push(`Cannot verify commitment continuity: ${err.message}`);
+  }
+
+  // State check
+  const stateFile = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "state.json");
+  await requireFile(failures, stateFile, "state.json");
+  await requireJsonFieldValue(failures, stateFile, "validatorRole", true, "state.validatorRole");
+
+  if (failures.length > 0) throw new GateError("VALIDATOR_SCORE_REVEAL_GATE", failures);
+}
+
+// ── VALIDATOR SCORE COMMIT GATE ───────────────────────────────────────────────
+
+/**
+ * Gate before building/signing the validator scoreCommit tx.
+ */
+export async function assertValidatorScoreCommitGate({ procurementId, procStruct, nowSecs }) {
+  const failures = [];
+  const now = nowSecs ?? Math.floor(Date.now() / 1000);
+  const id = String(procurementId);
+
+  // Chain phase check
+  const chainPhase = deriveChainPhase(procStruct, now);
+  if (chainPhase !== CHAIN_PHASE.SCORE_COMMIT) {
+    failures.push(`Chain phase is ${chainPhase}, not SCORE_COMMIT. Score commit window is not open.`);
+  }
+
+  // Required artifacts
+  const scoringDir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "scoring");
+  await requireFile(failures, path.join(scoringDir, "validator_assignment.json"), "scoring/validator_assignment.json");
+  await requireFile(failures, path.join(scoringDir, "evidence_bundle.json"), "scoring/evidence_bundle.json");
+  await requireFile(failures, path.join(scoringDir, "adjudication_result.json"), "scoring/adjudication_result.json");
+  await requireFile(failures, path.join(scoringDir, "score_commit_payload.json"), "scoring/score_commit_payload.json");
+
+  // Required fields
+  await requireJsonField(failures, path.join(scoringDir, "validator_assignment.json"), "assigned", "validator_assignment.assigned");
+  await requireJsonFieldValue(failures, path.join(scoringDir, "validator_assignment.json"), "assigned", true, "validator_assignment.assigned");
+  await requireJsonField(failures, path.join(scoringDir, "score_commit_payload.json"), "scoreCommitment", "score_commit_payload.scoreCommitment");
+
+  // State check
+  const stateFile = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "state.json");
+  await requireFile(failures, stateFile, "state.json");
+  await requireJsonFieldValue(failures, stateFile, "validatorRole", true, "state.validatorRole");
+
+  if (failures.length > 0) throw new GateError("VALIDATOR_SCORE_COMMIT_GATE", failures);
+}
+
+// ── VALIDATOR SCORE REVEAL GATE ───────────────────────────────────────────────
+
+/**
+ * Gate before building/signing the validator scoreReveal tx.
+ */
+export async function assertValidatorScoreRevealGate({ procurementId, procStruct, nowSecs }) {
+  const failures = [];
+  const now = nowSecs ?? Math.floor(Date.now() / 1000);
+  const id = String(procurementId);
+
+  // Chain phase check
+  const chainPhase = deriveChainPhase(procStruct, now);
+  if (chainPhase !== CHAIN_PHASE.SCORE_REVEAL) {
+    failures.push(`Chain phase is ${chainPhase}, not SCORE_REVEAL. Score reveal window is not open.`);
+  }
+
+  // Required artifacts
+  const scoringDir = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "scoring");
+  await requireFile(failures, path.join(scoringDir, "score_commit_payload.json"), "scoring/score_commit_payload.json");
+  await requireFile(failures, path.join(scoringDir, "score_reveal_payload.json"), "scoring/score_reveal_payload.json");
+
+  // Required fields
+  await requireJsonField(failures, path.join(scoringDir, "score_commit_payload.json"), "scoreCommitment", "score_commit_payload.scoreCommitment");
+  await requireJsonField(failures, path.join(scoringDir, "score_reveal_payload.json"), "salt", "score_reveal_payload.salt");
+  await requireJsonField(failures, path.join(scoringDir, "score_reveal_payload.json"), "score", "score_reveal_payload.score");
+
+  // Verify commitment continuity
+  try {
+    const commitPayload = await readJson(path.join(scoringDir, "score_commit_payload.json"));
+    const revealPayload = await readJson(path.join(scoringDir, "score_reveal_payload.json"));
+    if (commitPayload && revealPayload) {
+      const { verifyScoreReveal } = await import("../validation/scoring-adjudicator.js");
+      const check = verifyScoreReveal({
+        score: revealPayload.score,
+        salt: revealPayload.salt,
+        expectedCommitment: commitPayload.scoreCommitment,
+      });
+      if (!check.verified) {
+        failures.push("Commitment continuity check failed: reveal does not match prior commit.");
+      }
+    }
+  } catch (err) {
+    failures.push(`Cannot verify commitment continuity: ${err.message}`);
+  }
+
+  // State check
+  const stateFile = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${id}`, "state.json");
+  await requireFile(failures, stateFile, "state.json");
+  await requireJsonFieldValue(failures, stateFile, "validatorRole", true, "state.validatorRole");
+
+  if (failures.length > 0) throw new GateError("VALIDATOR_SCORE_REVEAL_GATE", failures);
+}
+
 // ── Generic gate runner (try/catch wrapper) ───────────────────────────────────
 
 /**

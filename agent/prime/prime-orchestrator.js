@@ -79,6 +79,8 @@ import {
   assertFinalistAcceptGate,
   assertTrialSubmitGate,
   assertCompletionGate,
+  assertValidatorScoreCommitGate,
+  assertValidatorScoreRevealGate,
 } from "../prime-review-gates.js";
 import { activateBridge } from "../prime-execution-bridge.js";
 import { createRetrievalPacket, extractSteppingStone, extractSearchKeywords } from "../prime-retrieval.js";
@@ -847,6 +849,22 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
   assertStateIntegrity(state);
   assertStateIntegrity(state);
+
+  // Gate check.
+  try {
+    await assertValidatorScoreCommitGate({ procurementId, procStruct });
+  } catch (err) {
+    log(`#${procurementId}: validator score commit gate failed — ${err.message}`);
+    return false;
+  }
+
+  const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
+  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
+  if (!assignment.assigned) {
+    log(`#${procurementId}: validator assignment not chain-confirmed; score commit remains locked`);
+    return false;
+  }
+
   const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
   await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
   if (!assignment.assigned) {
@@ -890,6 +908,15 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
 async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
   assertStateIntegrity(state);
+
+  // Gate check.
+  try {
+    await assertValidatorScoreRevealGate({ procurementId, procStruct });
+  } catch (err) {
+    log(`#${procurementId}: validator score reveal gate failed — ${err.message}`);
+    return false;
+  }
+
   const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
   await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
   if (!assignment.assigned) {
@@ -1135,6 +1162,8 @@ export async function orchestrateOnceForProcurement(procurementId) {
     PROC_STATUS.FINALIST_ACCEPT_READY,
     PROC_STATUS.TRIAL_READY,
     PROC_STATUS.COMPLETION_READY,
+    PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY,
+    PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY,
   ]);
   return {
     before: stateBefore?.status ?? null,

@@ -32,7 +32,7 @@ function normalizeScore(raw, min = 0, max = 100) {
 }
 
 function evaluateSpecCompliance(evidence, trialContent) {
-  if (!trialContent) return 0;
+  if (!trialContent || !String(trialContent).trim()) return { score: 0, checks: [{ name: "no_content", passed: false }] };
 
   const content = trialContent.toLowerCase();
   let score = 0;
