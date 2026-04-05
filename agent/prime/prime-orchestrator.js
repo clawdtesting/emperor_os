@@ -50,6 +50,8 @@ import {
   ensureProcSubdir,
   writeProcCheckpoint,
   assertStateIntegrity,
+  isLlmBudgetConsumed,
+  appendLlmCallAudit,
 } from "../prime-state.js";
 import {
   writeInspectionExtras,
@@ -262,15 +264,13 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
     null
   );
   let llmDraft = null;
-  if ((state.llmCallsUsed ?? 0) < 1) {
+  if (!await isLlmBudgetConsumed(procurementId)) {
     try {
       llmDraft = await draftWithLLM({ phase: "application", procurementId, jobSpec, fitEvaluation, retrievalPacket });
-      await setProcState(procurementId, {
-        llmCallsUsed: (state.llmCallsUsed ?? 0) + 1,
-        llmDraftedAt: new Date().toISOString(),
-      });
+      await appendLlmCallAudit(procurementId, "application", { status: "success", chars: llmDraft.length });
       log(`#${procurementId}: LLM application draft produced (${llmDraft.length} chars)`);
     } catch (err) {
+      await appendLlmCallAudit(procurementId, "application", { status: "failed", error: err.message });
       log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
     }
   } else {
@@ -639,15 +639,13 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
 
   // Generate trial content — attempt LLM draft, fall back to template.
   let llmTrialDraft = null;
-  if ((state.llmCallsUsed ?? 0) < 1) {
+  if (!await isLlmBudgetConsumed(procurementId)) {
     try {
       llmTrialDraft = await draftWithLLM({ phase: "trial", procurementId, jobSpec, retrievalPacket });
-      await setProcState(procurementId, {
-        llmCallsUsed: (state.llmCallsUsed ?? 0) + 1,
-        llmDraftedAt: new Date().toISOString(),
-      });
+      await appendLlmCallAudit(procurementId, "trial", { status: "success", chars: llmTrialDraft.length });
       log(`#${procurementId}: LLM trial draft produced (${llmTrialDraft.length} chars)`);
     } catch (err) {
+      await appendLlmCallAudit(procurementId, "trial", { status: "failed", error: err.message });
       log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
     }
   } else {

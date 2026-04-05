@@ -415,3 +415,46 @@ export function assertStateIntegrity(state) {
     );
   }
 }
+
+// ── LLM call audit log (append-only) ──────────────────────────────────────────
+
+function llmAuditLogPath(procurementId) {
+  return path.join(procRootDir(procurementId), "llm_audit.json");
+}
+
+/**
+ * Reads the append-only LLM call audit log for a procurement.
+ * Returns { calls: Array<{phase, at, hash}> }
+ */
+export async function readLlmAuditLog(procurementId) {
+  const data = await readJson(llmAuditLogPath(procurementId), null);
+  return { calls: Array.isArray(data?.calls) ? data.calls : [] };
+}
+
+/**
+ * Appends an LLM call record to the audit log.
+ * The log is append-only: we read existing entries, append one, and write atomically.
+ * Returns the total call count after append.
+ */
+export async function appendLlmCallAudit(procurementId, phase, detail = {}) {
+  const log = await readLlmAuditLog(procurementId);
+  const entry = {
+    phase,
+    at: new Date().toISOString(),
+    hash: createHash("sha256").update(JSON.stringify({ procurementId: String(procurementId), phase, ...detail })).digest("hex").slice(0, 16),
+    ...detail,
+  };
+  log.calls.push(entry);
+  await ensureDir(procRootDir(procurementId));
+  await writeJson(llmAuditLogPath(procurementId), log);
+  return log.calls.length;
+}
+
+/**
+ * Returns true if the LLM call budget has been consumed for this procurement.
+ * Budget is enforced by counting entries in the append-only audit log.
+ */
+export async function isLlmBudgetConsumed(procurementId, maxCalls = 1) {
+  const log = await readLlmAuditLog(procurementId);
+  return log.calls.length >= maxCalls;
+}
