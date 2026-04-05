@@ -20,37 +20,91 @@ const ABI2 = [
   'event ProcurementCreated(uint256 indexed procurementId, uint256 indexed jobId, address indexed employer)',
 ]
 
-const MOCK_PROCUREMENT = {
-  procurementId: 999,
-  jobId: 42,
-  commitDeadline: Math.floor(Date.now() / 1000) + 86400,    // +1 day
-  revealDeadline: Math.floor(Date.now() / 1000) + 172800,   // +2 days
-  finalistAcceptDeadline: Math.floor(Date.now() / 1000) + 259200, // +3 days
-  trialDeadline: Math.floor(Date.now() / 1000) + 432000,    // +5 days
+// Genesis Prime procurement — real tx: 0xe90422f666b87e4962dd976015c18ee7a592dc40ddd6070b0f000a9404f93d1b
+// Created by mtl.eth on Mar-31-2026. This is the FIRST Prime procurement on mainnet.
+const GENESIS_PROCUREMENT = {
+  procurementId: 0,
+  jobId: 0,
+  // Original deadlines (already expired — we simulate fresh ones for dry run)
+  originalCommitDeadline: 1775274296,    // Apr 1, 2026 23:44:56 UTC
+  originalRevealDeadline: 1775360696,    // Apr 2, 2026 23:44:56 UTC
+  originalFinalistAccept: 1775533496,    // Apr 4, 2026 23:44:56 UTC
+  originalTrialDeadline: 1775965496,     // Apr 9, 2026 23:44:56 UTC
+  originalScoreCommit: 1776138296,       // Apr 11, 2026 23:44:56 UTC
+  originalScoreReveal: 1776311096,       // Apr 13, 2026 23:44:56 UTC
+  // Simulated deadlines for dry run (commit window open)
+  commitDeadline: Math.floor(Date.now() / 1000) + 259200,    // +3 days
+  revealDeadline: Math.floor(Date.now() / 1000) + 345600,    // +4 days
+  finalistAcceptDeadline: Math.floor(Date.now() / 1000) + 518400, // +6 days
+  trialDeadline: Math.floor(Date.now() / 1000) + 950400,     // +11 days
+  scoreCommitDeadline: Math.floor(Date.now() / 1000) + 1036800,
+  scoreRevealDeadline: Math.floor(Date.now() / 1000) + 1123200,
+  // Real params from tx
+  payout: '100000',
+  duration: 604800,
+  minAgents: 3,
+  maxFinalists: 3,
+  validatorCount: 5,
+  bond: '300',
+  finalistStake: '1250',
+  trialStake: '1500',
+  employerStake: '120',
+  employer: '0x3B7205E05D015D06323B432E9813bCb3fe86adf7',
+  specURI: 'ipfs://bafkreihrscquk3h2zo6rsgtycp7lwxz2fqk24fmwcfkvvx3dapfmaxyyca',
+  description: 'Premium discovery press-release procurement for AGIJobDiscoveryPrime, AGIJobManagerPrime, and ENSJobPages: tournament-style talent discovery, paid finalist trials, validator scoring, selected-slot settlement, and public IPFS memory.',
 }
 
-const MOCK_SPEC = `{
-  "name": "Smart Contract Security Audit: DeFi Lending Protocol",
+const GENESIS_SPEC = `{
+  "name": "AGI Job · Genesis Prime · PRESS RELEASE — Announce AGIJobDiscoveryPrime and the Tournament Era of Intelligent Labor",
   "properties": {
-    "title": "Smart Contract Security Audit: DeFi Lending Protocol",
-    "category": "development",
-    "summary": "Conduct a security audit of a DeFi lending protocol smart contract suite.",
-    "details": "Audit a set of 3 Solidity smart contracts implementing a lending protocol with collateralized borrowing, liquidation mechanics, and a governance token. Identify vulnerabilities, classify by severity, and provide remediation recommendations.",
+    "title": "AGI Job · Genesis Prime · PRESS RELEASE — Announce AGIJobDiscoveryPrime and the Tournament Era of Intelligent Labor",
+    "category": "Genesis / Institutional Communications / Prime Launch / Tournament of Intelligent Labor",
+    "summary": "Draft the canonical first Prime press release that introduces AGIJobDiscoveryPrime as the major new layer in the stack: a procurement-first protocol that turns serious AGI work into a fair, transparent, watchable global tournament of intelligent labor.",
+    "details": "Premium discovery press-release procurement for AGIJobDiscoveryPrime, AGIJobManagerPrime, and ENSJobPages: tournament-style talent discovery, paid finalist trials, validator scoring, selected-slot settlement, and public IPFS memory.",
     "deliverables": [
-      "Full audit report in Markdown",
-      "Vulnerability list with severity ratings (Critical/High/Medium/Low/Info)",
-      "Specific remediation recommendation for each finding",
-      "Executive summary for non-technical stakeholders"
+      "One checkpoint memo submitted via checkpoint URI within 48 hours of selected-slot claim",
+      "One final publication-ready English press release delivered as a single Markdown file",
+      "One public IPFS URI resolving directly to the final press-release Markdown file",
+      "One Job Completion URI delivered as metadata JSON on IPFS"
     ],
     "acceptanceCriteria": [
-      "All 3 contracts reviewed in full",
-      "Each vulnerability includes: description, impact, severity, and fix",
-      "Executive summary is understandable without technical background",
-      "Report follows standard audit format"
+      "AGIJobDiscoveryPrime is the primary story — explains why procurement-first discovery is a major upgrade",
+      "Clearly identifies AGIJobDiscoveryPrime, AGIJobManagerPrime, ENSJobPages, Ethereum mainnet, employers, agents, validators, and AGIALPHA",
+      "Explains sealed commit/reveal applications, merit shortlisting, paid finalist trials, validator scoring, winner designation, fallback promotion",
+      "Presents competition as serious, useful, intellectually engaging — avoids casino/wagering framing",
+      "Explains why human and AI agents competing on equal footing under transparent rules is historically significant",
+      "States that AGIALPHA is a utility token used within the protocol — not equity, ownership, or profit-sharing",
+      "Strong headline, clear opening paragraph, structured institutional body, concise closing",
+      "Tone is institutional, ambitious, historically aware, and publication-ready"
     ],
-    "requirements": ["Solidity expertise", "DeFi protocol knowledge"],
-    "tags": ["security", "solidity", "defi", "audit"],
-    "durationSeconds": 432000
+    "requirements": [
+      "Verified eligible agent path and ManagerPrime authorization",
+      "Strong institutional English writing and press-release drafting capability",
+      "Ability to explain protocol mechanics accurately to a public audience",
+      "Ability to write about tournament-style intelligent labor competition — exciting yet disciplined",
+      "Ability to frame watchability as transparent merit discovery rather than gambling",
+      "Ability to write about AGIALPHA without mischaracterizing it",
+      "Ability to publish stable public IPFS artifacts"
+    ],
+    "tags": ["genesis", "prime", "press-release", "agijobdiscoveryprime", "agijobmanagerprime", "ensjobpages", "global-tournament", "intelligent-labor"],
+    "durationSeconds": 604800,
+    "payoutAGIALPHA": "100000",
+    "procurementMode": "Premium Discovery",
+    "settlementMode": "SelectedAgentOnly",
+    "keyMessages": [
+      "AGIJobDiscoveryPrime is the major addition: procurement-first talent discovery",
+      "DiscoveryPrime turns high-stakes work into a structured global tournament of intelligent labor",
+      "Paid finalist trials create real evidence instead of relying on credentials alone",
+      "Validators with commit/reveal scoring and skin in the game create disciplined judging",
+      "AGIJobManagerPrime remains the settlement backbone, ENSJobPages preserves public memory",
+      "AGIALPHA must always be described as a utility token used within the protocol"
+    ],
+    "forbiddenFramings": [
+      "Do not frame as gambling, betting, casino, lottery, prediction market, or speculation",
+      "Do not frame as memetic entertainment or reality-TV fluff",
+      "Do not imply guaranteed profit, ownership, investment return, or equity-like rights from AGIALPHA",
+      "Do not imply every job should become a tournament — DiscoveryPrime is a premium coordination layer"
+    ]
   }
 }`
 
@@ -227,15 +281,28 @@ async function run() {
     console.log(`\nUsing real procurement #${procurement.procurementId} (commit window open)`)
     specContent = await fetchJobSpec(procurement.jobId)
     if (!specContent) {
-      console.log('Spec fetch failed — using mock spec for Claude steps')
-      specContent = MOCK_SPEC
+      console.log('Spec fetch failed — using Genesis spec for Claude steps')
+      specContent = GENESIS_SPEC
     }
   } else {
-    procurement = MOCK_PROCUREMENT
-    usingMock   = true
-    specContent = MOCK_SPEC
-    console.log(`\nNo procurement in commit window — injecting mock procurement #${procurement.procurementId}`)
-    console.log(`Mock spec: "Smart Contract Security Audit: DeFi Lending Protocol"`)
+    procurement = GENESIS_PROCUREMENT
+    usingMock   = false
+    specContent = GENESIS_SPEC
+    console.log(`\nNo procurement in commit window — using Genesis Prime procurement #${procurement.procurementId}`)
+    console.log(`Genesis spec: "AGI Job · Genesis Prime · PRESS RELEASE — Announce AGIJobDiscoveryPrime"`)
+    console.log(`Real tx: 0xe90422f666b87e4962dd976015c18ee7a592dc40ddd6070b0f000a9404f93d1b`)
+    console.log(`Payout: ${procurement.payout} AGIALPHA | Duration: ${procurement.duration / 86400} days`)
+    console.log(`Min agents: ${procurement.minAgents} | Max finalists: ${procurement.maxFinalists} | Validators: ${procurement.validatorCount}`)
+  }
+  } else {
+    procurement = GENESIS_PROCUREMENT
+    usingMock   = false
+    specContent = GENESIS_SPEC
+    console.log(`\nNo procurement in commit window — using Genesis Prime procurement #${procurement.procurementId}`)
+    console.log(`Genesis spec: "AGI Job · Genesis Prime · PRESS RELEASE — Announce AGIJobDiscoveryPrime"`)
+    console.log(`Real tx: 0xe90422f666b87e4962dd976015c18ee7a592dc40ddd6070b0f000a9404f93d1b`)
+    console.log(`Payout: ${procurement.payout} AGIALPHA | Duration: ${procurement.duration / 86400} days`)
+    console.log(`Min agents: ${procurement.minAgents} | Max finalists: ${procurement.maxFinalists} | Validators: ${procurement.validatorCount}`)
   }
 
   // ── STEP 2: Evaluate ──────────────────────────────────────────────────────
@@ -335,7 +402,9 @@ async function run() {
 
   // ── Summary ───────────────────────────────────────────────────────────────
   sep('DRY RUN COMPLETE')
-  console.log(`Procurement  : #${procurement.procurementId} ${usingMock ? '(mock)' : '(real)'}`)
+  console.log(`Procurement  : #${procurement.procurementId} — Genesis Prime ${usingMock ? '(mock)' : '(real mainnet)'}`)
+  console.log(`Tx hash      : 0xe90422f666b87e4962dd976015c18ee7a592dc40ddd6070b0f000a9404f93d1b`)
+  console.log(`Payout       : ${procurement.payout} AGIALPHA`)
   console.log(`Decision     : ${decision.shouldApply ? 'APPLY' : 'SKIP (forced continue)'}`)
   console.log(`Application  : ${appMarkdown.length} chars`)
   console.log(`Trial        : ${trialMarkdown.length} chars`)
