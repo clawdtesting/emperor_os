@@ -43,6 +43,8 @@ export async function run(opts = {}) {
   await writeFullReport(report, "safety");
   return report;
 }
+
+export default { run };
  
 if (process.argv[1] === __filename) {
   run().then(r => {
