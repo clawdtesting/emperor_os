@@ -25,6 +25,8 @@ const NOTIF_LOG_FILE = join(NOTIF_STATE_DIR, 'actions.log.jsonl')
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID
 const MC_URL = process.env.MISSION_CONTROL_URL || 'http://100.104.194.128:3000'
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN
+const GH_REPO = process.env.GH_REPO || 'clawdtesting/emperor_os_clean'
 
 mkdirSync(NOTIF_STATE_DIR, { recursive: true })
 
@@ -899,6 +901,64 @@ const SCAN_INTERVAL_MS = 30_000
 console.log('[notify] starting scanner (interval: ' + (SCAN_INTERVAL_MS / 1000) + 's)')
 scanAndNotify()
 setInterval(scanAndNotify, SCAN_INTERVAL_MS)
+
+// ── GitHub Actions — workflow dispatch ───────────────────────────────────────
+app.post('/api/workflow-dispatch', async (req, res) => {
+  const { workflow, ref = 'main', inputs = {} } = req.body || {}
+  if (!workflow) return res.status(400).json({ error: 'workflow required' })
+  if (!GITHUB_TOKEN) return res.status(401).json({ error: 'GITHUB_TOKEN not set on server' })
+
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${GH_REPO}/actions/workflows/${workflow}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ref, inputs }),
+        signal: AbortSignal.timeout(10000),
+      }
+    )
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      return res.status(r.status).json({ error: `GitHub API ${r.status}: ${txt.slice(0, 300)}` })
+    }
+    res.json({ ok: true, workflow, ref, inputs })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── GitHub Actions — recent runs for a workflow ───────────────────────────────
+app.get('/api/workflow-runs/:workflow', async (req, res) => {
+  if (!GITHUB_TOKEN) return res.status(401).json({ error: 'GITHUB_TOKEN not set on server' })
+
+  const perPage = Math.min(Number(req.query.per_page) || 10, 30)
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${GH_REPO}/actions/workflows/${encodeURIComponent(req.params.workflow)}/runs?per_page=${perPage}`,
+      {
+        headers: {
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        signal: AbortSignal.timeout(10000),
+      }
+    )
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      return res.status(r.status).json({ error: `GitHub API ${r.status}: ${txt.slice(0, 300)}` })
+    }
+    res.json(await r.json())
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
 
 // ── Serve React frontend (production build) ───────────────────────────────────
 const DIST = resolve(__dirname, 'dist')
