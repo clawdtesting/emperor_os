@@ -21,6 +21,22 @@ const CRITICAL_DIRS = [
 ];
 
 async function checkDir(dir, requireWrite) {
+  let stats = null;
+  try {
+    stats = await fs.stat(dir);
+  } catch {
+    if (!requireWrite) return { readable: false, writable: false, missing: true };
+    try {
+      await fs.mkdir(dir, { recursive: true });
+      await fs.access(dir, fs.constants.R_OK | fs.constants.W_OK);
+      return { readable: true, writable: true, created: true };
+    } catch {
+      return { readable: false, writable: false, missing: true };
+    }
+  }
+
+  if (!stats?.isDirectory?.()) return { readable: false, writable: false, notDirectory: true };
+
   try {
     await fs.access(dir, fs.constants.R_OK);
   } catch {
@@ -40,12 +56,15 @@ async function checkDir(dir, requireWrite) {
 export async function run(ctx) {
   const start = Date.now();
   const issues = [];
+  const notes = [];
 
   for (const { path, label, write } of CRITICAL_DIRS) {
     const result = await checkDir(path, write);
 
     if (!result.readable) {
       issues.push(`${label} (${path}): not readable`);
+    } else if (result.created) {
+      notes.push(`${label} (${path}): created during audit bootstrap`);
     } else if (write && result.writable === false) {
       issues.push(`${label} (${path}): not writable`);
     }
@@ -58,15 +77,18 @@ export async function run(ctx) {
       severity: SEVERITY.CRITICAL,
       details: `${issues.length} filesystem permission issue(s): ${issues.join("; ")}`,
       durationMs: Date.now() - start,
-      extra: { issues },
+      extra: { issues, notes },
     });
   } else {
     addCheck(ctx, {
       name: CHECK_NAME,
       status: SEVERITY.PASS,
       severity: SEVERITY.PASS,
-      details: `All ${CRITICAL_DIRS.length} critical directories are accessible`,
+      details: notes.length > 0
+        ? `All ${CRITICAL_DIRS.length} critical directories are accessible (${notes.length} created during audit bootstrap)`
+        : `All ${CRITICAL_DIRS.length} critical directories are accessible`,
       durationMs: Date.now() - start,
+      extra: notes.length > 0 ? { notes } : undefined,
     });
   }
 
