@@ -1,8 +1,8 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/config.js
+// /home/emperor/.openclaw/workspace/agent/config.js
 export const CONFIG = {
   WORKSPACE_ROOT:
     process.env.WORKSPACE_ROOT ??
-    "/home/ubuntu/emperor_OS/.openclaw/workspace",
+    "/home/emperor/.openclaw/workspace",
 
   AGI_ALPHA_MCP: process.env.AGI_ALPHA_MCP ?? "",
   AGENT_ADDRESS: (process.env.AGENT_ADDRESS ?? "").toLowerCase(),

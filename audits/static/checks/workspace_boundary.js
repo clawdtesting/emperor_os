@@ -15,7 +15,7 @@ export async function run(ctx) {
     /process\.cwd\(\)/,
     /\/etc\//,
     /\/tmp\//,
-    /\/home\/(?!ubuntu\/\.openclaw\/workspace)/,
+    /\/home\/(?!emperor\/\.openclaw\/workspace)/,
   ];
 
   const dirsToScan = [AGENT_ROOT, CORE_ROOT];

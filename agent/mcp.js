@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/mcp.js
+// ./agent/mcp.js
 const DEFAULT_TIMEOUT_MS = 30_000;
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const HEX_0X = /^0x[0-9a-fA-F]+$/;

@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/apply.js
+// ./agent/apply.js
 import { applyForJob } from "./mcp.js";
 import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";

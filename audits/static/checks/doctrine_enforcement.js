@@ -36,14 +36,28 @@ export async function run(ctx) {
 
   // Check no_private_key_usage
   const pkMatches = [];
+  const KNOWN_FALSE_POSITIVES = [
+    { file: "prime-evaluate.js", pattern: "AGENT_PRIVATE_KEY", reason: "spec rejection rule, not key usage" },
+    { file: "prime-evaluate.js", pattern: "PRIVATE_KEY", reason: "spec rejection rule, not key usage" },
+    // Also exclude the pattern definitions themselves in hard reject rules
+    { file: "prime-evaluate.js", pattern: "{ pattern: /AGENT_PRIVATE_KEY\\b/", reason: "hard reject rule pattern" },
+    { file: "prime-evaluate.js", pattern: "/AGENT_PRIVATE_KEY\\b/", reason: "hard reject rule regex" },
+  ];
+  function isFalsePositive(hit) {
+    return KNOWN_FALSE_POSITIVES.some(fp =>
+      hit.file.endsWith(fp.file) && hit.content.includes(fp.pattern)
+    );
+  }
   for (const dir of dirsToScan) {
     const matches = await searchInFiles(dir, /privateKey|PRIVATE_KEY|0x.*private/, (name) => name.endsWith(".js"));
     const realMatches = matches.filter(m => {
+      if (!m || typeof m.file !== "string" || typeof m.content !== "string") return false;
       const line = m.content.trim();
       if (line.startsWith("//") || line.startsWith("*") || line.startsWith("/*")) return false;
       if (m.file.includes("/test/") || m.file.includes(".test.")) return false;
       if (m.file.includes("config.js") || m.file.includes(".env")) return false;
-      return true;
+      const hit = { pattern: m.pattern || "privateKey", file: m.file, line: m.line, content: line };
+      return !isFalsePositive(hit);
     });
     pkMatches.push(...realMatches);
   }

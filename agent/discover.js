@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/discover.js
+// /home/emperor/.openclaw/workspace/agent/discover.js
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

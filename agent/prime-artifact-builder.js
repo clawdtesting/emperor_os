@@ -18,7 +18,7 @@ import { ensureProcSubdir, procSubdir, writeJson, readJson } from "./prime-state
 // ── Low-level file write ──────────────────────────────────────────────────────
 
 async function writeFile(filePath, content) {
-  const tmp = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
+  const tmp = `${filePath}.tmp.${Date.now()}.${Buffer.from(filePath).toString('hex').slice(0, 6)}`;
   const data = typeof content === "string" ? content : JSON.stringify(content, null, 2);
   await fs.writeFile(tmp, data, "utf8");
   await fs.rename(tmp, filePath);
