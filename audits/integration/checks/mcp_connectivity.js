@@ -40,7 +40,7 @@ export async function run(ctx) {
       severity: SEVERITY.CRITICAL,
       details: `MCP endpoint returned HTTP ${res.status} (${endpoint})`,
       durationMs: Date.now() - start,
-      extra: { endpoint, status: res.status },
+      extra: { endpoint, httpStatus: res.status },
     });
     return ctx;
   }

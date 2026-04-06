@@ -1,8 +1,8 @@
 {
   "auditType": "safety",
   "status": "warn",
-  "startedAt": "2026-04-06T20:56:19.077Z",
-  "completedAt": "2026-04-06T20:56:19.077Z",
+  "startedAt": "2026-04-06T21:38:01.105Z",
+  "completedAt": "2026-04-06T21:38:01.105Z",
   "durationMs": 0,
   "summary": {
     "pass": 5,
@@ -16,21 +16,21 @@
       "status": "pass",
       "details": "No private key usage detected in agent or core source",
       "severity": "pass",
-      "durationMs": 235
+      "durationMs": 237
     },
     {
       "name": "safety.no_signer_send_transaction",
       "status": "pass",
       "details": "No signer/wallet sendTransaction calls detected",
       "severity": "pass",
-      "durationMs": 130
+      "durationMs": 132
     },
     {
       "name": "safety.unsigned_only_guarantee",
       "status": "pass",
       "details": "No artifact files found — unsigned-only guarantee holds by absence",
       "severity": "pass",
-      "durationMs": null
+      "durationMs": 1
     },
     {
       "name": "safety.anti_replay_freshness",
@@ -44,7 +44,7 @@
       "status": "warn",
       "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
       "severity": "warn",
-      "durationMs": 145
+      "durationMs": 143
     },
     {
       "name": "safety.signing_manifest_integrity",
@@ -57,6 +57,6 @@
   "metrics": {
     "durationMs": 0
   },
-  "elapsedMs": 511,
+  "elapsedMs": 514,
   "errors": []
 }

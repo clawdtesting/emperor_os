@@ -1,8 +1,8 @@
 {
   "reportType": "master",
   "status": "warn",
-  "startedAt": "2026-04-06T20:56:17.932Z",
-  "completedAt": "2026-04-06T20:56:19.797Z",
+  "startedAt": "2026-04-06T21:37:59.915Z",
+  "completedAt": "2026-04-06T21:38:01.365Z",
   "totalDurationMs": 0,
   "summary": {
     "pass": 23,
@@ -61,19 +61,19 @@
       "name": "workspace_boundary",
       "status": "pass",
       "details": "No workspace boundary violations detected",
-      "durationMs": 138
+      "durationMs": 152
     },
     {
       "name": "forbidden_signing_calls",
       "status": "pass",
       "details": "No forbidden signing patterns found in worker code",
-      "durationMs": 329
+      "durationMs": 346
     },
     {
       "name": "forbidden_broadcast_calls",
       "status": "pass",
       "details": "No forbidden broadcast patterns found in worker code",
-      "durationMs": 100
+      "durationMs": 106
     },
     {
       "name": "env_contracts",
@@ -97,7 +97,7 @@
       "name": "config_file_exists",
       "status": "pass",
       "details": "agent/config.js exists",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "name": "unsigned_handoff_only",
@@ -109,28 +109,28 @@
       "name": "no_private_key_usage",
       "status": "pass",
       "details": "No private key references found in worker code",
-      "durationMs": 53
+      "durationMs": 55
     },
     {
       "name": "safety.no_private_key_usage",
       "status": "pass",
       "details": "No private key usage detected in agent or core source",
       "severity": "pass",
-      "durationMs": 235
+      "durationMs": 237
     },
     {
       "name": "safety.no_signer_send_transaction",
       "status": "pass",
       "details": "No signer/wallet sendTransaction calls detected",
       "severity": "pass",
-      "durationMs": 130
+      "durationMs": 132
     },
     {
       "name": "safety.unsigned_only_guarantee",
       "status": "pass",
       "details": "No artifact files found — unsigned-only guarantee holds by absence",
       "severity": "pass",
-      "durationMs": null
+      "durationMs": 1
     },
     {
       "name": "safety.anti_replay_freshness",
@@ -144,7 +144,7 @@
       "status": "warn",
       "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
       "severity": "warn",
-      "durationMs": 145
+      "durationMs": 143
     },
     {
       "name": "safety.signing_manifest_integrity",
@@ -161,23 +161,23 @@
       "durationMs": null
     },
     {
-      "name": "protocol.contract_address_validation",
-      "status": "pass",
-      "details": "All 3 contract addresses are valid and checksummed",
-      "severity": "pass",
-      "durationMs": 2,
       "contracts": {
         "AGI_JOB_MANAGER": "0xB3AAeb69b630f0299791679c063d68d6687481d1",
         "AGI_JOB_DISCOVERY_PRIME": "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29",
         "AGIALPHA_TOKEN": "0xA61a3B3a130a9c20768EEBF97E21515A6046a1fA"
-      }
+      },
+      "name": "protocol.contract_address_validation",
+      "status": "pass",
+      "details": "All 3 contract addresses are valid and checksummed",
+      "severity": "pass",
+      "durationMs": 1
     },
     {
       "name": "protocol.function_selector_validation",
       "status": "pass",
       "details": "All 2 function selectors match canonical values: submitCompletion(uint256,string,bytes32)=0x5635b65d, approve(address,uint256)=0x095ea7b3",
       "severity": "pass",
-      "durationMs": 3
+      "durationMs": 4
     },
     {
       "name": "protocol.calldata_encoding",
@@ -191,21 +191,21 @@
       "status": "pass",
       "details": "ABI decoding utilities verified for AGI contract signatures",
       "severity": "pass",
-      "durationMs": null
+      "durationMs": 1
     },
     {
       "name": "protocol.erc20_approval_flow",
       "status": "pass",
       "details": "ERC20 approve calldata encodes correctly — selector=0x095ea7b3, spender=0xB3AAeb69b630f0299791679c063d68d6687481d1",
       "severity": "pass",
-      "durationMs": null
+      "durationMs": 1
     },
     {
       "name": "protocol.prime_deadline_logic",
       "status": "warn",
       "details": "No deadline-related code found in agent/core — PRIME deadline logic may be missing",
       "severity": "warn",
-      "durationMs": 358
+      "durationMs": -5366
     },
     {
       "name": "doctrine.max_one_llm_call_per_job",
@@ -233,17 +233,17 @@
       "status": "pass",
       "details": "No nondeterministic constructs detected in agent/core source",
       "severity": "pass",
-      "durationMs": 79
+      "durationMs": 78
     },
     {
       "name": "doctrine.workspace_scope_only",
       "status": "pass",
       "details": "No out-of-scope path references detected — workspace boundary intact",
       "severity": "pass",
-      "durationMs": 183
+      "durationMs": 181
     }
   ],
   "profile": "fast",
   "errors": [],
-  "elapsedMs": 1865
+  "elapsedMs": 1450
 }

@@ -43,13 +43,14 @@ export function buildAuditContext(opts = {}) {
 }
 
 export function addCheck(ctx, check) {
+  const { name, status, details, severity, durationMs, extra } = check;
   ctx.checks.push({
-    name: check.name,
-    status: check.status,
-    details: check.details || null,
-    severity: check.severity || null,
-    durationMs: check.durationMs || null,
-    ...check.extra,
+    ...extra,
+    name,
+    status,
+    details: details || null,
+    severity: severity || null,
+    durationMs: durationMs || null,
   });
 }
 

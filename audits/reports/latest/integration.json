@@ -1,40 +1,36 @@
 {
   "auditType": "integration",
-  "status": "warn",
-  "startedAt": "2026-04-06T19:37:15.059Z",
-  "completedAt": "2026-04-06T19:37:15.059Z",
+  "status": "critical",
+  "startedAt": "2026-04-06T21:37:49.747Z",
+  "completedAt": "2026-04-06T21:37:49.747Z",
   "durationMs": 0,
   "summary": {
     "pass": 3,
     "warn": 1,
     "fail": 0,
-    "critical": 0
+    "critical": 1
   },
   "checks": [
     {
+      "chainId": 1,
+      "blockNumber": 24823368,
+      "rpcUrl": "https://eth-mainnet.g.alchemy.com/v2/rDjRRnJwDPdErIRoNgU_9",
       "name": "integration.rpc_health",
       "status": "pass",
-      "details": "RPC healthy — chainId 1 (mainnet), block #24822768 (257ms)",
+      "details": "RPC healthy — chainId 1 (mainnet), block #24823368 (247ms)",
       "severity": "pass",
-      "durationMs": 257,
-      "chainId": 1,
-      "blockNumber": 24822768,
-      "rpcUrl": "https://eth-mainnet.g.alchemy.com/v2/rDjRRnJwDPdErIRoNgU_9"
+      "durationMs": 247
     },
     {
+      "endpoint": "https://agialpha.com/api/mcp",
+      "httpStatus": 406,
       "name": "integration.mcp_connectivity",
-      "status": 406,
+      "status": "critical",
       "details": "MCP endpoint returned HTTP 406 (https://agialpha.com/api/mcp)",
       "severity": "critical",
-      "durationMs": 179,
-      "endpoint": "https://agialpha.com/api/mcp"
+      "durationMs": 166
     },
     {
-      "name": "integration.ipfs_health",
-      "status": "warn",
-      "details": "1 IPFS endpoint(s) unreachable, 2 healthy: cloudflare-ipfs",
-      "severity": "warn",
-      "durationMs": 856,
       "results": [
         {
           "name": "ipfs.io",
@@ -51,14 +47,19 @@
           "ok": true,
           "status": 200
         }
-      ]
+      ],
+      "name": "integration.ipfs_health",
+      "status": "warn",
+      "details": "1 IPFS endpoint(s) unreachable, 2 healthy: cloudflare-ipfs",
+      "severity": "warn",
+      "durationMs": 377
     },
     {
       "name": "integration.github_sync_health",
       "status": "pass",
       "details": "Git repository is healthy and in sync",
       "severity": "pass",
-      "durationMs": 770
+      "durationMs": 752
     },
     {
       "name": "integration.file_system_permissions",
@@ -69,9 +70,9 @@
     }
   ],
   "metrics": {
-    "rpc_health.blockNumber": 24822768,
+    "rpc_health.blockNumber": 24823368,
     "durationMs": 0
   },
-  "elapsedMs": 2063,
+  "elapsedMs": 1544,
   "errors": []
 }

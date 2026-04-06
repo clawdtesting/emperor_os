@@ -4,8 +4,8 @@
 
 | Metric | Value |
 |---|---|
-| Started | 2026-04-06T20:56:19.794Z |
-| Completed | 2026-04-06T20:56:19.794Z |
+| Started | 2026-04-06T21:38:01.362Z |
+| Completed | 2026-04-06T21:38:01.362Z |
 | Duration | 0ms |
 | Pass | 3 |
 | Warn | 2 |
@@ -30,9 +30,9 @@ _Duration: 1ms_
 ### ✅ doctrine.deterministic_scoring_required — pass
 
 No nondeterministic constructs detected in agent/core source
-_Duration: 79ms_
+_Duration: 78ms_
 
 ### ✅ doctrine.workspace_scope_only — pass
 
 No out-of-scope path references detected — workspace boundary intact
-_Duration: 183ms_
+_Duration: 181ms_
