@@ -902,59 +902,117 @@ console.log('[notify] starting scanner (interval: ' + (SCAN_INTERVAL_MS / 1000) 
 scanAndNotify()
 setInterval(scanAndNotify, SCAN_INTERVAL_MS)
 
+// ── GitHub API proxy helpers ──────────────────────────────────────────────────
+
+function ghHeaders(extra = {}) {
+  const h = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    ...extra,
+  }
+  if (GITHUB_TOKEN) h.Authorization = `Bearer ${GITHUB_TOKEN}`
+  return h
+}
+
+async function ghGet(path) {
+  const r = await fetch(`https://api.github.com${path}`, {
+    headers: ghHeaders(),
+    signal: AbortSignal.timeout(12000),
+  })
+  if (!r.ok) {
+    const txt = await r.text().catch(() => '')
+    const err = new Error(`GitHub API ${r.status}`)
+    err.status = r.status
+    err.body = txt.slice(0, 400)
+    err.noToken = !GITHUB_TOKEN
+    throw err
+  }
+  return r.json()
+}
+
+function ghErrResponse(e) {
+  if (e.status === 401 || e.status === 403) {
+    return {
+      error: e.noToken
+        ? 'GitHub token not configured — set GITHUB_TOKEN in server env'
+        : 'GitHub token rejected (expired or missing scope) — regenerate with workflow scope',
+      noToken: e.noToken,
+      needsToken: true,
+      status: e.status,
+    }
+  }
+  return { error: e.body || e.message }
+}
+
+// ── GitHub Actions — full workflow list with latest run per workflow ───────────
+app.get('/api/github/workflows', async (req, res) => {
+  try {
+    const data = await ghGet(`/repos/${GH_REPO}/actions/workflows?per_page=100`)
+    const workflows = Array.isArray(data?.workflows) ? data.workflows : []
+
+    const withRuns = await Promise.all(
+      workflows.map(async wf => {
+        try {
+          const runData = await ghGet(`/repos/${GH_REPO}/actions/workflows/${wf.id}/runs?per_page=1`)
+          return { ...wf, latestRun: runData?.workflow_runs?.[0] || null }
+        } catch {
+          return { ...wf, latestRun: null }
+        }
+      })
+    )
+
+    res.json({ workflows: withRuns, fetchedAt: new Date().toISOString(), hasToken: Boolean(GITHUB_TOKEN) })
+  } catch (e) {
+    const status = e.status === 401 || e.status === 403 ? e.status : 500
+    res.status(status).json(ghErrResponse(e))
+  }
+})
+
+// ── GitHub Actions — recent runs for a specific workflow ──────────────────────
+app.get('/api/workflow-runs/:workflow', async (req, res) => {
+  const perPage = Math.min(Number(req.query.per_page) || 10, 30)
+  try {
+    const data = await ghGet(
+      `/repos/${GH_REPO}/actions/workflows/${encodeURIComponent(req.params.workflow)}/runs?per_page=${perPage}`
+    )
+    res.json(data)
+  } catch (e) {
+    const status = e.status === 401 || e.status === 403 ? e.status : 500
+    res.status(status).json(ghErrResponse(e))
+  }
+})
+
 // ── GitHub Actions — workflow dispatch ───────────────────────────────────────
 app.post('/api/workflow-dispatch', async (req, res) => {
   const { workflow, ref = 'main', inputs = {} } = req.body || {}
   if (!workflow) return res.status(400).json({ error: 'workflow required' })
-  if (!GITHUB_TOKEN) return res.status(401).json({ error: 'GITHUB_TOKEN not set on server' })
+  if (!GITHUB_TOKEN) {
+    return res.status(401).json({
+      error: 'GitHub token not configured — set GITHUB_TOKEN in server env',
+      noToken: true,
+      needsToken: true,
+    })
+  }
 
   try {
     const r = await fetch(
       `https://api.github.com/repos/${GH_REPO}/actions/workflows/${workflow}/dispatches`,
       {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${GITHUB_TOKEN}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
-        },
+        headers: ghHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ ref, inputs }),
         signal: AbortSignal.timeout(10000),
       }
     )
     if (!r.ok) {
       const txt = await r.text().catch(() => '')
-      return res.status(r.status).json({ error: `GitHub API ${r.status}: ${txt.slice(0, 300)}` })
+      const err = new Error(`GitHub API ${r.status}`)
+      err.status = r.status
+      err.body = txt.slice(0, 400)
+      err.noToken = false
+      return res.status(r.status).json(ghErrResponse(err))
     }
     res.json({ ok: true, workflow, ref, inputs })
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
-
-// ── GitHub Actions — recent runs for a workflow ───────────────────────────────
-app.get('/api/workflow-runs/:workflow', async (req, res) => {
-  if (!GITHUB_TOKEN) return res.status(401).json({ error: 'GITHUB_TOKEN not set on server' })
-
-  const perPage = Math.min(Number(req.query.per_page) || 10, 30)
-  try {
-    const r = await fetch(
-      `https://api.github.com/repos/${GH_REPO}/actions/workflows/${encodeURIComponent(req.params.workflow)}/runs?per_page=${perPage}`,
-      {
-        headers: {
-          Authorization: `Bearer ${GITHUB_TOKEN}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-        signal: AbortSignal.timeout(10000),
-      }
-    )
-    if (!r.ok) {
-      const txt = await r.text().catch(() => '')
-      return res.status(r.status).json({ error: `GitHub API ${r.status}: ${txt.slice(0, 300)}` })
-    }
-    res.json(await r.json())
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
