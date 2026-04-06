@@ -3,7 +3,7 @@
  
 import { addCheck } from "../../lib/audit_context.js";
 import { SEVERITY } from "../../lib/severity.js";
-import { decodeCalldata, getSelector } from "../../lib/abi_utils.js";
+import { decodeCalldata, encodeFunctionCall, getSelector } from "../../lib/abi_utils.js";
  
 const CHECK_NAME = "protocol.calldata_decoding";
  
@@ -13,13 +13,11 @@ const AGI_JOB_MANAGER_ABI = [
   "function applyForJob(uint256 jobId, bytes calldata applicationData)",
 ];
  
-// Known test calldata for submitCompletion
 const TEST_CASES = [
   {
     name: "submitCompletion",
     abi: AGI_JOB_MANAGER_ABI,
-    // selector for submitCompletion
-    expectedSelector: "0x" + Buffer.from("submitCompletion(uint256,string,bytes32)").toString("hex").slice(0, 8),
+    expectedSelector: "0x5635b65d",
   },
 ];
  
@@ -28,17 +26,19 @@ export async function run(ctx) {
   const failures = [];
  
   for (const tc of TEST_CASES) {
-    // Just verify ABI parses without errors
-    try {
-      const { ethers } = await import("ethers");
-      const iface = new ethers.Interface(tc.abi);
-      const frag = iface.getFunction(tc.name);
-      if (!frag) {
-        failures.push(`${tc.name}: function not found in ABI`);
-        continue;
-      }
-    } catch (err) {
-      failures.push(`${tc.name}: ABI parse error — ${err.message}`);
+    const encoded = encodeFunctionCall(tc.abi, tc.name, [
+      1n,
+      "QmTestHash",
+      "0x" + "ab".repeat(32),
+    ]);
+    if (!encoded) {
+      failures.push(`${tc.name}: encoding returned null`);
+      continue;
+    }
+
+    const decoded = decodeCalldata(tc.abi, encoded);
+    if (!decoded || decoded.selector !== tc.expectedSelector) {
+      failures.push(`${tc.name}: decode/selector mismatch`);
     }
   }
  
