@@ -37,6 +37,7 @@ import {
   getOrCreateProcState,
   getProcState,
   setProcState,
+  transitionProcStatus,
   listActiveProcurements,
   writeProcCheckpoint,
   procRootDir,
@@ -50,11 +51,11 @@ import path from "path";
 // ── Monitor config ────────────────────────────────────────────────────────────
 
 const SCAN_BLOCKS = 1000
-const POLL_INTERVAL_MS  = 60_000;   // 1 minute between scans
+const POLL_INTERVAL_MS  = 60_000;
 const MONITOR_STATE_FILE = path.join(CONFIG.WORKSPACE_ROOT, "prime_monitor_state.json");
+const MONITOR_HEALTH_FILE = path.join(CONFIG.WORKSPACE_ROOT, "monitor_health.json");
 const REORG_SAFETY_BLOCKS = Number(process.env.PRIME_MONITOR_REORG_SAFETY_BLOCKS ?? "24");
-
-// ── Monitor state (persists across restarts) ──────────────────────────────────
+const MAX_CONSECUTIVE_FAILURES = Number(process.env.PRIME_MONITOR_MAX_FAILURES ?? "5");
 
 async function loadMonitorState() {
   const data = await readJson(MONITOR_STATE_FILE, null);
@@ -71,6 +72,50 @@ async function loadMonitorState() {
 
 async function saveMonitorState(state) {
   await writeJson(MONITOR_STATE_FILE, { ...state, updatedAt: new Date().toISOString() });
+}
+
+async function loadMonitorHealth() {
+  return readJson(MONITOR_HEALTH_FILE, {
+    status: "healthy",
+    consecutiveFailures: 0,
+    lastSuccessAt: null,
+    lastFailureAt: null,
+    lastError: null,
+    failureHistory: [],
+    fatalThreshold: MAX_CONSECUTIVE_FAILURES,
+  });
+}
+
+async function saveMonitorHealth(health) {
+  await writeJson(MONITOR_HEALTH_FILE, health);
+}
+
+async function recordMonitorSuccess() {
+  const health = await loadMonitorHealth();
+  health.consecutiveFailures = 0;
+  health.lastSuccessAt = new Date().toISOString();
+  health.status = "healthy";
+  await saveMonitorHealth(health);
+}
+
+async function recordMonitorFailure(err) {
+  const health = await loadMonitorHealth();
+  health.consecutiveFailures = (health.consecutiveFailures ?? 0) + 1;
+  health.lastFailureAt = new Date().toISOString();
+  health.lastError = err.message;
+  health.failureHistory = [
+    ...(health.failureHistory ?? []).slice(-20),
+    { at: new Date().toISOString(), error: err.message, cycle: err.cycle ?? null },
+  ];
+  if (health.consecutiveFailures >= health.fatalThreshold) {
+    health.status = "FATAL";
+    health.fatalAt = new Date().toISOString();
+    log(`MONITOR FATAL: ${health.consecutiveFailures} consecutive failures. Monitor is stalled.`);
+  } else {
+    health.status = "degraded";
+  }
+  await saveMonitorHealth(health);
+  return health;
 }
 
 // ── Main monitor loop ─────────────────────────────────────────────────────────
@@ -113,9 +158,20 @@ export async function startPrimeMonitor({ agentAddress, once = false } = {}) {
       // 4. Save monitor state
       await saveMonitorState(monitorState);
 
+      // 5. Record success
+      await recordMonitorSuccess();
+
       log(`Cycle #${monitorState.cycles} complete.`);
     } catch (err) {
+      err.cycle = monitorState.cycles;
       log(`Cycle #${monitorState.cycles} error: ${err.message}`);
+      const health = await recordMonitorFailure(err);
+      if (health.status === "FATAL") {
+        log(`Monitor entering FATAL state after ${health.consecutiveFailures} consecutive failures. Stopping.`);
+        if (once) return;
+        clearInterval(handle);
+        return;
+      }
     }
   }
 
@@ -275,6 +331,7 @@ async function updateCursorAnchor(monitorState, key, blockNumber) {
 
 async function reconcileReorgCursors(monitorState) {
   const anchors = monitorState.cursorAnchors ?? {};
+  let reorgDetected = false;
   for (const [key, anchor] of Object.entries(anchors)) {
     if (!anchor?.blockNumber || !anchor?.blockHash) continue;
     const currentHash = await getBlockHash(Number(anchor.blockNumber));
@@ -284,7 +341,65 @@ async function reconcileReorgCursors(monitorState) {
     if (key === "shortlist") monitorState.lastShortlistBlock = rewindTo;
     if (key === "winner") monitorState.lastWinnerBlock = rewindTo;
     log(`Reorg detected at ${key} cursor block ${anchor.blockNumber}. Rewinding to ${rewindTo}`);
+    reorgDetected = true;
   }
+  if (reorgDetected) {
+    monitorState.lastReorgAt = new Date().toISOString();
+    monitorState.reorgCount = (monitorState.reorgCount ?? 0) + 1;
+  }
+}
+
+async function checkProcurementReorgIntegrity(procurementId, state) {
+  if (!state?.lastChainSync) return { ok: true };
+  const syncBlock = state.lastChainSyncBlock ?? null;
+  if (!syncBlock) return { ok: true };
+
+  try {
+    const currentHash = await getBlockHash(Number(syncBlock));
+    const storedHash = state.lastChainSyncBlockHash ?? null;
+    if (storedHash && currentHash && currentHash !== storedHash) {
+      return {
+        ok: false,
+        reason: "reorg",
+        syncBlock,
+        storedHash,
+        currentHash,
+        message: `Procurement #${procurementId} synced at block ${syncBlock} which has been reorged`,
+      };
+    }
+  } catch {
+    return { ok: true, reason: "hash-check-failed" };
+  }
+  return { ok: true };
+}
+  if (reorgDetected) {
+    monitorState.lastReorgAt = new Date().toISOString();
+    monitorState.reorgCount = (monitorState.reorgCount ?? 0) + 1;
+  }
+}
+
+async function checkProcurementReorgIntegrity(procurementId, state) {
+  if (!state?.lastChainSync) return { ok: true };
+  const syncBlock = state.lastChainSyncBlock ?? null;
+  if (!syncBlock) return { ok: true };
+
+  try {
+    const currentHash = await getBlockHash(Number(syncBlock));
+    const storedHash = state.lastChainSyncBlockHash ?? null;
+    if (storedHash && currentHash && currentHash !== storedHash) {
+      return {
+        ok: false,
+        reason: "reorg",
+        syncBlock,
+        storedHash,
+        currentHash,
+        message: `Procurement #${procurementId} synced at block ${syncBlock} which has been reorged`,
+      };
+    }
+  } catch {
+    return { ok: true, reason: "hash-check-failed" };
+  }
+  return { ok: true };
 }
 
 // ── Refresh active procurements ───────────────────────────────────────────────
@@ -299,6 +414,31 @@ async function refreshActiveProcurements(agentAddress) {
   for (const state of active) {
     const { procurementId } = state;
     try {
+      // Check if this procurement's sync block has been reorged
+      const reorgCheck = await checkProcurementReorgIntegrity(procurementId, state);
+      if (!reorgCheck.ok) {
+        log(`  #${procurementId} REORG DETECTED — ${reorgCheck.message}. Rolling back state.`);
+        // Roll back submitted states that may have been based on reorged chain data
+        const rollbackMap = {
+          [PROC_STATUS.COMMIT_SUBMITTED]: PROC_STATUS.COMMIT_READY,
+          [PROC_STATUS.REVEAL_SUBMITTED]: PROC_STATUS.REVEAL_READY,
+          [PROC_STATUS.FINALIST_ACCEPT_SUBMITTED]: PROC_STATUS.FINALIST_ACCEPT_READY,
+          [PROC_STATUS.TRIAL_SUBMITTED]: PROC_STATUS.TRIAL_READY,
+          [PROC_STATUS.COMPLETION_SUBMITTED]: PROC_STATUS.COMPLETION_READY,
+        };
+        const rollbackTo = rollbackMap[state.status];
+        if (rollbackTo) {
+          await setProcState(procurementId, {
+            status: rollbackTo,
+            reorgRolledBackAt: new Date().toISOString(),
+            reorgPreviousStatus: state.status,
+            reorgSyncBlock: reorgCheck.syncBlock,
+          });
+          log(`  #${procurementId}: rolled back ${state.status} → ${rollbackTo}`);
+        }
+        continue;
+      }
+
       // Fetch fresh chain data
       const procStruct = await fetchProcurement(procurementId);
       const appView    = agentAddress ? await fetchApplicationView(procurementId, agentAddress) : null;
@@ -308,9 +448,7 @@ async function refreshActiveProcurements(agentAddress) {
       const chainPhase = deriveChainPhase(procStruct, now);
 
       if (didMissRequiredWindow(state.status, chainPhase)) {
-        await setProcState(procurementId, {
-          status: PROC_STATUS.MISSED_WINDOW,
-          canonicalPhase: toCanonicalPhase(PROC_STATUS.MISSED_WINDOW),
+        await transitionProcStatus(procurementId, PROC_STATUS.MISSED_WINDOW, {
           missedWindowAt: new Date().toISOString(),
           missedWindowReason: `Required action window missed while in ${state.status} during ${chainPhase}`,
         });
@@ -324,6 +462,8 @@ async function refreshActiveProcurements(agentAddress) {
       }
 
       // Persist chain snapshot + next action
+      const currentBlock = await getCurrentBlock();
+      const blockHash = await getBlockHash(currentBlock);
       await writeProcCheckpoint(procurementId, "chain_snapshot.json", {
         procurementId:  String(procurementId),
         snapshotAt:     new Date().toISOString(),
@@ -331,12 +471,18 @@ async function refreshActiveProcurements(agentAddress) {
         procurement:    procStruct,
         applicationView: appView ?? null,
         deadlineWarnings: warnings,
+        syncBlock:      currentBlock,
+        syncBlockHash:  blockHash,
       });
 
       await writeProcCheckpoint(procurementId, "next_action.json", nextAction);
 
-      // Update state lastChainSync
-      await setProcState(procurementId, { lastChainSync: new Date().toISOString() });
+      // Update state lastChainSync with block hash for reorg detection
+      await setProcState(procurementId, {
+        lastChainSync: new Date().toISOString(),
+        lastChainSyncBlock: currentBlock,
+        lastChainSyncBlockHash: blockHash,
+      });
 
       log(`  #${procurementId} refreshed — status=${state.status} action=${nextAction.action}` +
           (nextAction.blockedReason ? ` BLOCKED: ${nextAction.blockedReason}` : ""));

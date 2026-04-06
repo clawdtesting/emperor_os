@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/evaluate.js
+// ./agent/evaluate.js
 import { listAllJobStates, setJobState } from "./state.js";
 import { evaluateJobStrategy } from "./strategy.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson } from "./artifact-manager.js";

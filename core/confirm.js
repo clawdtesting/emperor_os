@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/confirm.js
+// ./agent/confirm.js
 import { getJob } from "./mcp.js";
 import { listAllJobStates, setJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";

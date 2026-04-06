@@ -1,10 +1,11 @@
 import express from 'express'
 import cors from 'cors'
 import { spawn } from 'child_process'
-import { readdirSync, readFileSync, existsSync } from 'fs'
-import { dirname, resolve } from 'path'
+import { readdirSync, readFileSync, existsSync, statSync, mkdirSync, writeFileSync, appendFileSync, renameSync, unlinkSync } from 'fs'
+import { dirname, resolve, join } from 'path'
 import { fileURLToPath } from 'url'
 import { createServer } from 'http'
+import { tmpdir } from 'os'
 
 const app = express()
 app.use(cors())
@@ -12,7 +13,8 @@ app.use(express.json())
 
 const __dirname     = dirname(fileURLToPath(import.meta.url))
 const MCP_ENDPOINT  = process.env.AGI_ALPHA_MCP || 'https://agialpha.com/api/mcp'
-const PIPELINES_DIR = '/home/ubuntu/.openclaw/workspace/pipelines'
+const WORKSPACE_ROOT = resolve(__dirname, '..')
+const PIPELINES_DIR = join(WORKSPACE_ROOT, 'pipelines')
 const TESTS_DIR     = resolve(__dirname, '..', 'tests')
 const GITHUB_OWNER  = process.env.GITHUB_REPO_OWNER || 'clawdtesting'
 const GITHUB_REPO   = process.env.GITHUB_REPO_NAME || 'emperor_os_clean'
@@ -318,6 +320,7 @@ app.get('/api/jobs', async (req, res) => {
 // ── Pipelines ─────────────────────────────────────────────────────────────────
 app.get('/api/pipelines', (req, res) => {
   try {
+    if (!existsSync(PIPELINES_DIR)) return res.json([])
     const files = readdirSync(PIPELINES_DIR).filter(f => f.endsWith('.yaml') || f.endsWith('.lobster'))
     res.json(files.map(name => ({
       name,
@@ -506,6 +509,340 @@ app.post('/api/test-run', (req, res) => {
   proc.on('close', code => { send('done',  { code, ts: new Date().toISOString() }); res.end() })
   proc.on('error', err  => { send('error', { message: err.message });               res.end() })
   req.on('close',  ()   => proc.kill())
+})
+
+// ── Intake pipeline runner (for real MCP jobs) ───────────────────────────────
+app.post('/api/intake-run', (req, res) => {
+  const { jobId, job } = req.body || {}
+  if (!job || typeof job !== 'object') {
+    return res.status(400).json({ error: 'job payload required' })
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.flushHeaders()
+
+  const send = (type, data) => res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`)
+
+  const safeJobId = String(jobId || job.jobId || Date.now()).replace(/[^a-z0-9_-]/gi, '_')
+  const tmpFile = join(tmpdir(), `intake-job-${safeJobId}.json`)
+
+  // Find intake pipeline
+  let pipelinePath = null
+  if (existsSync(PIPELINES_DIR)) {
+    const files = readdirSync(PIPELINES_DIR).filter(f => f.endsWith('.yaml') || f.endsWith('.lobster'))
+    const intakeFile = files.find(f => f.toLowerCase().includes('intake')) || files[0] || null
+    if (intakeFile) pipelinePath = join(PIPELINES_DIR, intakeFile)
+  }
+
+  if (!pipelinePath) {
+    send('error', { message: 'No pipeline found in pipelines/. Add intake.lobster.yaml to enable autonomous intake.' })
+    res.end()
+    return
+  }
+
+  try {
+    writeFileSync(tmpFile, JSON.stringify(job, null, 2))
+  } catch (e) {
+    send('error', { message: `Failed to write tmp job spec: ${e.message}` })
+    res.end()
+    return
+  }
+
+  send('start', { pipeline: pipelinePath, jobId: safeJobId, ts: new Date().toISOString() })
+
+  const proc = spawn('lobster', ['run', pipelinePath, '--json-input', tmpFile], {
+    cwd: WORKSPACE_ROOT,
+    env: { ...process.env },
+  })
+
+  let buf = ''
+
+  proc.stdout.on('data', chunk => {
+    buf += chunk.toString()
+    const lines = buf.split('\n')
+    buf = lines.pop()
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        const p = JSON.parse(line)
+        send('step', { step: p.step || p.id || '?', tool: p.tool || p.command || '?', status: p.status || 'ok', result: p.result || p.output || '' })
+      } catch {
+        send('stream', { text: line, ts: new Date().toISOString() })
+      }
+    }
+  })
+
+  proc.stderr.on('data', chunk => {
+    chunk.toString().split('\n').filter(Boolean).forEach(line =>
+      send('stream', { text: line, level: 'stderr', ts: new Date().toISOString() })
+    )
+  })
+
+  proc.on('error', err => {
+    const msg = err.code === 'ENOENT'
+      ? 'lobster not found in PATH. Install lobster to enable pipeline execution.'
+      : err.message
+    send('error', { message: msg })
+    try { unlinkSync(tmpFile) } catch {}
+    res.end()
+  })
+
+  proc.on('close', code => {
+    send('done', { code, ts: new Date().toISOString() })
+    try { unlinkSync(tmpFile) } catch {}
+    res.end()
+  })
+
+  req.on('close', () => {
+    proc.kill()
+    try { unlinkSync(tmpFile) } catch {}
+  })
+})
+
+// ── Operations Lane ───────────────────────────────────────────────────────────
+
+function classifyLifecycleStage(status) {
+  const s = (status || '').toLowerCase()
+  if (['commit_ready', 'reveal_ready', 'finalist_accept_ready', 'trial_ready', 'completion_ready', 'ready_for_signature'].includes(s)) return 'ready_for_signature'
+  if (['awaiting_finalization', 'in_progress', 'assigned'].includes(s)) return 'awaiting_finalization'
+  if (['completed', 'done', 'finalized', 'selected'].includes(s)) return 'finalized'
+  return 'idle'
+}
+
+app.get('/api/operations-lane', async (req, res) => {
+  try {
+    const procurements = []
+    if (existsSync(PROC_ARTIFACTS_DIR)) {
+      const dirs = readdirSync(PROC_ARTIFACTS_DIR).filter(d => d.startsWith('proc_') && statSync(join(PROC_ARTIFACTS_DIR, d)).isDirectory())
+      for (const dir of dirs) {
+        const state = readJsonSafe(join(PROC_ARTIFACTS_DIR, dir, 'state.json'), null)
+        const nextAction = readJsonSafe(join(PROC_ARTIFACTS_DIR, dir, 'next_action.json'), null)
+        if (!state) continue
+        const procId = dir.replace('proc_', '')
+        procurements.push({
+          procurementId: procId,
+          status: state.status || 'unknown',
+          phase: state.phase || '',
+          employer: state.employer || null,
+          linkedJobId: state.linkedJobId || null,
+          nextAction: nextAction?.action || null,
+          txPackages: (state.txPackages || []).map(p => ({
+            file: p.file || 'unknown',
+            ageMin: p.ageMin ?? 0,
+            expired: p.expired ?? false,
+            fresh: p.fresh ?? false,
+          })),
+          receipts: (state.receipts || []).map(r => ({
+            action: r.action || '',
+            txHash: r.txHash || '',
+            status: r.status || '',
+            finalizedAt: r.finalizedAt || null,
+          })),
+          deadlines: state.deadlines || null,
+          lifecycleStage: classifyLifecycleStage(state.status),
+          updatedAt: state.lastChainSync || state.updatedAt || null,
+        })
+      }
+    }
+
+    const jobs = []
+    if (existsSync(AGENT_STATE_DIR)) {
+      const files = readdirSync(AGENT_STATE_DIR).filter(f => f.endsWith('.json'))
+      for (const file of files) {
+        const state = readJsonSafe(join(AGENT_STATE_DIR, file), null)
+        if (!state) continue
+        const jobId = state.jobId || file.replace('.json', '')
+        jobs.push({
+          jobId,
+          status: state.status || 'unknown',
+          txPackages: (state.txPackages || []).map(p => ({
+            file: p.file || 'unknown',
+            ageMin: p.ageMin ?? 0,
+            expired: p.expired ?? false,
+            fresh: p.fresh ?? false,
+          })),
+          receipts: (state.receipts || []).map(r => ({
+            action: r.action || '',
+            txHash: r.txHash || '',
+            status: r.status || '',
+            finalizedAt: r.finalizedAt || null,
+          })),
+          lifecycleStage: classifyLifecycleStage(state.status),
+          updatedAt: state.updatedAt || state.lastSync || null,
+        })
+      }
+    }
+
+    res.json({
+      procurements,
+      jobs,
+      scannedAt: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('[ops-lane] error:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── Actions / Notifications API ───────────────────────────────────────────────
+
+app.get('/api/actions', (req, res) => {
+  const state = loadNotifState()
+  const filter = req.query.filter
+  let actions = state.actions
+
+  if (filter === 'urgent') {
+    actions = actions.filter(a => a.urgency === 'urgent' && !state.dismissed[a.id])
+  } else if (filter === 'pending') {
+    actions = actions.filter(a => !state.dismissed[a.id])
+  } else if (filter === 'dismissed') {
+    actions = actions.filter(a => state.dismissed[a.id])
+  } else {
+    actions = actions.filter(a => !state.dismissed[a.id])
+  }
+
+  res.json({
+    actions: actions.reverse(),
+    total: state.actions.length,
+    dismissed: Object.keys(state.dismissed).length,
+    lastScanAt: state.lastScanAt,
+  })
+})
+
+app.post('/api/actions/:id/dismiss', (req, res) => {
+  const state = loadNotifState()
+  const id = req.params.id
+  if (!state.actions.find(a => a.id === id)) {
+    return res.status(404).json({ error: 'action not found' })
+  }
+  state.dismissed[id] = { dismissedAt: new Date().toISOString() }
+  saveNotifState(state)
+  res.json({ ok: true, dismissed: id })
+})
+
+// ── Start notification scanner (after sseClients is available) ────────────────
+const SCAN_INTERVAL_MS = 30_000
+console.log('[notify] starting scanner (interval: ' + (SCAN_INTERVAL_MS / 1000) + 's)')
+scanAndNotify()
+setInterval(scanAndNotify, SCAN_INTERVAL_MS)
+
+// ── GitHub API proxy helpers ──────────────────────────────────────────────────
+
+function ghHeaders(extra = {}) {
+  const h = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    ...extra,
+  }
+  if (GITHUB_TOKEN) h.Authorization = `Bearer ${GITHUB_TOKEN}`
+  return h
+}
+
+async function ghGet(path) {
+  const r = await fetch(`https://api.github.com${path}`, {
+    headers: ghHeaders(),
+    signal: AbortSignal.timeout(12000),
+  })
+  if (!r.ok) {
+    const txt = await r.text().catch(() => '')
+    const err = new Error(`GitHub API ${r.status}`)
+    err.status = r.status
+    err.body = txt.slice(0, 400)
+    err.noToken = !GITHUB_TOKEN
+    throw err
+  }
+  return r.json()
+}
+
+function ghErrResponse(e) {
+  if (e.status === 401 || e.status === 403) {
+    return {
+      error: e.noToken
+        ? 'GitHub token not configured — set GITHUB_TOKEN in server env'
+        : 'GitHub token rejected (expired or missing scope) — regenerate with workflow scope',
+      noToken: e.noToken,
+      needsToken: true,
+      status: e.status,
+    }
+  }
+  return { error: e.body || e.message }
+}
+
+// ── GitHub Actions — full workflow list with latest run per workflow ───────────
+app.get('/api/github/workflows', async (req, res) => {
+  try {
+    const data = await ghGet(`/repos/${GH_REPO}/actions/workflows?per_page=100`)
+    const workflows = Array.isArray(data?.workflows) ? data.workflows : []
+
+    const withRuns = await Promise.all(
+      workflows.map(async wf => {
+        try {
+          const runData = await ghGet(`/repos/${GH_REPO}/actions/workflows/${wf.id}/runs?per_page=1`)
+          return { ...wf, latestRun: runData?.workflow_runs?.[0] || null }
+        } catch {
+          return { ...wf, latestRun: null }
+        }
+      })
+    )
+
+    res.json({ workflows: withRuns, fetchedAt: new Date().toISOString(), hasToken: Boolean(GITHUB_TOKEN) })
+  } catch (e) {
+    const status = e.status === 401 || e.status === 403 ? e.status : 500
+    res.status(status).json(ghErrResponse(e))
+  }
+})
+
+// ── GitHub Actions — recent runs for a specific workflow ──────────────────────
+app.get('/api/workflow-runs/:workflow', async (req, res) => {
+  const perPage = Math.min(Number(req.query.per_page) || 10, 30)
+  try {
+    const data = await ghGet(
+      `/repos/${GH_REPO}/actions/workflows/${encodeURIComponent(req.params.workflow)}/runs?per_page=${perPage}`
+    )
+    res.json(data)
+  } catch (e) {
+    const status = e.status === 401 || e.status === 403 ? e.status : 500
+    res.status(status).json(ghErrResponse(e))
+  }
+})
+
+// ── GitHub Actions — workflow dispatch ───────────────────────────────────────
+app.post('/api/workflow-dispatch', async (req, res) => {
+  const { workflow, ref = 'main', inputs = {} } = req.body || {}
+  if (!workflow) return res.status(400).json({ error: 'workflow required' })
+  if (!GITHUB_TOKEN) {
+    return res.status(401).json({
+      error: 'GitHub token not configured — set GITHUB_TOKEN in server env',
+      noToken: true,
+      needsToken: true,
+    })
+  }
+
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${GH_REPO}/actions/workflows/${workflow}/dispatches`,
+      {
+        method: 'POST',
+        headers: ghHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ ref, inputs }),
+        signal: AbortSignal.timeout(10000),
+      }
+    )
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '')
+      const err = new Error(`GitHub API ${r.status}`)
+      err.status = r.status
+      err.body = txt.slice(0, 400)
+      err.noToken = false
+      return res.status(r.status).json(ghErrResponse(err))
+    }
+    res.json({ ok: true, workflow, ref, inputs })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // ── Serve React frontend (production build) ───────────────────────────────────

@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/strategy.js
+// ./agent/strategy.js
 
 const DEFAULTS = {
     MIN_CONFIDENCE_TO_APPLY: Number(process.env.MIN_CONFIDENCE_TO_APPLY ?? "0.4"),

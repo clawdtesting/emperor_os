@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/tx-reconcile.js
+// ./agent/tx-reconcile.js
 import { getProvider, assertMainnet } from "./rpc.js";
 
 export async function fetchReceipt(txHash) {

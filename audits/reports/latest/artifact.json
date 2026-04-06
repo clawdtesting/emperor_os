@@ -1,0 +1,55 @@
+{
+  "auditType": "artifact",
+  "status": "pass",
+  "startedAt": "2026-04-06T21:42:18.197Z",
+  "completedAt": "2026-04-06T21:42:18.197Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 5,
+    "warn": 0,
+    "fail": 0,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "name": "artifact.artifact_presence",
+      "status": "pass",
+      "details": "No completed jobs or procurements found — nothing to check",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "artifact.artifact_schema",
+      "status": "pass",
+      "details": "No JSON files found in artifacts — nothing to validate",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "artifact.manifest_hash_match",
+      "status": "pass",
+      "details": "No manifest files found in artifacts — nothing to verify",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "artifact.artifact_uri_resolution",
+      "status": "pass",
+      "details": "No JSON files found in artifacts — nothing to check",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "artifact.reviewability_check",
+      "status": "pass",
+      "details": "No artifact directories found to check — nothing to review",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 1,
+  "errors": []
+}

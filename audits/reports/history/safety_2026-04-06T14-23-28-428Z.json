@@ -1,0 +1,69 @@
+{
+  "auditType": "safety",
+  "status": "critical",
+  "startedAt": "2026-04-06T14:23:28.428Z",
+  "completedAt": "2026-04-06T14:23:28.428Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 4,
+    "warn": 1,
+    "fail": 0,
+    "critical": 1
+  },
+  "checks": [
+    {
+      "name": "safety.no_private_key_usage",
+      "status": "critical",
+      "details": "1 private key reference(s) found: PRIVATE_KEY @ /home/emperor/.openclaw/workspace/agent/prime/prime-evaluate.js:25",
+      "severity": "critical",
+      "durationMs": 342,
+      "hits": [
+        {
+          "pattern": "PRIVATE_KEY",
+          "file": "/home/emperor/.openclaw/workspace/agent/prime/prime-evaluate.js",
+          "line": 25
+        }
+      ]
+    },
+    {
+      "name": "safety.no_signer_send_transaction",
+      "status": "pass",
+      "details": "No signer/wallet sendTransaction calls detected",
+      "severity": "pass",
+      "durationMs": 190
+    },
+    {
+      "name": "safety.unsigned_only_guarantee",
+      "status": "pass",
+      "details": "No artifact files found — unsigned-only guarantee holds by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.anti_replay_freshness",
+      "status": "pass",
+      "details": "No artifacts to check — freshness requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.pre_sign_simulation_policy",
+      "status": "warn",
+      "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
+      "severity": "warn",
+      "durationMs": 2266
+    },
+    {
+      "name": "safety.signing_manifest_integrity",
+      "status": "pass",
+      "details": "No signing manifests found — integrity requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 2799,
+  "errors": []
+}

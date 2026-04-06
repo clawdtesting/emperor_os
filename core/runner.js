@@ -53,7 +53,7 @@ async function main() {
 
     const exp = Math.max(0, consecutiveFailures - 1);
     const backedOffDelay = Math.min(maxDelay, Math.floor(baseDelay * Math.pow(backoffMultiplier, exp)));
-    const jitter = jitterMax > 0 ? Math.floor(Math.random() * (jitterMax + 1)) : 0;
+    const jitter = jitterMax > 0 ? Math.floor((Date.now() + consecutiveFailures) % (jitterMax + 1)) : 0;
     const nextDelay = backedOffDelay + jitter;
 
     console.log(`[runner] sleeping ${nextDelay}ms (failures=${consecutiveFailures})`);

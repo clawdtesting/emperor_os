@@ -1,0 +1,3871 @@
+{
+  "auditType": "safety",
+  "status": "critical",
+  "startedAt": "2026-04-06T14:21:28.898Z",
+  "completedAt": "2026-04-06T14:21:28.898Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 3,
+    "warn": 1,
+    "fail": 0,
+    "critical": 2
+  },
+  "checks": [
+    {
+      "name": "safety.no_private_key_usage",
+      "status": "critical",
+      "details": "707 private key reference(s) found: PRIVATE_KEY @ /home/emperor/.openclaw/workspace/agent/prime/prime-evaluate.js:25; privateKey @ /home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/_shortw_utils.d.ts:45; privateKey @ /home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/_shortw_utils.d.ts:56",
+      "severity": "critical",
+      "durationMs": 3603,
+      "hits": [
+        {
+          "pattern": "PRIVATE_KEY",
+          "file": "/home/emperor/.openclaw/workspace/agent/prime/prime-evaluate.js",
+          "line": 25
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/_shortw_utils.d.ts",
+          "line": 45
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/_shortw_utils.d.ts",
+          "line": 56
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.d.ts",
+          "line": 63
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.d.ts",
+          "line": 65
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.d.ts",
+          "line": 66
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.js",
+          "line": 132
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.js",
+          "line": 133
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.js",
+          "line": 135
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.js",
+          "line": 138
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/edwards.d.ts",
+          "line": 63
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/edwards.d.ts",
+          "line": 67
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/edwards.d.ts",
+          "line": 68
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/edwards.js",
+          "line": 361
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/montgomery.d.ts",
+          "line": 17
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/montgomery.d.ts",
+          "line": 18
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/montgomery.js",
+          "line": 154
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/montgomery.js",
+          "line": 155
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.d.ts",
+          "line": 79
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.d.ts",
+          "line": 202
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.d.ts",
+          "line": 210
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 229
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 230
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 231
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 680
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 682
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 714
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 718
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 719
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 788
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 802
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/bls.js",
+          "line": 129
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/bls.js",
+          "line": 130
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/bls.js",
+          "line": 132
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/bls.js",
+          "line": 135
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/edwards.js",
+          "line": 358
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/montgomery.js",
+          "line": 151
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/montgomery.js",
+          "line": 152
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 226
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 227
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 228
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 676
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 678
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 710
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 714
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 715
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 784
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 798
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/secp256k1.js",
+          "line": 140
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/secp256k1.js",
+          "line": 141
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/secp256k1.js",
+          "line": 147
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/secp256k1.js",
+          "line": 149
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p256.d.ts",
+          "line": 36
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p256.d.ts",
+          "line": 47
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p256.d.ts",
+          "line": 87
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p256.d.ts",
+          "line": 98
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p384.d.ts",
+          "line": 36
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p384.d.ts",
+          "line": 47
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p384.d.ts",
+          "line": 87
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p384.d.ts",
+          "line": 98
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p521.d.ts",
+          "line": 36
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p521.d.ts",
+          "line": 47
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p521.d.ts",
+          "line": 87
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/p521.d.ts",
+          "line": 98
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.d.ts",
+          "line": 40
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.d.ts",
+          "line": 51
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.d.ts",
+          "line": 65
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.d.ts",
+          "line": 70
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.js",
+          "line": 143
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.js",
+          "line": 144
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.js",
+          "line": 150
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.js",
+          "line": 152
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 72
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 74
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 75
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 265
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 266
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 271
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 272
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 273
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 276
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/edwards.ts",
+          "line": 72
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/edwards.ts",
+          "line": 77
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/edwards.ts",
+          "line": 78
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/edwards.ts",
+          "line": 444
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/montgomery.ts",
+          "line": 24
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/montgomery.ts",
+          "line": 25
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/montgomery.ts",
+          "line": 184
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/montgomery.ts",
+          "line": 185
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 81
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 318
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 319
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 320
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 675
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 683
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 839
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 841
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 875
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 879
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 880
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 949
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 962
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/secp256k1.ts",
+          "line": 149
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/secp256k1.ts",
+          "line": 150
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/secp256k1.ts",
+          "line": 159
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/secp256k1.ts",
+          "line": 163
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1322
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1329
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1347
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1354
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1381
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1390
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1392
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1622
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1623
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1629
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1631
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 1632
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2156
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2159
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2163
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2165
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2168
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2172
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2364
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2365
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2367
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2371
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2373
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2374
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2419
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2493
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2523
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2540
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2549
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2558
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2567
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2576
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2585
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2591
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2597
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2612
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2619
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2628
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2774
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2791
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2797
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2802
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2805
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2812
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2817
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2822
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2827
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2832
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2837
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2842
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2847
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2852
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2857
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2862
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2867
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2872
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2877
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2882
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2887
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2892
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2897
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2902
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2907
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2912
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2917
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2922
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2927
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2932
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2937
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2942
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2947
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2952
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2957
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2962
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2967
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2972
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2977
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2982
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2987
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2992
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 2997
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3002
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3007
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3015
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3022
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3029
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3036
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3044
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3051
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3058
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3065
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3076
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3083
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3090
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3097
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3105
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3112
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3119
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3126
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3134
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3141
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3148
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3155
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3166
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3173
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3180
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3187
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3195
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3202
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3209
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3216
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3227
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3234
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3241
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3248
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3305
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3309
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3716
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 3718
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 4111
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/crypto.d.ts",
+          "line": 4119
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/tls.d.ts",
+          "line": 888
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/tls.d.ts",
+          "line": 891
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/tls.d.ts",
+          "line": 894
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@types/node/tls.d.ts",
+          "line": 898
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 5782
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 5783
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 5784
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6232
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6234
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6266
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6270
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6271
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6340
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6354
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6999
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7001
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7003
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7004
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7005
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7010
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7017
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7025
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7031
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7064
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7076
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7080
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 24275
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 24281
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 24283
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 24284
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 24297
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25275
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25276
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25282
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25284
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25412
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25426
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25546
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25549
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25553
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25665
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25715
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25747
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25748
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26051
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26090
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26104
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26112
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26115
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26117
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26118
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 5788
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 5789
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 5790
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6238
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6240
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6272
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6276
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6277
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6346
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6360
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7005
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7007
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7009
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7010
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7011
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7016
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7023
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7031
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7037
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7070
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7082
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7086
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 24281
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 24287
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 24289
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 24290
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 24303
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25281
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25282
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25288
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25290
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25418
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25432
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25552
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25555
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25559
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25671
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25721
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25753
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25754
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26057
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26096
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26110
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26118
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26121
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26123
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26124
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.d.ts",
+          "line": 16
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.d.ts",
+          "line": 18
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.d.ts",
+          "line": 22
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.d.ts",
+          "line": 75
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.d.ts",
+          "line": 79
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 17
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 19
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 21
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 22
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 23
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 28
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 35
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 43
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 49
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 82
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 94
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 98
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.d.ts",
+          "line": 24
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.d.ts",
+          "line": 30
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.d.ts",
+          "line": 38
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.js",
+          "line": 27
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.js",
+          "line": 33
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.js",
+          "line": 35
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.js",
+          "line": 36
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/base-wallet.js",
+          "line": 49
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 44
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 47
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 51
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 163
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 213
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 245
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 246
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-crowdsale.d.ts",
+          "line": 9
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-crowdsale.js",
+          "line": 57
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-keystore.d.ts",
+          "line": 18
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-keystore.js",
+          "line": 53
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-keystore.js",
+          "line": 54
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-keystore.js",
+          "line": 60
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-keystore.js",
+          "line": 62
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-keystore.js",
+          "line": 192
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/json-keystore.js",
+          "line": 206
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 47
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 61
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 69
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 72
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 74
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 75
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.d.ts",
+          "line": 16
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.d.ts",
+          "line": 18
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.d.ts",
+          "line": 22
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.d.ts",
+          "line": 75
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.d.ts",
+          "line": 79
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 14
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 16
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 18
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 19
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 20
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 25
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 32
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 40
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 46
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 79
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 91
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 95
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.d.ts",
+          "line": 24
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.d.ts",
+          "line": 30
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.d.ts",
+          "line": 38
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.js",
+          "line": 24
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.js",
+          "line": 30
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.js",
+          "line": 32
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.js",
+          "line": 33
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/base-wallet.js",
+          "line": 46
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 41
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 44
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 48
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 160
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 210
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 242
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 243
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-crowdsale.d.ts",
+          "line": 9
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-crowdsale.js",
+          "line": 53
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-keystore.d.ts",
+          "line": 18
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-keystore.js",
+          "line": 49
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-keystore.js",
+          "line": 50
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-keystore.js",
+          "line": 56
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-keystore.js",
+          "line": 58
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-keystore.js",
+          "line": 186
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/json-keystore.js",
+          "line": 200
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 44
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 58
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 66
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 69
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 71
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 72
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 26
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 29
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 31
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 32
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 33
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 39
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 47
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 56
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 64
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 99
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 112
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 116
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/base-wallet.ts",
+          "line": 39
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/base-wallet.ts",
+          "line": 45
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/base-wallet.ts",
+          "line": 48
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/base-wallet.ts",
+          "line": 50
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/base-wallet.ts",
+          "line": 67
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 63
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 67
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 72
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 206
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 262
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 299
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 300
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-crowdsale.ts",
+          "line": 20
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-crowdsale.ts",
+          "line": 73
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-keystore.ts",
+          "line": 36
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-keystore.ts",
+          "line": 94
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-keystore.ts",
+          "line": 96
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-keystore.ts",
+          "line": 101
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-keystore.ts",
+          "line": 104
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-keystore.ts",
+          "line": 275
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/json-keystore.ts",
+          "line": 293
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 62
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 77
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 87
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 90
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 93
+        },
+        {
+          "pattern": "privateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 96
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/bls.js",
+          "line": 133
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/edwards.d.ts",
+          "line": 63
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/edwards.js",
+          "line": 314
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.d.ts",
+          "line": 79
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 230
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/abstract/weierstrass.js",
+          "line": 719
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/bls.js",
+          "line": 130
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/edwards.js",
+          "line": 311
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 227
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+          "line": 715
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/secp256k1.js",
+          "line": 110
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/esm/secp256k1.js",
+          "line": 111
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.js",
+          "line": 113
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/secp256k1.js",
+          "line": 114
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/bls.ts",
+          "line": 266
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/edwards.ts",
+          "line": 72
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/edwards.ts",
+          "line": 394
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 81
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 319
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/abstract/weierstrass.ts",
+          "line": 880
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/secp256k1.ts",
+          "line": 120
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/@noble/curves/src/secp256k1.ts",
+          "line": 121
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 5783
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 6271
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 5789
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 6277
+        },
+        {
+          "pattern": "fromPrivateKey",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26080
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26117
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26086
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26123
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 37
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 74
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 34
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 71
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 51
+        },
+        {
+          "pattern": "new Wallet(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 93
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 7142
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25593
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25600
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25652
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25662
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25749
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25763
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25770
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25793
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25811
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25820
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25836
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25842
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25850
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25851
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25962
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25963
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25969
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 25972
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26111
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26167
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26173
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26180
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26183
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26334
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 26487
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 7148
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25599
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25606
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25658
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25668
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25755
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25769
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25776
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25799
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25817
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25826
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25842
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25848
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25856
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25857
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25968
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25969
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25975
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 25978
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26117
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26173
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26179
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26186
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26189
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26340
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 26535
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.d.ts",
+          "line": 117
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/crypto/signing-key.js",
+          "line": 160
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/ethers.d.ts",
+          "line": 11
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/ethers.js",
+          "line": 8
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/ethers.js",
+          "line": 195
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 19
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 26
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 78
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 123
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 127
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 133
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 135
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 139
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 143
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 147
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 151
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 158
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.d.ts",
+          "line": 159
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 3
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 91
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 98
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 150
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 160
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 247
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 261
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 268
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 291
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 309
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 318
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 334
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 340
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 343
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 349
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 350
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 462
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 463
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 469
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/hdwallet.js",
+          "line": 472
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/index.d.ts",
+          "line": 13
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/index.d.ts",
+          "line": 20
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/index.js",
+          "line": 14
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/index.js",
+          "line": 21
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/index.js",
+          "line": 28
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.d.ts",
+          "line": 3
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.d.ts",
+          "line": 50
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.d.ts",
+          "line": 58
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.d.ts",
+          "line": 60
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.d.ts",
+          "line": 65
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.d.ts",
+          "line": 67
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.d.ts",
+          "line": 69
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 68
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 124
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 130
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 137
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/wallet/wallet.js",
+          "line": 140
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.d.ts",
+          "line": 117
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/crypto/signing-key.js",
+          "line": 157
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/ethers.d.ts",
+          "line": 11
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/ethers.js",
+          "line": 13
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 19
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 26
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 78
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 123
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 127
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 133
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 135
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 139
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 143
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 147
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 151
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 158
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.d.ts",
+          "line": 159
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 88
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 95
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 147
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 157
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 244
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 258
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 265
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 288
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 306
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 315
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 331
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 337
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 345
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 346
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 457
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 458
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 464
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+          "line": 467
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/index.d.ts",
+          "line": 13
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/index.d.ts",
+          "line": 20
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/index.js",
+          "line": 13
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/index.js",
+          "line": 20
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.d.ts",
+          "line": 3
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.d.ts",
+          "line": 50
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.d.ts",
+          "line": 58
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.d.ts",
+          "line": 60
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.d.ts",
+          "line": 65
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.d.ts",
+          "line": 67
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.d.ts",
+          "line": 69
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 4
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 65
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 121
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 127
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 134
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/wallet/wallet.js",
+          "line": 137
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/crypto/signing-key.ts",
+          "line": 187
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/ethers.ts",
+          "line": 121
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 120
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 127
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 187
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 189
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 192
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 197
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 200
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 201
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 288
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 302
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 310
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 311
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 314
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 323
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 332
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 334
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 357
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 368
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 373
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 379
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 381
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 387
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 392
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 398
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 399
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 408
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 409
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 542
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 543
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 549
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/hdwallet.ts",
+          "line": 552
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/index.ts",
+          "line": 13
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/index.ts",
+          "line": 27
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 5
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 81
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 86
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 108
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 130
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 144
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 149
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 150
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 156
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 158
+        },
+        {
+          "pattern": "HDNodeWallet",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/wallet/wallet.ts",
+          "line": 159
+        }
+      ]
+    },
+    {
+      "name": "safety.no_signer_send_transaction",
+      "status": "critical",
+      "details": "54 sendTransaction call(s) found in source: signer.sendTransaction @ /home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js:23806; signer.sendTransaction @ /home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js:1; signer.sendTransaction @ /home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js:23812",
+      "severity": "critical",
+      "durationMs": 1985,
+      "hits": [
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 23806
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 23812
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/providers/signer-noncemanager.js",
+          "line": 65
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/utils/errors.d.ts",
+          "line": 425
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/providers/signer-noncemanager.js",
+          "line": 62
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/utils/errors.d.ts",
+          "line": 425
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/providers/signer-noncemanager.ts",
+          "line": 84
+        },
+        {
+          "pattern": "signer.sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/utils/errors.ts",
+          "line": 561
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 15983
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 16043
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 16851
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 23806
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js",
+          "line": 1
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 15989
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 16049
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 16857
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 23812
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.min.js",
+          "line": 1
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/contract/contract.js",
+          "line": 168
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/contract/contract.js",
+          "line": 228
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/contract/factory.js",
+          "line": 85
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/providers/signer-noncemanager.js",
+          "line": 65
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/contract/contract.js",
+          "line": 163
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/contract/contract.js",
+          "line": 223
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/contract/factory.js",
+          "line": 82
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/providers/signer-noncemanager.js",
+          "line": 62
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/contract/contract.ts",
+          "line": 236
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/contract/contract.ts",
+          "line": 313
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/contract/factory.ts",
+          "line": 111
+        },
+        {
+          "pattern": ".sendTransaction(",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/providers/signer-noncemanager.ts",
+          "line": 84
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 20420
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 20440
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 21020
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.js",
+          "line": 21030
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 20426
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 20446
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 21026
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.js",
+          "line": 21036
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/dist/ethers.umd.min.js",
+          "line": 1
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/providers/provider-jsonrpc.js",
+          "line": 107
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/providers/provider-jsonrpc.js",
+          "line": 127
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/providers/provider-jsonrpc.js",
+          "line": 708
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.commonjs/providers/provider-jsonrpc.js",
+          "line": 718
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/providers/provider-jsonrpc.js",
+          "line": 104
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/providers/provider-jsonrpc.js",
+          "line": 124
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/providers/provider-jsonrpc.js",
+          "line": 704
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/lib.esm/providers/provider-jsonrpc.js",
+          "line": 714
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/providers/provider-jsonrpc.ts",
+          "line": 336
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/providers/provider-jsonrpc.ts",
+          "line": 358
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/providers/provider-jsonrpc.ts",
+          "line": 1036
+        },
+        {
+          "pattern": "eth_sendTransaction",
+          "file": "/home/emperor/.openclaw/workspace/core/node_modules/ethers/src.ts/providers/provider-jsonrpc.ts",
+          "line": 1048
+        }
+      ]
+    },
+    {
+      "name": "safety.unsigned_only_guarantee",
+      "status": "pass",
+      "details": "No artifact files found — unsigned-only guarantee holds by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.anti_replay_freshness",
+      "status": "pass",
+      "details": "No artifacts to check — freshness requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.pre_sign_simulation_policy",
+      "status": "warn",
+      "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
+      "severity": "warn",
+      "durationMs": 2165
+    },
+    {
+      "name": "safety.signing_manifest_integrity",
+      "status": "pass",
+      "details": "No signing manifests found — integrity requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": 1
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 7756,
+  "errors": []
+}

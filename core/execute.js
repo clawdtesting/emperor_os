@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/execute.js
+// ./agent/execute.js
 import "dotenv/config";
 import { buildBrief } from "./build-brief.js";
 import { buildPrompt } from "./templates.js";

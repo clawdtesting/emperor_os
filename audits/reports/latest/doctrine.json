@@ -1,0 +1,55 @@
+{
+  "auditType": "doctrine",
+  "status": "warn",
+  "startedAt": "2026-04-06T21:42:19.048Z",
+  "completedAt": "2026-04-06T21:42:19.048Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 3,
+    "warn": 2,
+    "fail": 0,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "name": "doctrine.max_one_llm_call_per_job",
+      "status": "warn",
+      "details": "LLM audit log not found — cannot verify call budget",
+      "severity": "warn",
+      "durationMs": null
+    },
+    {
+      "name": "doctrine.no_llm_before_assignment",
+      "status": "warn",
+      "details": "LLM audit log not found — cannot verify pre-assignment calls",
+      "severity": "warn",
+      "durationMs": 1
+    },
+    {
+      "name": "doctrine.unsigned_handoff_only",
+      "status": "pass",
+      "details": "All 0 tx package(s) are unsigned — handoff boundary intact",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "doctrine.deterministic_scoring_required",
+      "status": "pass",
+      "details": "No nondeterministic constructs detected in agent/core source",
+      "severity": "pass",
+      "durationMs": 79
+    },
+    {
+      "name": "doctrine.workspace_scope_only",
+      "status": "pass",
+      "details": "No out-of-scope path references detected — workspace boundary intact",
+      "severity": "pass",
+      "durationMs": 181
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 261,
+  "errors": []
+}

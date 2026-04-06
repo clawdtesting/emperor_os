@@ -1,0 +1,74 @@
+{
+  "auditType": "protocol",
+  "status": "fail",
+  "startedAt": "2026-04-06T14:23:31.473Z",
+  "completedAt": "2026-04-06T14:23:31.473Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 3,
+    "warn": 2,
+    "fail": 2,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "name": "protocol.chainid_validation",
+      "status": "warn",
+      "details": "EXPECTED_CHAIN_ID not set — chain ID validation skipped",
+      "severity": "warn",
+      "durationMs": null
+    },
+    {
+      "name": "protocol.contract_address_validation",
+      "status": "pass",
+      "details": "All 3 contract addresses are valid and checksummed",
+      "severity": "pass",
+      "durationMs": 1,
+      "contracts": {
+        "AGI_JOB_MANAGER": "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+        "AGI_JOB_DISCOVERY_PRIME": "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29",
+        "AGIALPHA_TOKEN": "0xA61a3B3a130a9c20768EEBF97E21515A6046a1fA"
+      }
+    },
+    {
+      "name": "protocol.function_selector_validation",
+      "status": "fail",
+      "details": "submitCompletion(uint256,string,bytes32): expected 0xd9d98ce4, got 0x5635b65d",
+      "severity": "fail",
+      "durationMs": 3
+    },
+    {
+      "name": "protocol.calldata_encoding",
+      "status": "fail",
+      "details": "submitCompletion selector mismatch: expected 0xd9d98ce4, got 0x5635b65d",
+      "severity": "fail",
+      "durationMs": 1
+    },
+    {
+      "name": "protocol.calldata_decoding",
+      "status": "pass",
+      "details": "ABI decoding utilities verified for AGI contract signatures",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "protocol.erc20_approval_flow",
+      "status": "pass",
+      "details": "ERC20 approve calldata encodes correctly — selector=0x095ea7b3, spender=0xB3AAeb69b630f0299791679c063d68d6687481d1",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "protocol.prime_deadline_logic",
+      "status": "warn",
+      "details": "No deadline-related code found in agent/core — PRIME deadline logic may be missing",
+      "severity": "warn",
+      "durationMs": 2954
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 2962,
+  "errors": []
+}

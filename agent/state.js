@@ -1,13 +1,15 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/state.js
+// ./agent/state.js
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createHash } from "crypto";
 import { CONFIG } from "./config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const STATE_ROOT = path.join(__dirname, "state");
+const ARCHIVE_INDEX_DIR = path.join(CONFIG.WORKSPACE_ROOT, "archive", "state_index");
 export const JOBS_DIR = path.join(STATE_ROOT, "jobs");
 
 async function ensureDir(dir) {
@@ -43,13 +45,88 @@ export async function readJson(filePath, fallback = null) {
 }
 
 export async function writeJson(filePath, data) {
-  const tmp = `${filePath}.tmp`;
+  const tmp = `${filePath}.tmp.${Date.now()}.${Buffer.from(filePath).toString('hex').slice(0, 6)}`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
   await fs.rename(tmp, filePath);
 }
 
 export async function getJobState(jobId) {
   return readJson(jobStatePath(jobId), null);
+}
+
+// ── State machine ─────────────────────────────────────────────────────────────
+
+const JOB_STATUS = {
+  QUEUED: "queued",
+  SCORED: "scored",
+  APPLICATION_PENDING_REVIEW: "application_pending_review",
+  ASSIGNED: "assigned",
+  DELIVERABLE_READY: "deliverable_ready",
+  COMPLETION_PENDING_REVIEW: "completion_pending_review",
+  SUBMITTED: "submitted",
+  COMPLETED: "completed",
+  DISPUTED: "disputed",
+  FAILED: "failed",
+  REJECTED: "rejected",
+  EXPIRED: "expired",
+  SKIPPED: "skipped",
+};
+
+const TERMINAL_STATUSES = new Set([
+  JOB_STATUS.COMPLETED,
+  JOB_STATUS.DISPUTED,
+  JOB_STATUS.FAILED,
+  JOB_STATUS.REJECTED,
+  JOB_STATUS.EXPIRED,
+  JOB_STATUS.SKIPPED,
+]);
+
+const VALID_TRANSITIONS = {
+  [JOB_STATUS.QUEUED]: [JOB_STATUS.SCORED, JOB_STATUS.SKIPPED],
+  [JOB_STATUS.SCORED]: [JOB_STATUS.APPLICATION_PENDING_REVIEW, JOB_STATUS.SKIPPED],
+  [JOB_STATUS.APPLICATION_PENDING_REVIEW]: [JOB_STATUS.ASSIGNED, JOB_STATUS.REJECTED, JOB_STATUS.EXPIRED],
+  [JOB_STATUS.ASSIGNED]: [JOB_STATUS.DELIVERABLE_READY, JOB_STATUS.FAILED],
+  [JOB_STATUS.DELIVERABLE_READY]: [JOB_STATUS.COMPLETION_PENDING_REVIEW, JOB_STATUS.FAILED],
+  [JOB_STATUS.COMPLETION_PENDING_REVIEW]: [JOB_STATUS.SUBMITTED, JOB_STATUS.FAILED],
+  [JOB_STATUS.SUBMITTED]: [JOB_STATUS.COMPLETED, JOB_STATUS.DISPUTED, JOB_STATUS.FAILED],
+};
+
+function isValidJobTransition(from, to) {
+  const allowed = VALID_TRANSITIONS[from];
+  if (!allowed) return TERMINAL_STATUSES.has(to);
+  return allowed.includes(to);
+}
+
+export function assertValidJobTransition(from, to) {
+  if (!isValidJobTransition(from, to)) {
+    const allowed = VALID_TRANSITIONS[from] ?? [];
+    throw new Error(
+      `Invalid job state transition: "${from}" → "${to}". ` +
+      `Allowed: ${allowed.length > 0 ? allowed.join(", ") : "none (terminal state)"}`
+    );
+  }
+}
+
+export async function transitionJobStatus(jobId, newStatus, extra = {}) {
+  const current = await getJobState(jobId);
+  if (!current) throw new Error(`job ${jobId} state not found`);
+
+  assertValidJobTransition(current.status, newStatus);
+
+  const now = new Date().toISOString();
+  const next = {
+    ...current,
+    ...extra,
+    status: newStatus,
+    statusHistory: [
+      ...(current.statusHistory ?? []),
+      { status: newStatus, at: now },
+    ],
+    updatedAt: now,
+  };
+
+  await writeJson(jobStatePath(jobId), next);
+  return next;
 }
 
 export async function setJobState(jobId, patch) {
@@ -79,6 +156,14 @@ export async function setJobState(jobId, patch) {
     },
     updatedAt: now
   };
+
+  if ("status" in patch && patch.status !== current.status) {
+    assertValidJobTransition(current.status, patch.status);
+    next.statusHistory = [
+      ...(current.statusHistory ?? []),
+      { status: patch.status, at: now },
+    ];
+  }
 
   await writeJson(jobStatePath(jobId), next);
   return next;
@@ -178,6 +263,29 @@ function toTimestamp(value) {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+async function ensureArchiveIndexDir() {
+  await fs.mkdir(ARCHIVE_INDEX_DIR, { recursive: true });
+}
+
+async function writeArchiveIndexEntry(job) {
+  const entry = {
+    jobId: String(job.jobId),
+    status: job.status,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    archivedAt: new Date().toISOString(),
+    artifactDir: job.artifactDir ?? null,
+    deliverablePath: job.deliverablePath ?? null,
+    specPath: job.specPath ?? null,
+    stateHash: job.stateHash ?? null,
+    removalReason: job.removalReason ?? null,
+  };
+  const hash = createHash("sha256").update(JSON.stringify(entry)).digest("hex").slice(0, 12);
+  const indexFile = path.join(ARCHIVE_INDEX_DIR, `${entry.jobId}_${hash}.json`);
+  await fs.writeFile(indexFile, JSON.stringify(entry, null, 2), "utf8");
+  return indexFile;
+}
+
 export async function pruneStateFiles() {
   const jobs = await listAllJobStates();
   if (jobs.length === 0) return { removed: 0, reason: "no-state" };
@@ -215,15 +323,28 @@ export async function pruneStateFiles() {
   }
 
   let removed = 0;
+  const archived = [];
+  await ensureArchiveIndexDir();
+
   for (const jobId of toRemove) {
+    const job = jobs.find(j => String(j.jobId) === jobId);
+    if (job) {
+      job.removalReason = ttlMs > 0 && nowMs - toTimestamp(job.updatedAt ?? job.createdAt) > ttlMs
+        ? "ttl-expired"
+        : "max-files-overflow";
+      const indexFile = await writeArchiveIndexEntry(job);
+      archived.push(indexFile);
+    }
     await fs.rm(jobStatePath(jobId), { force: true });
     removed += 1;
   }
 
   return {
     removed,
+    archived,
     total: jobs.length,
     ttlDays: CONFIG.STATE_TTL_DAYS,
-    maxStateFiles: CONFIG.MAX_STATE_FILES
+    maxStateFiles: CONFIG.MAX_STATE_FILES,
+    archiveIndexDir: ARCHIVE_INDEX_DIR,
   };
 }

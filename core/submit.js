@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/submit.js
+// ./agent/submit.js
 import path from "path";
 import { createHash } from "crypto";
 import { uploadToIpfs, requestJobCompletion } from "./mcp.js";

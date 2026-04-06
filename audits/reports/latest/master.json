@@ -1,0 +1,696 @@
+{
+  "reportType": "master",
+  "status": "warn",
+  "startedAt": "2026-04-06T21:42:16.321Z",
+  "completedAt": "2026-04-06T21:42:20.243Z",
+  "totalDurationMs": 0,
+  "summary": {
+    "pass": 50,
+    "warn": 10,
+    "fail": 0,
+    "critical": 0
+  },
+  "audits": [
+    {
+      "auditType": "static",
+      "status": "pass",
+      "durationMs": 0,
+      "summary": {
+        "pass": 9,
+        "warn": 0,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "safety",
+      "status": "warn",
+      "durationMs": 0,
+      "summary": {
+        "pass": 5,
+        "warn": 1,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "protocol",
+      "status": "warn",
+      "durationMs": 0,
+      "summary": {
+        "pass": 6,
+        "warn": 1,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "functional",
+      "status": "pass",
+      "durationMs": 0,
+      "summary": {
+        "pass": 5,
+        "warn": 0,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "recovery",
+      "status": "warn",
+      "durationMs": 0,
+      "summary": {
+        "pass": 2,
+        "warn": 3,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "artifact",
+      "status": "pass",
+      "durationMs": 0,
+      "summary": {
+        "pass": 5,
+        "warn": 0,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "doctrine",
+      "status": "warn",
+      "durationMs": 0,
+      "summary": {
+        "pass": 3,
+        "warn": 2,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "integration",
+      "status": "warn",
+      "durationMs": 0,
+      "summary": {
+        "pass": 3,
+        "warn": 2,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "determinism",
+      "status": "pass",
+      "durationMs": 0,
+      "summary": {
+        "pass": 4,
+        "warn": 0,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "performance",
+      "status": "warn",
+      "durationMs": 0,
+      "summary": {
+        "pass": 4,
+        "warn": 1,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "economics",
+      "status": "pass",
+      "durationMs": 0,
+      "summary": {
+        "pass": 4,
+        "warn": 0,
+        "fail": 0,
+        "critical": 0
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "workspace_boundary",
+      "status": "pass",
+      "details": "No workspace boundary violations detected",
+      "durationMs": 142
+    },
+    {
+      "name": "forbidden_signing_calls",
+      "status": "pass",
+      "details": "No forbidden signing patterns found in worker code",
+      "durationMs": -158
+    },
+    {
+      "name": "forbidden_broadcast_calls",
+      "status": "pass",
+      "details": "No forbidden broadcast patterns found in worker code",
+      "durationMs": 106
+    },
+    {
+      "name": "env_contracts",
+      "status": "pass",
+      "details": "All environment contract addresses match canonical values",
+      "durationMs": 0
+    },
+    {
+      "name": "required_files",
+      "status": "pass",
+      "details": "All required files present",
+      "durationMs": 1
+    },
+    {
+      "name": "config_env_required",
+      "status": "pass",
+      "details": "All required environment variables present",
+      "durationMs": 0
+    },
+    {
+      "name": "config_file_exists",
+      "status": "pass",
+      "details": "agent/config.js exists",
+      "durationMs": 0
+    },
+    {
+      "name": "unsigned_handoff_only",
+      "status": "pass",
+      "details": "No signing logic found in worker code — unsigned handoff doctrine upheld",
+      "durationMs": 26
+    },
+    {
+      "name": "no_private_key_usage",
+      "status": "pass",
+      "details": "No private key references found in worker code",
+      "durationMs": 54
+    },
+    {
+      "name": "safety.no_private_key_usage",
+      "status": "pass",
+      "details": "No private key usage detected in agent or core source",
+      "severity": "pass",
+      "durationMs": 241
+    },
+    {
+      "name": "safety.no_signer_send_transaction",
+      "status": "pass",
+      "details": "No signer/wallet sendTransaction calls detected",
+      "severity": "pass",
+      "durationMs": 133
+    },
+    {
+      "name": "safety.unsigned_only_guarantee",
+      "status": "pass",
+      "details": "No artifact files found — unsigned-only guarantee holds by absence",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "safety.anti_replay_freshness",
+      "status": "pass",
+      "details": "No artifacts to check — freshness requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.pre_sign_simulation_policy",
+      "status": "warn",
+      "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
+      "severity": "warn",
+      "durationMs": 142
+    },
+    {
+      "name": "safety.signing_manifest_integrity",
+      "status": "pass",
+      "details": "No signing manifests found — integrity requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "protocol.chainid_validation",
+      "status": "pass",
+      "details": "Chain ID 1 is valid",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "contracts": {
+        "AGI_JOB_MANAGER": "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+        "AGI_JOB_DISCOVERY_PRIME": "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29",
+        "AGIALPHA_TOKEN": "0xA61a3B3a130a9c20768EEBF97E21515A6046a1fA"
+      },
+      "name": "protocol.contract_address_validation",
+      "status": "pass",
+      "details": "All 3 contract addresses are valid and checksummed",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "protocol.function_selector_validation",
+      "status": "pass",
+      "details": "All 2 function selectors match canonical values: submitCompletion(uint256,string,bytes32)=0x5635b65d, approve(address,uint256)=0x095ea7b3",
+      "severity": "pass",
+      "durationMs": 3
+    },
+    {
+      "name": "protocol.calldata_encoding",
+      "status": "pass",
+      "details": "ABI encoding verified for submitCompletion — selector=0x5635b65d",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "protocol.calldata_decoding",
+      "status": "pass",
+      "details": "ABI decoding utilities verified for AGI contract signatures",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "protocol.erc20_approval_flow",
+      "status": "pass",
+      "details": "ERC20 approve calldata encodes correctly — selector=0x095ea7b3, spender=0xB3AAeb69b630f0299791679c063d68d6687481d1",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "protocol.prime_deadline_logic",
+      "status": "warn",
+      "details": "No deadline-related code found in agent/core — PRIME deadline logic may be missing",
+      "severity": "warn",
+      "durationMs": 362
+    },
+    {
+      "stages": [
+        {
+          "stage": "evaluate",
+          "fitScore": 0.85,
+          "passed": true
+        },
+        {
+          "stage": "apply",
+          "payload": {
+            "jobId": "99999",
+            "agentAddress": "0xMOCK",
+            "timestamp": "MOCK"
+          },
+          "passed": true
+        },
+        {
+          "stage": "confirm",
+          "status": "assigned",
+          "passed": true
+        },
+        {
+          "stage": "completion_package",
+          "package": {
+            "jobId": "99999",
+            "deliverables": [
+              "mock_artifact.md"
+            ],
+            "contentHash": "0xMOCKHASH"
+          },
+          "passed": true
+        },
+        {
+          "stage": "unsigned_tx",
+          "tx": {
+            "to": "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+            "data": "0xMOCKCALLDATA",
+            "value": "0",
+            "signed": false
+          },
+          "passed": true
+        }
+      ],
+      "name": "functional.agijobmanager_e2e_mock",
+      "status": "pass",
+      "details": "AGIJobManager e2e mock passed all 5 pipeline stages",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "stages": [
+        {
+          "phase": "DISCOVERED",
+          "artifact": "DISCOVERED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "INSPECTED",
+          "artifact": "INSPECTED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "FIT_EVALUATED",
+          "artifact": "FIT_EVALUATED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "COMMIT_READY",
+          "artifact": "COMMIT_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "REVEAL_READY",
+          "artifact": "REVEAL_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "SHORTLISTED",
+          "artifact": "SHORTLISTED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "TRIAL_READY",
+          "artifact": "TRIAL_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "COMPLETION_READY",
+          "artifact": "COMPLETION_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "DONE",
+          "artifact": "DONE",
+          "tx": null,
+          "passed": true
+        }
+      ],
+      "name": "functional.prime_e2e_mock",
+      "status": "pass",
+      "details": "Prime e2e mock passed all 9 phase(s)",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "functional.assignment_flow",
+      "status": "pass",
+      "details": "Assignment flow valid for all 0 job(s)",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "functional.artifact_flow",
+      "status": "pass",
+      "details": "No completed jobs found — artifact flow not yet exercised",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "functional.completion_package_flow",
+      "status": "pass",
+      "details": "No completed jobs found — completion package flow not yet exercised",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "recovery.singleton_lock_enforcement",
+      "status": "warn",
+      "details": "No singleton lock mechanism detected in agent/core — concurrent execution may not be prevented",
+      "severity": "warn",
+      "durationMs": 265
+    },
+    {
+      "name": "recovery.crash_mid_execution",
+      "status": "pass",
+      "details": "No state fixtures present — crash mid-execution not applicable",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "recovery.duplicate_submission_prevention",
+      "status": "warn",
+      "details": "No duplicate submission guard detected in source — idempotency may not be enforced",
+      "severity": "warn",
+      "durationMs": 234
+    },
+    {
+      "name": "recovery.partial_state_repair",
+      "status": "pass",
+      "details": "No state fixtures — partial state repair not applicable",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "recovery.restart_resume",
+      "status": "warn",
+      "details": "No restart/resume logic detected — interrupted jobs may not be recoverable",
+      "severity": "warn",
+      "durationMs": 233
+    },
+    {
+      "name": "artifact.artifact_presence",
+      "status": "pass",
+      "details": "No completed jobs or procurements found — nothing to check",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "artifact.artifact_schema",
+      "status": "pass",
+      "details": "No JSON files found in artifacts — nothing to validate",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "artifact.manifest_hash_match",
+      "status": "pass",
+      "details": "No manifest files found in artifacts — nothing to verify",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "artifact.artifact_uri_resolution",
+      "status": "pass",
+      "details": "No JSON files found in artifacts — nothing to check",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "artifact.reviewability_check",
+      "status": "pass",
+      "details": "No artifact directories found to check — nothing to review",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "doctrine.max_one_llm_call_per_job",
+      "status": "warn",
+      "details": "LLM audit log not found — cannot verify call budget",
+      "severity": "warn",
+      "durationMs": null
+    },
+    {
+      "name": "doctrine.no_llm_before_assignment",
+      "status": "warn",
+      "details": "LLM audit log not found — cannot verify pre-assignment calls",
+      "severity": "warn",
+      "durationMs": null
+    },
+    {
+      "name": "doctrine.unsigned_handoff_only",
+      "status": "pass",
+      "details": "All 0 tx package(s) are unsigned — handoff boundary intact",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "doctrine.deterministic_scoring_required",
+      "status": "pass",
+      "details": "No nondeterministic constructs detected in agent/core source",
+      "severity": "pass",
+      "durationMs": 80
+    },
+    {
+      "name": "doctrine.workspace_scope_only",
+      "status": "pass",
+      "details": "No out-of-scope path references detected — workspace boundary intact",
+      "severity": "pass",
+      "durationMs": 188
+    },
+    {
+      "chainId": 1,
+      "blockNumber": 24823391,
+      "rpcUrl": "https://eth-mainnet.g.alchemy.com/v2/rDjRRnJwDPdErIRoNgU_9",
+      "name": "integration.rpc_health",
+      "status": "pass",
+      "details": "RPC healthy — chainId 1 (mainnet), block #24823391 (242ms)",
+      "severity": "pass",
+      "durationMs": 242
+    },
+    {
+      "endpoint": "https://agialpha.com/api/mcp",
+      "httpStatus": 406,
+      "name": "integration.mcp_connectivity",
+      "status": "warn",
+      "details": "MCP endpoint returned HTTP 406 (https://agialpha.com/api/mcp)",
+      "severity": "warn",
+      "durationMs": 161
+    },
+    {
+      "results": [
+        {
+          "name": "ipfs.io",
+          "ok": true,
+          "status": 200
+        },
+        {
+          "name": "cloudflare-ipfs",
+          "ok": false,
+          "error": "fetch failed"
+        },
+        {
+          "name": "pinata",
+          "ok": true,
+          "status": 200
+        }
+      ],
+      "name": "integration.ipfs_health",
+      "status": "warn",
+      "details": "1 IPFS endpoint(s) unreachable, 2 healthy: cloudflare-ipfs",
+      "severity": "warn",
+      "durationMs": 371
+    },
+    {
+      "name": "integration.github_sync_health",
+      "status": "pass",
+      "details": "Git repository is healthy and in sync",
+      "severity": "pass",
+      "durationMs": 902
+    },
+    {
+      "name": "integration.file_system_permissions",
+      "status": "pass",
+      "details": "All 6 critical directories are accessible",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "determinism.artifact_hash_stability",
+      "status": "pass",
+      "details": "No hashable artifact files found — nothing to check",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "determinism.normalized_input_consistency",
+      "status": "pass",
+      "details": "No normalized input files found — nothing to check",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "determinism.repeated_run_same_output",
+      "status": "pass",
+      "details": "No runnable input files found — nothing to check",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "determinism.scoring_determinism",
+      "status": "pass",
+      "details": "No scoring files found — nothing to check",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "performance.discovery_latency",
+      "status": "warn",
+      "details": "Discovery endpoint returned HTTP 406 — cannot measure latency",
+      "severity": "warn",
+      "durationMs": 67
+    },
+    {
+      "avgMs": null,
+      "maxMs": null,
+      "name": "performance.execution_latency",
+      "status": "pass",
+      "details": "No completed jobs with timing data found",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "performance.llm_budget_usage",
+      "status": "pass",
+      "details": "LLM audit log not found — no LLM usage recorded yet",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "heapUsedMb": 16,
+      "heapTotalMb": 31,
+      "rssMb": 91,
+      "externalMb": 4,
+      "heapPct": 52,
+      "name": "performance.memory_usage",
+      "status": "pass",
+      "details": "Memory healthy: heap 16MB / 31MB (52%), RSS: 91MB",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "avgMs": null,
+      "maxMs": null,
+      "name": "performance.package_build_latency",
+      "status": "pass",
+      "details": "No package build timing data found",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "economics.application_selectivity",
+      "status": "pass",
+      "details": "No job state files found — nothing to assess",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "economics.bad_job_filtering",
+      "status": "pass",
+      "details": "All 0 active job(s) passed bad-job filter checks",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "checked": 0,
+      "totalPayoutUsd": "0.00",
+      "name": "economics.cost_reward_ratio",
+      "status": "pass",
+      "details": "All 0 completed job(s) exceed 1.5x cost/reward ratio",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "economics.expected_value_estimation",
+      "status": "pass",
+      "details": "No applied jobs found — EV not computable yet",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "profile": "full",
+  "errors": [],
+  "elapsedMs": 3922
+}

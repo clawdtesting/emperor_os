@@ -1,0 +1,11 @@
+{
+  "jobId": "TEST_JOB_001",
+  "status": "completed",
+  "employer": "0x0000000000000000000000000000000000000001",
+  "agent": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+  "payout": "100000000000000000000",
+  "completedAt": "2026-04-06T12:00:00.000Z",
+  "specUri": "ipfs://bafkreiexamplespec",
+  "completionUri": "ipfs://bafkreiexamplecompletion",
+  "updatedAt": "2026-04-06T12:00:00.000Z"
+}

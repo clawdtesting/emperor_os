@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/simulation.js
+// ./agent/simulation.js
 import { getProvider, assertMainnet } from "./rpc.js";
 
 function normalizeValue(value) {

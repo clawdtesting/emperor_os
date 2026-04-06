@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/ipfs-verify.js
+// ./agent/ipfs-verify.js
 import { createHash } from "crypto";
 
 function toGatewayUrl(uri) {

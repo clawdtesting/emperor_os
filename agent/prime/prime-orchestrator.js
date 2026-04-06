@@ -49,6 +49,9 @@ import {
   procSubdir,
   ensureProcSubdir,
   writeProcCheckpoint,
+  assertStateIntegrity,
+  isLlmBudgetConsumed,
+  appendLlmCallAudit,
 } from "../prime-state.js";
 import {
   writeInspectionExtras,
@@ -76,6 +79,8 @@ import {
   assertFinalistAcceptGate,
   assertTrialSubmitGate,
   assertCompletionGate,
+  assertValidatorScoreCommitGate,
+  assertValidatorScoreRevealGate,
 } from "../prime-review-gates.js";
 import { activateBridge } from "../prime-execution-bridge.js";
 import { createRetrievalPacket, extractSteppingStone, extractSearchKeywords } from "../prime-retrieval.js";
@@ -261,15 +266,13 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
     null
   );
   let llmDraft = null;
-  if ((state.llmCallsUsed ?? 0) < 1) {
+  if (!await isLlmBudgetConsumed(procurementId)) {
     try {
       llmDraft = await draftWithLLM({ phase: "application", procurementId, jobSpec, fitEvaluation, retrievalPacket });
-      await setProcState(procurementId, {
-        llmCallsUsed: (state.llmCallsUsed ?? 0) + 1,
-        llmDraftedAt: new Date().toISOString(),
-      });
+      await appendLlmCallAudit(procurementId, "application", { status: "success", chars: llmDraft.length });
       log(`#${procurementId}: LLM application draft produced (${llmDraft.length} chars)`);
     } catch (err) {
+      await appendLlmCallAudit(procurementId, "application", { status: "failed", error: err.message });
       log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
     }
   } else {
@@ -363,6 +366,7 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
 async function handleBuildCommitTx(procurementId, procStruct) {
   log(`#${procurementId}: building commit tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   // Gate check.
   try {
@@ -413,6 +417,7 @@ async function handleWaitRevealWindow(procurementId, procStruct) {
 async function handleBuildRevealTx(procurementId, procStruct) {
   log(`#${procurementId}: building reveal tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
   const chainPhase = deriveChainPhase(procStruct);
 
   if (chainPhase !== CHAIN_PHASE.REVEAL_OPEN) {
@@ -503,12 +508,18 @@ async function handleWaitShortlist(procurementId) {
   const onChainPhase = Number(appView?.applicationPhase ?? 0);
 
   if (appView?.shortlisted || onChainPhase >= 3) {
+    // Require finalized reveal receipt before advancing — chain phase is corroborating signal only.
+    const revealReceipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "revealApplication" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
+    if (!revealReceipt.ok) {
+      log(`#${procurementId}: chain shows shortlisted but reveal receipt not finalized (${revealReceipt.reason}) — awaiting receipt`);
+      return false;
+    }
     // Mark shortlisted if not already done.
     if (!state.shortlisted) {
       await setProcState(procurementId, { shortlisted: true });
     }
     await transitionProcStatus(procurementId, PROC_STATUS.SHORTLISTED);
-    log(`#${procurementId}: → SHORTLISTED (on-chain confirmation)`);
+    log(`#${procurementId}: → SHORTLISTED (receipt + on-chain confirmation)`);
     return true;
   }
 
@@ -525,6 +536,7 @@ async function handleWaitShortlist(procurementId) {
 async function handleBuildFinalistTx(procurementId, procStruct) {
   log(`#${procurementId}: building finalist accept tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   // Gate check.
   try {
@@ -601,22 +613,42 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
   log(`#${procurementId}: building trial artifacts`);
   const state = await getProcState(procurementId);
 
-  // Confirm finalist accept landed on-chain.
+  // Confirm finalist accept landed on-chain — require finalized receipt, not just chain phase.
   if (AGENT_ADDRESS) {
     const appView = await fetchApplicationView(procurementId, AGENT_ADDRESS);
-    if (Number(appView?.applicationPhase ?? 0) < 4) {
-      // Accept not yet on chain; check if we need to advance FINALIST_ACCEPT_SUBMITTED.
-      if (Number(appView?.applicationPhase ?? 0) >= 3 &&
-          state.status === PROC_STATUS.FINALIST_ACCEPT_READY) {
-        await transitionProcStatus(procurementId, PROC_STATUS.FINALIST_ACCEPT_SUBMITTED);
-        log(`#${procurementId}: → FINALIST_ACCEPT_SUBMITTED`);
+    const onChainPhase = Number(appView?.applicationPhase ?? 0);
+
+    if (state.status === PROC_STATUS.FINALIST_ACCEPT_READY && onChainPhase >= 3) {
+      // Chain shows accept landed — but require finalized receipt before advancing.
+      const acceptReceipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "acceptFinalist" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
+      if (acceptReceipt.ok) {
+        await transitionProcStatus(procurementId, PROC_STATUS.FINALIST_ACCEPT_SUBMITTED, {
+          acceptReceiptRef: acceptReceipt,
+        });
+        log(`#${procurementId}: → FINALIST_ACCEPT_SUBMITTED (receipt ingested)`);
+      } else {
+        log(`#${procurementId}: chain shows acceptFinalist but receipt not finalized (${acceptReceipt.reason}) — awaiting receipt`);
+        return false;
       }
-      log(`#${procurementId}: FINALIST_ACCEPT_READY — waiting for operator to sign acceptFinalist tx`);
+    }
+
+    if (onChainPhase < 4) {
+      log(`#${procurementId}: FINALIST_ACCEPT — waiting for operator to sign acceptFinalist tx (chain phase=${onChainPhase})`);
       return false;
     }
+
     if (state.status === PROC_STATUS.FINALIST_ACCEPT_SUBMITTED) {
-      await transitionProcStatus(procurementId, PROC_STATUS.TRIAL_IN_PROGRESS);
-      log(`#${procurementId}: → TRIAL_IN_PROGRESS (on-chain accept confirmed)`);
+      // Double-check receipt before advancing to TRIAL_IN_PROGRESS.
+      const acceptReceipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "acceptFinalist" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
+      if (acceptReceipt.ok) {
+        await transitionProcStatus(procurementId, PROC_STATUS.TRIAL_IN_PROGRESS, {
+          acceptReceiptRef: acceptReceipt,
+        });
+        log(`#${procurementId}: → TRIAL_IN_PROGRESS (receipt + on-chain confirmed)`);
+      } else {
+        log(`#${procurementId}: chain shows trial open but acceptFinalist receipt not finalized (${acceptReceipt.reason}) — awaiting receipt`);
+        return false;
+      }
     }
   }
 
@@ -634,15 +666,13 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
 
   // Generate trial content — attempt LLM draft, fall back to template.
   let llmTrialDraft = null;
-  if ((state.llmCallsUsed ?? 0) < 1) {
+  if (!await isLlmBudgetConsumed(procurementId)) {
     try {
       llmTrialDraft = await draftWithLLM({ phase: "trial", procurementId, jobSpec, retrievalPacket });
-      await setProcState(procurementId, {
-        llmCallsUsed: (state.llmCallsUsed ?? 0) + 1,
-        llmDraftedAt: new Date().toISOString(),
-      });
+      await appendLlmCallAudit(procurementId, "trial", { status: "success", chars: llmTrialDraft.length });
       log(`#${procurementId}: LLM trial draft produced (${llmTrialDraft.length} chars)`);
     } catch (err) {
+      await appendLlmCallAudit(procurementId, "trial", { status: "failed", error: err.message });
       log(`#${procurementId}: LLM draft unavailable (${err.message}), using template`);
     }
   } else {
@@ -723,6 +753,7 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
 async function handleBuildTrialTx(procurementId, procStruct) {
   log(`#${procurementId}: building submitTrial tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   if (!state.trialURI) {
     log(`#${procurementId}: trial not yet published — run BUILD_TRIAL first`);
@@ -760,6 +791,7 @@ async function handleBuildTrialTx(procurementId, procStruct) {
 async function handleExecuteJob(procurementId) {
   log(`#${procurementId}: activating execution bridge (SELECTED → JOB_EXECUTION_IN_PROGRESS)`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   try {
     await activateBridge({ procurementId, agentAddress: AGENT_ADDRESS });
@@ -775,6 +807,7 @@ async function handleExecuteJob(procurementId) {
 async function handleBuildCompletionTx(procurementId) {
   log(`#${procurementId}: building completion tx`);
   const state = await getProcState(procurementId);
+  assertStateIntegrity(state);
 
   if (!state?.linkedJobId || !state?.completionURI) {
     log(`#${procurementId}: completion tx blocked — linkedJobId or completionURI missing`);
@@ -814,6 +847,17 @@ async function handleBuildCompletionTx(procurementId) {
 
 async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
+  assertStateIntegrity(state);
+  assertStateIntegrity(state);
+
+  // Gate check.
+  try {
+    await assertValidatorScoreCommitGate({ procurementId, procStruct });
+  } catch (err) {
+    log(`#${procurementId}: validator score commit gate failed — ${err.message}`);
+    return false;
+  }
+
   const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
   await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
   if (!assignment.assigned) {
@@ -856,6 +900,16 @@ async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
 
 async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
   let state = await getProcState(procurementId);
+  assertStateIntegrity(state);
+
+  // Gate check.
+  try {
+    await assertValidatorScoreRevealGate({ procurementId, procStruct });
+  } catch (err) {
+    log(`#${procurementId}: validator score reveal gate failed — ${err.message}`);
+    return false;
+  }
+
   const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
   await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
   if (!assignment.assigned) {
@@ -968,21 +1022,55 @@ export async function orchestrateProcurement(procurementId) {
       case "NONE":
         await handleReceiptDrivenReadyTransitions(procurementId, state.status);
         break;
-      case "INSPECT":                await handleInspect(procurementId);                           break;
-      case "EVALUATE_FIT":           await handleEvaluateFit(procurementId, procStruct, jobSpec);  break;
-      case "DRAFT_APPLICATION":      await handleDraftApplication(procurementId, procStruct, jobSpec); break;
-      case "BUILD_COMMIT_TX":        await handleBuildCommitTx(procurementId, procStruct);         break;
-      case "WAIT_REVEAL_WINDOW":     await handleWaitRevealWindow(procurementId, procStruct);      break;
-      case "BUILD_REVEAL_TX":        await handleBuildRevealTx(procurementId, procStruct);         break;
+      case "INSPECT": {
+        const idemKey = `inspect:${state.procurementId}`;
+        const didRun = await guardIdempotentStep(procurementId, "inspect", idemKey);
+        if (!didRun) break;
+        await handleInspect(procurementId);
+        break;
+      }
+      case "EVALUATE_FIT": {
+        const idemKey = `evaluate:${state.procurementId}:${procStruct?.payout ?? "na"}`;
+        const didRun = await guardIdempotentStep(procurementId, "evaluateFit", idemKey);
+        if (!didRun) break;
+        await handleEvaluateFit(procurementId, procStruct, jobSpec);
+        break;
+      }
+      case "DRAFT_APPLICATION": {
+        const idemKey = `draft:${state.procurementId}`;
+        const didRun = await guardIdempotentStep(procurementId, "draftApplication", idemKey);
+        if (!didRun) break;
+        await handleDraftApplication(procurementId, procStruct, jobSpec);
+        break;
+      }
+      case "BUILD_COMMIT_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_COMMIT_TX")) break;
+        await handleBuildCommitTx(procurementId, procStruct);
+        break;
+      case "WAIT_REVEAL_WINDOW":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_REVEAL_TX")) break;
+        await handleWaitRevealWindow(procurementId, procStruct);
+        break;
+      case "BUILD_REVEAL_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_REVEAL_TX")) break;
+        await handleBuildRevealTx(procurementId, procStruct);
+        break;
       case "WAIT_SHORTLIST":         await handleWaitShortlist(procurementId);                     break;
       case "CHECK_SHORTLIST":        await handleWaitShortlist(procurementId);                     break;
-      case "BUILD_FINALIST_TX":      await handleBuildFinalistTx(procurementId, procStruct);       break;
+      case "BUILD_FINALIST_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_FINALIST_TX")) break;
+        await handleBuildFinalistTx(procurementId, procStruct);
+        break;
       case "BUILD_TRIAL": {
+        if (!guardDeadline(procurementId, procStruct, "BUILD_TRIAL")) break;
         const built = await handleBuildTrial(procurementId, procStruct, jobSpec);
         if (built) await handleBuildTrialTx(procurementId, procStruct);
         break;
       }
-      case "BUILD_TRIAL_TX":         await handleBuildTrialTx(procurementId, procStruct);          break;
+      case "BUILD_TRIAL_TX":
+        if (!guardDeadline(procurementId, procStruct, "BUILD_TRIAL_TX")) break;
+        await handleBuildTrialTx(procurementId, procStruct);
+        break;
       case "WAIT_SCORING":
         const trialReceipt = await ingestFinalizedOperatorReceipt({ procurementId, action: "submitTrial" }).catch(() => ({ ok: false, reason: "receipt-check-failed" }));
         // Detect if trial was submitted on-chain.
@@ -1015,6 +1103,9 @@ export async function orchestrateProcurement(procurementId) {
         break;
       case "BUILD_COMPLETION_TX":
         await handleBuildCompletionTx(procurementId);
+        break;
+      case "WAIT_COMPLETION":
+        await handleReceiptDrivenReadyTransitions(procurementId, PROC_STATUS.COMPLETION_READY);
         break;
       case "TERMINAL":
         // Nothing to do — already terminal.
@@ -1098,6 +1189,8 @@ export async function orchestrateOnceForProcurement(procurementId) {
     PROC_STATUS.FINALIST_ACCEPT_READY,
     PROC_STATUS.TRIAL_READY,
     PROC_STATUS.COMPLETION_READY,
+    PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY,
+    PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY,
   ]);
   return {
     before: stateBefore?.status ?? null,

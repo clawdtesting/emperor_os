@@ -15,6 +15,7 @@
 import path from "path";
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
+import { ethers } from "ethers";
 import { encodePrimeCall, decodePrimeCalldata, PRIME_CONTRACT, CHAIN_ID, AGIALPHA_TOKEN, encodeErc20Approve } from "./prime-client.js";
 import { CONFIG } from "./config.js";
 import { ensureProcSubdir } from "./prime-state.js";
@@ -102,18 +103,30 @@ async function withReviewRootHash(procurementId, pkg) {
 async function writeTxFile(dir, filename, pkg) {
   await fs.mkdir(dir, { recursive: true });
   const p = path.join(dir, filename);
-  const tmp = `${p}.tmp`;
+  const tmp = `${p}.tmp.${Date.now()}.${Buffer.from(p).toString('hex').slice(0, 6)}`;
   await fs.writeFile(tmp, JSON.stringify(pkg, null, 2), "utf8");
   await fs.rename(tmp, p);
   return p;
 }
 
-function normalizePreparedTx(preparedTx) {
+function normalizePreparedTx(preparedTx, expectedContract) {
   const tx = preparedTx?.tx ?? preparedTx?.transaction ?? preparedTx;
   if (!tx || typeof tx !== "object") throw new Error("prepared tx missing");
   if (!tx.to || !tx.data) throw new Error("prepared tx must include to + data");
+
+  const normalizedTo = ethers.getAddress(String(tx.to));
+  if (expectedContract) {
+    const expected = ethers.getAddress(expectedContract);
+    if (normalizedTo !== expected) {
+      throw new Error(
+        `prepared tx target mismatch: expected ${expected}, got ${normalizedTo}. ` +
+        `Refusing to package tx — possible preparedTx poisoning.`
+      );
+    }
+  }
+
   return {
-    to: String(tx.to),
+    to: normalizedTo,
     data: String(tx.data),
     value: String(tx.value ?? "0"),
   };
@@ -478,13 +491,13 @@ export async function buildRequestJobCompletionTx(opts) {
 
 export async function buildValidatorScoreCommitTx(opts) {
   const { procurementId, linkedJobId, scoreCommitment, preparedTx } = opts;
-  const tx = normalizePreparedTx(preparedTx);
+  const tx = normalizePreparedTx(preparedTx, PRIME_CONTRACT);
   const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase: "VALIDATOR_SCORE_COMMIT",
     contractName: "AGIJobDiscoveryPrime",
-    contractAddress: tx.to,
+    contractAddress: PRIME_CONTRACT,
     functionName: "scoreCommit",
     args: { procurementId: String(procurementId), scoreCommitment },
     calldata: tx.data,
@@ -509,13 +522,13 @@ export async function buildValidatorScoreCommitTx(opts) {
 
 export async function buildValidatorScoreRevealTx(opts) {
   const { procurementId, linkedJobId, scoreValue, salt, preparedTx } = opts;
-  const tx = normalizePreparedTx(preparedTx);
+  const tx = normalizePreparedTx(preparedTx, PRIME_CONTRACT);
   const pkg = await withReviewRootHash(procurementId, buildPackage({
     procurementId,
     linkedJobId,
     phase: "VALIDATOR_SCORE_REVEAL",
     contractName: "AGIJobDiscoveryPrime",
-    contractAddress: tx.to,
+    contractAddress: PRIME_CONTRACT,
     functionName: "scoreReveal",
     args: { procurementId: String(procurementId), score: scoreValue, salt },
     calldata: tx.data,

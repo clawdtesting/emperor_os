@@ -1,0 +1,21 @@
+{
+  "txType": "EIP1559",
+  "chainId": 1,
+  "nonce": "0x00",
+  "maxPriorityFeePerGas": "0x02540be400",
+  "maxFeePerGas": "0x02540be400",
+  "gasLimit": "0x5208",
+  "to": "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+  "value": "0x00",
+  "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b8d4c9db96c4b4d8b60000000000000000000000000000000000000000000000000de0b6b3a7640000",
+  "accessList": [],
+  "signature": {
+    "r": "0x0",
+    "s": "0x0",
+    "v": "0x0"
+  },
+  "jobId": "TEST_JOB_001",
+  "procurementId": "TEST_PROC_001",
+  "createdAt": "2026-04-06T10:00:00.000Z",
+  "version": "1.0.0"
+}

@@ -48,7 +48,7 @@ async function ensureDir(dir) {
 }
 
 async function writeJsonAtomic(filePath, data) {
-  const tmp = `${filePath}.tmp`;
+  const tmp = `${filePath}.tmp.${Date.now()}.${Buffer.from(filePath).toString('hex').slice(0, 6)}`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
   await fs.rename(tmp, filePath);
 }

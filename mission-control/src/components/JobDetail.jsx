@@ -237,6 +237,10 @@ export function JobDetail({ job, onRunIntake }) {
   const [completionMeta, setCompletionMeta] = useState(null)
   const [loadingMeta, setLoadingMeta]   = useState(false)
   const [showCompletionBrief, setShowCompletionBrief] = useState(false)
+  const [intakeRunning, setIntakeRunning] = useState(false)
+  const [intakeLog, setIntakeLog]         = useState([])
+  const [intakeDone, setIntakeDone]       = useState(false)
+  const [intakeExitCode, setIntakeExitCode] = useState(null)
 
   if (!job) {
     return (
@@ -286,6 +290,55 @@ export function JobDetail({ job, onRunIntake }) {
       setBriefError(e.message)
     } finally {
       setLoadingBrief(false)
+    }
+  }
+
+  async function handleRunIntake(targetJob) {
+    setIntakeRunning(true)
+    setIntakeLog([])
+    setIntakeDone(false)
+    setIntakeExitCode(null)
+    onRunIntake?.(targetJob)
+
+    const addLog = (entry) => setIntakeLog(prev => [...prev, entry])
+
+    try {
+      const res = await fetch('/api/intake-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: targetJob.jobId, job: targetJob }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        addLog({ type: 'error', message: err.error || `HTTP ${res.status}` })
+        setIntakeRunning(false)
+        return
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop()
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
+          try {
+            const data = JSON.parse(line.slice(5).trim())
+            addLog(data)
+            if (data.type === 'done') { setIntakeDone(true); setIntakeExitCode(data.code ?? null) }
+          } catch {}
+        }
+      }
+    } catch (e) {
+      addLog({ type: 'error', message: e.message })
+    } finally {
+      setIntakeRunning(false)
     }
   }
 
@@ -381,17 +434,53 @@ export function JobDetail({ job, onRunIntake }) {
       )}
 
       {job.status === 'Assigned' && (
-        <div className="rounded-lg border border-amber-800 bg-amber-950/30 p-4">
-          <div className="text-xs font-medium text-amber-400 mb-1">Pipeline action available</div>
-          <div className="text-xs text-amber-600 mb-3">
+        <div className="rounded-lg border border-amber-800 bg-amber-950/30 p-4 space-y-3">
+          <div className="text-xs font-medium text-amber-400">Pipeline action available</div>
+          <div className="text-xs text-amber-600">
             Job #{job.jobId} is active. Run the intake pipeline to analyze and process it.
           </div>
           <button
-            onClick={() => onRunIntake(job)}
-            className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors"
+            onClick={() => handleRunIntake(job)}
+            disabled={intakeRunning}
+            className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium transition-colors"
           >
-            Run intake pipeline
+            {intakeRunning ? 'Running pipeline…' : intakeDone ? 'Re-run intake pipeline' : 'Run intake pipeline'}
           </button>
+
+          {(intakeLog.length > 0) && (
+            <div className="rounded border border-slate-700 bg-slate-950 p-2 max-h-48 overflow-y-auto space-y-0.5 font-mono text-xs">
+              {intakeLog.map((entry, i) => {
+                if (entry.type === 'start') return (
+                  <div key={i} className="text-slate-500">
+                    &gt; start: {entry.pipeline?.split('/').pop() || 'pipeline'} · job #{entry.jobId}
+                  </div>
+                )
+                if (entry.type === 'step') return (
+                  <div key={i} className={`${entry.status === 'ok' ? 'text-green-400' : 'text-amber-400'}`}>
+                    &gt; {entry.step} [{entry.tool}] — {entry.status}
+                    {entry.result && <span className="text-slate-500 ml-1 truncate">{String(entry.result).slice(0, 80)}</span>}
+                  </div>
+                )
+                if (entry.type === 'stream') return (
+                  <div key={i} className={entry.level === 'stderr' ? 'text-amber-500' : 'text-slate-400'}>
+                    {entry.text}
+                  </div>
+                )
+                if (entry.type === 'error') return (
+                  <div key={i} className="text-red-400">&gt; error: {entry.message}</div>
+                )
+                if (entry.type === 'done') return (
+                  <div key={i} className={intakeExitCode === 0 ? 'text-green-400' : 'text-red-400'}>
+                    &gt; done (exit {entry.code ?? '?'})
+                  </div>
+                )
+                return null
+              })}
+              {intakeRunning && (
+                <div className="text-blue-400 animate-pulse">&gt; running…</div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

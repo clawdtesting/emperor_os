@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/validate.js
+// ./agent/validate.js
 import { CONFIG } from "./config.js";
 import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { uploadToIpfs } from "./mcp.js";

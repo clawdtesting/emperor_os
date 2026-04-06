@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/daemon.js
+// ./agent/daemon.js
 import "dotenv/config";
 import { acquireLock } from "./lock.js";
 import { ensureStateDirs } from "./state.js";

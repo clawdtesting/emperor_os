@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/tx-builder.js
+// ./agent/tx-builder.js
 import { CONFIG } from "./config.js";
 
 function toBigIntValue(value) {
@@ -92,6 +92,7 @@ export function buildUnsignedApplyTxPackage({ jobId, preparedTx, agentSubdomain 
     jobId: Number(jobId),
     contract: CONFIG.CONTRACT,
     generatedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     deterministicVerification: {
       selectorChecks: {
         approve: selectorOf(approve.data),

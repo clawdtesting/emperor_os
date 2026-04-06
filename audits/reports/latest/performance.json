@@ -1,0 +1,74 @@
+{
+  "auditType": "performance",
+  "status": "warn",
+  "startedAt": "2026-04-06T21:42:20.235Z",
+  "completedAt": "2026-04-06T21:42:20.235Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 4,
+    "warn": 1,
+    "fail": 0,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "name": "performance.discovery_latency",
+      "status": "warn",
+      "details": "Discovery endpoint returned HTTP 406 — cannot measure latency",
+      "severity": "warn",
+      "durationMs": 67
+    },
+    {
+      "avgMs": null,
+      "maxMs": null,
+      "name": "performance.execution_latency",
+      "status": "pass",
+      "details": "No completed jobs with timing data found",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "performance.llm_budget_usage",
+      "status": "pass",
+      "details": "LLM audit log not found — no LLM usage recorded yet",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "heapUsedMb": 16,
+      "heapTotalMb": 31,
+      "rssMb": 91,
+      "externalMb": 4,
+      "heapPct": 52,
+      "name": "performance.memory_usage",
+      "status": "pass",
+      "details": "Memory healthy: heap 16MB / 31MB (52%), RSS: 91MB",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "avgMs": null,
+      "maxMs": null,
+      "name": "performance.package_build_latency",
+      "status": "pass",
+      "details": "No package build timing data found",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "metrics": {
+    "execution_latency.avg_ms": null,
+    "execution_latency.max_ms": null,
+    "execution_latency.slow_count": 0,
+    "memory.heap_used_mb": 16,
+    "memory.heap_total_mb": 31,
+    "memory.rss_mb": 91,
+    "memory.heap_pct": 52,
+    "package_build_latency.avg_ms": null,
+    "package_build_latency.max_ms": null,
+    "package_build_latency.slow_count": 0,
+    "durationMs": 0
+  },
+  "elapsedMs": 68,
+  "errors": []
+}

@@ -1,0 +1,161 @@
+{
+  "auditType": "functional",
+  "status": "pass",
+  "startedAt": "2026-04-06T21:42:17.453Z",
+  "completedAt": "2026-04-06T21:42:17.453Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 5,
+    "warn": 0,
+    "fail": 0,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "stages": [
+        {
+          "stage": "evaluate",
+          "fitScore": 0.85,
+          "passed": true
+        },
+        {
+          "stage": "apply",
+          "payload": {
+            "jobId": "99999",
+            "agentAddress": "0xMOCK",
+            "timestamp": "MOCK"
+          },
+          "passed": true
+        },
+        {
+          "stage": "confirm",
+          "status": "assigned",
+          "passed": true
+        },
+        {
+          "stage": "completion_package",
+          "package": {
+            "jobId": "99999",
+            "deliverables": [
+              "mock_artifact.md"
+            ],
+            "contentHash": "0xMOCKHASH"
+          },
+          "passed": true
+        },
+        {
+          "stage": "unsigned_tx",
+          "tx": {
+            "to": "0xB3AAeb69b630f0299791679c063d68d6687481d1",
+            "data": "0xMOCKCALLDATA",
+            "value": "0",
+            "signed": false
+          },
+          "passed": true
+        }
+      ],
+      "name": "functional.agijobmanager_e2e_mock",
+      "status": "pass",
+      "details": "AGIJobManager e2e mock passed all 5 pipeline stages",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "stages": [
+        {
+          "phase": "DISCOVERED",
+          "artifact": "DISCOVERED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "INSPECTED",
+          "artifact": "INSPECTED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "FIT_EVALUATED",
+          "artifact": "FIT_EVALUATED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "COMMIT_READY",
+          "artifact": "COMMIT_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "REVEAL_READY",
+          "artifact": "REVEAL_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "SHORTLISTED",
+          "artifact": "SHORTLISTED",
+          "tx": null,
+          "passed": true
+        },
+        {
+          "phase": "TRIAL_READY",
+          "artifact": "TRIAL_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "COMPLETION_READY",
+          "artifact": "COMPLETION_READY",
+          "tx": {
+            "signed": false
+          },
+          "passed": true
+        },
+        {
+          "phase": "DONE",
+          "artifact": "DONE",
+          "tx": null,
+          "passed": true
+        }
+      ],
+      "name": "functional.prime_e2e_mock",
+      "status": "pass",
+      "details": "Prime e2e mock passed all 9 phase(s)",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "functional.assignment_flow",
+      "status": "pass",
+      "details": "Assignment flow valid for all 0 job(s)",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "functional.artifact_flow",
+      "status": "pass",
+      "details": "No completed jobs found — artifact flow not yet exercised",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "functional.completion_package_flow",
+      "status": "pass",
+      "details": "No completed jobs found — completion package flow not yet exercised",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 2,
+  "errors": []
+}

@@ -1,0 +1,62 @@
+{
+  "auditType": "safety",
+  "status": "warn",
+  "startedAt": "2026-04-06T21:42:18.330Z",
+  "completedAt": "2026-04-06T21:42:18.330Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 5,
+    "warn": 1,
+    "fail": 0,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "name": "safety.no_private_key_usage",
+      "status": "pass",
+      "details": "No private key usage detected in agent or core source",
+      "severity": "pass",
+      "durationMs": 247
+    },
+    {
+      "name": "safety.no_signer_send_transaction",
+      "status": "pass",
+      "details": "No signer/wallet sendTransaction calls detected",
+      "severity": "pass",
+      "durationMs": 136
+    },
+    {
+      "name": "safety.unsigned_only_guarantee",
+      "status": "pass",
+      "details": "No artifact files found — unsigned-only guarantee holds by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.anti_replay_freshness",
+      "status": "pass",
+      "details": "No artifacts to check — freshness requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "safety.pre_sign_simulation_policy",
+      "status": "warn",
+      "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
+      "severity": "warn",
+      "durationMs": 147
+    },
+    {
+      "name": "safety.signing_manifest_integrity",
+      "status": "pass",
+      "details": "No signing manifests found — integrity requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 531,
+  "errors": []
+}

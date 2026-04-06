@@ -1,0 +1,37 @@
+{
+  "jobId": "TEST_JOB_001",
+  "criteria": [
+    {
+      "name": "technical_quality",
+      "weight": 0.4,
+      "minScore": 0.6
+    },
+    {
+      "name": "communication",
+      "weight": 0.3,
+      "minScore": 0.5
+    },
+    {
+      "name": "timeliness",
+      "weight": 0.2,
+      "minScore": 0.7
+    },
+    {
+      "name": "cost_effectiveness",
+      "weight": 0.1,
+      "minScore": 0.5
+    }
+  ],
+  "submissions": [
+    {
+      "agent": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+      "scores": {
+        "technical_quality": 0.85,
+        "communication": 0.90,
+        "timeliness": 0.75,
+        "cost_effectiveness": 0.80
+      }
+    }
+  ],
+  "version": "1.0.0"
+}

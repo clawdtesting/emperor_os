@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/publish.js
+// ./agent/publish.js
 import path from "path";
 import { uploadToIpfs } from "./mcp.js";
 import { listAllJobStates, setJobState } from "./state.js";

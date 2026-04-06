@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/tx-validator.js
+// ./agent/tx-validator.js
 import { getAllowedContracts, getInterfaceForAddress } from "./abi-registry.js";
 import { CONFIG } from "./config.js";
 

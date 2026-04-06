@@ -1,0 +1,60 @@
+{
+  "auditType": "economics",
+  "status": "pass",
+  "startedAt": "2026-04-06T21:42:20.241Z",
+  "completedAt": "2026-04-06T21:42:20.241Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 4,
+    "warn": 0,
+    "fail": 0,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "name": "economics.application_selectivity",
+      "status": "pass",
+      "details": "No job state files found — nothing to assess",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "economics.bad_job_filtering",
+      "status": "pass",
+      "details": "All 0 active job(s) passed bad-job filter checks",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "checked": 0,
+      "totalPayoutUsd": "0.00",
+      "name": "economics.cost_reward_ratio",
+      "status": "pass",
+      "details": "All 0 completed job(s) exceed 1.5x cost/reward ratio",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "economics.expected_value_estimation",
+      "status": "pass",
+      "details": "No applied jobs found — EV not computable yet",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "metrics": {
+    "bad_job_filtering.checked": 0,
+    "bad_job_filtering.violations": 0,
+    "cost_reward_ratio.checked": 0,
+    "cost_reward_ratio.low_ratio_count": 0,
+    "cost_reward_ratio.total_payout_usd": "0.00",
+    "expected_value.applied": 0,
+    "expected_value.won": 0,
+    "expected_value.win_rate": "0.000",
+    "expected_value.ev_usd": "0.0000",
+    "expected_value.realized_usd": "0.00",
+    "durationMs": 0
+  },
+  "elapsedMs": 1,
+  "errors": []
+}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useJobs } from './hooks/useJobs'
+import { useActions } from './hooks/useActions'
 import { MetricCard } from './components/MetricCard'
 import { JobCard } from './components/JobCard'
 import { JobDetail } from './components/JobDetail'
@@ -10,6 +11,9 @@ import { WalletPanel } from './components/WalletPanel'
 import { JobRequestTab } from './components/JobRequestTab'
 import { PrimeContractTab } from './components/PrimeContractTab'
 import { IpfsTab } from './components/IpfsTab'
+import OperationsLane from './components/OperationsLane'
+import { ActionsPanel } from './components/ActionsPanel'
+import { PipelineRegistry } from './components/PipelineRegistry'
 import { useWallet } from './hooks/useWallet'
 
 function compareJobIdDesc(a, b) {
@@ -28,6 +32,7 @@ function compareJobIdDesc(a, b) {
 
 export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
+  const { unreadCount } = useActions()
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('jobs')
   const wallet = useWallet()
@@ -73,7 +78,7 @@ export default function App() {
         <div className="grid md:grid-cols-[180px,1fr] gap-4">
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-2 h-fit">
         <div className="flex flex-col gap-1">
-          {['jobs', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'workflows', 'events', 'test', 'ipfs'].filter(Boolean).map(t => (
+          {['jobs', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'ops', 'actions', 'workflows', 'pipelines', 'events', 'test', 'ipfs'].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -84,6 +89,9 @@ export default function App() {
               {t}
               {t === 'jobs' && assigned.length > 0 && (
                 <span className="ml-1 bg-blue-600 text-white text-xs rounded-full px-1.5 py-0.5">{assigned.length}</span>
+              )}
+              {t === 'actions' && unreadCount > 0 && (
+                <span className="ml-1 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5">{unreadCount}</span>
               )}
             </button>
           ))}
@@ -118,7 +126,25 @@ export default function App() {
         {tab === 'wallet' && <WalletPanel wallet={wallet} />}
         {tab === 'prime' && <PrimeContractTab wallet={wallet} jobs={jobs} />}
 
+        {tab === 'ops' && (
+          <div className="bg-slate-900 rounded-lg border border-slate-800">
+            <OperationsLane />
+          </div>
+        )}
+
+        {tab === 'actions' && (
+          <div className="bg-slate-900 rounded-lg border border-slate-800">
+            <ActionsPanel />
+          </div>
+        )}
+
         {tab === 'workflows' && <GitHubFlows />}
+
+        {tab === 'pipelines' && (
+          <div className="space-y-3">
+            <PipelineRegistry />
+          </div>
+        )}
 
         {tab === 'events' && (
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">

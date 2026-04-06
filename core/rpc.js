@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/rpc.js
+// ./agent/rpc.js
 import { JsonRpcProvider } from "ethers";
 import { CONFIG, requireEnv } from "./config.js";
 

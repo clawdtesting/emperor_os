@@ -1,0 +1,24 @@
+{
+  "jobId": "TEST_JOB_001",
+  "title": "Test Job for Audit Fixtures",
+  "description": "A mock job used for audit testing purposes",
+  "payout": 100,
+  "payoutAGIALPHA": 100,
+  "status": "Open",
+  "employer": "0x0000000000000000000000000000000000000001",
+  "deadline": "2026-12-31T23:59:59.000Z",
+  "specURI": "ipfs://bafkreiexampleforspec",
+  "assignedAgent": null,
+  "payoutRaw": "100000000000000000000",
+  "agentPayoutPercentage": 80,
+  "completed": false,
+  "disputed": false,
+  "expired": false,
+  "validation": {
+    "completionRequested": false,
+    "approvals": 0,
+    "disapprovals": 0,
+    "completionRequestedAt": null,
+    "disputedAt": null
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "auditType": "determinism",
+  "status": "pass",
+  "startedAt": "2026-04-06T21:42:20.162Z",
+  "completedAt": "2026-04-06T21:42:20.162Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 4,
+    "warn": 0,
+    "fail": 0,
+    "critical": 0
+  },
+  "checks": [
+    {
+      "name": "determinism.artifact_hash_stability",
+      "status": "pass",
+      "details": "No hashable artifact files found — nothing to check",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "determinism.normalized_input_consistency",
+      "status": "pass",
+      "details": "No normalized input files found — nothing to check",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "determinism.repeated_run_same_output",
+      "status": "pass",
+      "details": "No runnable input files found — nothing to check",
+      "severity": "pass",
+      "durationMs": 1
+    },
+    {
+      "name": "determinism.scoring_determinism",
+      "status": "pass",
+      "details": "No scoring files found — nothing to check",
+      "severity": "pass",
+      "durationMs": null
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  },
+  "elapsedMs": 4,
+  "errors": []
+}

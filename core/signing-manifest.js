@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/signing-manifest.js
+// ./agent/signing-manifest.js
 import { promises as fs } from "fs";
 import { sha256Text } from "./ipfs-verify.js";
 import { writeJson } from "./artifact-manager.js";

@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/job-normalize.js
+// ./agent/job-normalize.js
 function pick(obj, keys, fallback = undefined) {
   for (const key of keys) {
     if (obj && obj[key] !== undefined && obj[key] !== null) {

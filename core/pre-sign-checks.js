@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/pre-sign-checks.js
+// /home/emperor/.openclaw/workspace/core/pre-sign-checks.js
 import { promises as fs } from "fs";
 import path from "path";
 import { writeJson } from "./artifact-manager.js";
@@ -15,7 +15,21 @@ export async function runPreSignChecks({
   expectedJobCompletionUri = null,
   expectedJobCompletionSha256 = null
 }) {
+  const generatedAt = unsignedPackage?.generatedAt ? Date.parse(unsignedPackage.generatedAt) : null;
   const expiresAt = unsignedPackage?.expiresAt ? Date.parse(unsignedPackage.expiresAt) : null;
+
+  const MAX_PACKAGE_AGE_MS = 30 * 60 * 1000; // 30 minutes
+
+  if (generatedAt != null) {
+    if (!Number.isFinite(generatedAt)) {
+      throw new Error(`Invalid generatedAt timestamp: ${unsignedPackage.generatedAt}`);
+    }
+    const ageMs = Date.now() - generatedAt;
+    if (ageMs > MAX_PACKAGE_AGE_MS) {
+      throw new Error(`Unsigned package too old: ${Math.round(ageMs / 1000)}s (max ${MAX_PACKAGE_AGE_MS / 1000}s). Regenerate.`);
+    }
+  }
+
   if (expiresAt != null) {
     if (!Number.isFinite(expiresAt)) {
       throw new Error(`Invalid expiresAt timestamp: ${unsignedPackage.expiresAt}`);

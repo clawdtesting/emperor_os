@@ -1,0 +1,72 @@
+{
+  "auditType": "static",
+  "status": "critical",
+  "startedAt": "2026-04-06T14:23:25.618Z",
+  "completedAt": "2026-04-06T14:23:25.618Z",
+  "durationMs": 0,
+  "summary": {
+    "pass": 6,
+    "warn": 0,
+    "fail": 0,
+    "critical": 3
+  },
+  "checks": [
+    {
+      "name": "workspace_boundary",
+      "status": "critical",
+      "details": "Found 41 potential path escape patterns in agent/core code",
+      "durationMs": 1029
+    },
+    {
+      "name": "forbidden_signing_calls",
+      "status": "pass",
+      "details": "No forbidden signing patterns found in worker code",
+      "durationMs": 502
+    },
+    {
+      "name": "forbidden_broadcast_calls",
+      "status": "pass",
+      "details": "No forbidden broadcast patterns found in worker code",
+      "durationMs": 155
+    },
+    {
+      "name": "env_contracts",
+      "status": "pass",
+      "details": "All environment contract addresses match canonical values",
+      "durationMs": 0
+    },
+    {
+      "name": "required_files",
+      "status": "pass",
+      "details": "All required files present",
+      "durationMs": 1
+    },
+    {
+      "name": "config_env_required",
+      "status": "pass",
+      "details": "All required environment variables present",
+      "durationMs": 0
+    },
+    {
+      "name": "config_file_exists",
+      "status": "pass",
+      "details": "agent/config.js exists",
+      "durationMs": 0
+    },
+    {
+      "name": "unsigned_handoff_only",
+      "status": "critical",
+      "details": "Found 302 potential signing reference(s) violating unsigned-only doctrine",
+      "durationMs": 196
+    },
+    {
+      "name": "no_private_key_usage",
+      "status": "critical",
+      "details": "Found 187 potential private key reference(s)",
+      "durationMs": 430
+    }
+  ],
+  "metrics": {
+    "durationMs": 0
+  }
+}

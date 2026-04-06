@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/build-brief.js
+// ./agent/build-brief.js
 function inferAudience(job) {
     const text = `${job.title ?? ""}\n${job.details ?? ""}\n${JSON.stringify(job.rawSpec ?? {})}`;
   

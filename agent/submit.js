@@ -1,13 +1,14 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/submit.js
+// ./agent/submit.js
 import path from "path";
 import { createHash } from "crypto";
 import { uploadToIpfs, requestJobCompletion } from "./mcp.js";
-import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState, getJobState } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 import { buildUnsignedTxPackage } from "./tx-builder.js";
 import { buildSigningManifest } from "./signing-manifest.js";
 import { runPreSignChecks, sha256FromJsonFile } from "./pre-sign-checks.js";
+import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
 
 function guessAssetType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -89,6 +90,13 @@ export async function submit() {
       const claim = await claimJobStageIdempotency(job.jobId, "submit", stageKey);
       if (!claim.claimed) {
         console.log(`[submit] idempotency skip for job ${job.jobId} (${claim.reason})`);
+        continue;
+      }
+
+      // Check if a prior completion tx has already been finalized — prevent duplicate submission
+      const currentState = await getJobState(job.jobId);
+      if (currentState?.operatorTx?.requestJobCompletion?.status === "finalized") {
+        console.log(`[submit] job ${job.jobId} already has finalized completion tx — skipping`);
         continue;
       }
       const artifactPaths = getJobArtifactPaths(job.jobId);

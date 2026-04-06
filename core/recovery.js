@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/recovery.js
+// ./agent/recovery.js
 import { listAllJobStates, setJobState } from "./state.js";
 
 export async function recover() {

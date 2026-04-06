@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/templates.js
+// ./agent/templates.js
 import { promises as fs } from "fs";
 import path from "path";
 import { CONFIG } from "./config.js";
