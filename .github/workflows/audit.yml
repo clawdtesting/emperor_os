@@ -1,0 +1,129 @@
+name: Audit — Source & Integration Health
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # every 30 minutes
+  push:
+    branches: [main]
+    paths:
+      - 'audits/**'
+      - 'agent/**'
+      - 'core/**'
+      - '.github/workflows/audit.yml'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Audit profile to run'
+        required: false
+        default: 'fast'
+        type: choice
+        options:
+          - fast
+          - full
+          - runtime
+
+jobs:
+  audit:
+    name: Run Audits (${{ github.event.inputs.profile || (github.event_name == 'push' && 'fast') || 'runtime' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      AGI_ALPHA_MCP:      ${{ secrets.AGI_ALPHA_MCP }}
+      ETH_RPC_URL:        ${{ secrets.ETH_RPC_URL }}
+      RPC_URL:            ${{ secrets.ETH_RPC_URL }}
+      PINATA_JWT:         ${{ secrets.PINATA_JWT }}
+      AGENT_ADDRESS:      ${{ secrets.WALLET_ADDRESS }}
+      EXPECTED_CHAIN_ID:  '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Determine profile
+        id: profile
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "profile=${{ github.event.inputs.profile }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "profile=fast" >> $GITHUB_OUTPUT
+          else
+            echo "profile=runtime" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run audits
+        id: audit
+        run: |
+          node audits/run_all.js --profile ${{ steps.profile.outputs.profile }} --json > audit_result.json 2>audit_stderr.log
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Parse result
+        id: result
+        run: |
+          STATUS=$(node -e "const r=require('./audit_result.json'); console.log(r.status || 'unknown')" 2>/dev/null || echo "error")
+          PASS=$(node -e "const r=require('./audit_result.json'); console.log(r.summary?.pass || 0)" 2>/dev/null || echo "0")
+          WARN=$(node -e "const r=require('./audit_result.json'); console.log(r.summary?.warn || 0)" 2>/dev/null || echo "0")
+          CRIT=$(node -e "const r=require('./audit_result.json'); console.log(r.summary?.critical || 0)" 2>/dev/null || echo "0")
+          ELAPSED=$(node -e "const r=require('./audit_result.json'); console.log(r.elapsedMs || 0)" 2>/dev/null || echo "0")
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "pass=$PASS" >> $GITHUB_OUTPUT
+          echo "warn=$WARN" >> $GITHUB_OUTPUT
+          echo "critical=$CRIT" >> $GITHUB_OUTPUT
+          echo "elapsed=$ELAPSED" >> $GITHUB_OUTPUT
+
+      - name: Print audit log
+        run: cat audit_stderr.log || true
+
+      - name: Post summary
+        run: |
+          STATUS="${{ steps.result.outputs.status }}"
+          PASS="${{ steps.result.outputs.pass }}"
+          WARN="${{ steps.result.outputs.warn }}"
+          CRIT="${{ steps.result.outputs.critical }}"
+          ELAPSED="${{ steps.result.outputs.elapsed }}"
+          PROFILE="${{ steps.profile.outputs.profile }}"
+
+          if [ "$STATUS" = "pass" ]; then ICON="✅"; elif [ "$STATUS" = "warn" ]; then ICON="⚠️"; else ICON="🚨"; fi
+
+          echo "## $ICON Audit Report — \`$PROFILE\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | \`$STATUS\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Profile** | \`$PROFILE\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Pass** | $PASS |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Warn** | $WARN |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Critical** | $CRIT |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Duration** | ${ELAPSED}ms |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f audit_result.json ]; then
+            echo "<details><summary>Full JSON result</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat audit_result.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail on critical
+        if: steps.result.outputs.status == 'critical'
+        run: |
+          echo "🚨 Audit status is CRITICAL — ${{ steps.result.outputs.critical }} critical check(s) failed"
+          exit 1
+
+      - name: Upload audit result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-result-${{ steps.profile.outputs.profile }}-${{ github.run_number }}
+          path: |
+            audit_result.json
+            audit_stderr.log
+          retention-days: 14
