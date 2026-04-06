@@ -1,4 +1,4 @@
-// /home/ubuntu/emperor_OS/.openclaw/workspace/agent/pre-sign-checks.js
+// /home/emperor/.openclaw/workspace/core/pre-sign-checks.js
 import { promises as fs } from "fs";
 import path from "path";
 import { writeJson } from "./artifact-manager.js";

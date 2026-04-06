@@ -30,3 +30,57 @@ Thumbs.db
 
 # Temp / junk
 junk/
+
+##################################
+
+# =========================
+# HARD SYSTEM EXCLUSIONS
+# =========================
+/.ssh/
+/.npm/
+/.nvm/
+/.npm-global/
+/.ollama/
+/.cursor-server/
+/.local/
+/.gnupg/
+/.docker/
+/.landscape/
+/.convox/
+/.config/
+/.opencode/
+/node_modules/
+
+# =========================
+# SYSTEM FILES
+# =========================
+.bash_history
+.bash_logout
+.bashrc
+.profile
+.lesshst
+.motd_shown
+.sudo_as_admin_successful
+
+# =========================
+# KEYS / SECRETS
+# =========================
+*.pem
+*.key
+*.pub
+sshkey*
+id_*
+
+# =========================
+# RUNTIME / TEMP
+# =========================
+.tmp/
+artifacts/
+*.log
+*.lock
+
+# =========================
+# OPTIONAL (your choice)
+# =========================
+.env
+.env.*
