@@ -4,8 +4,8 @@
 
 | Metric | Value |
 |---|---|
-| Started | 2026-04-06T20:52:24.513Z |
-| Completed | 2026-04-06T20:52:24.513Z |
+| Started | 2026-04-06T20:56:19.794Z |
+| Completed | 2026-04-06T20:56:19.794Z |
 | Duration | 0ms |
 | Pass | 3 |
 | Warn | 2 |
@@ -21,16 +21,16 @@ LLM audit log not found — cannot verify call budget
 ### ⚠️ doctrine.no_llm_before_assignment — warn
 
 LLM audit log not found — cannot verify pre-assignment calls
-_Duration: 1ms_
 
 ### ✅ doctrine.unsigned_handoff_only — pass
 
 All 0 tx package(s) are unsigned — handoff boundary intact
+_Duration: 1ms_
 
 ### ✅ doctrine.deterministic_scoring_required — pass
 
 No nondeterministic constructs detected in agent/core source
-_Duration: 77ms_
+_Duration: 79ms_
 
 ### ✅ doctrine.workspace_scope_only — pass
 

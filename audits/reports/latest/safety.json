@@ -1,36 +1,29 @@
 {
   "auditType": "safety",
-  "status": "critical",
-  "startedAt": "2026-04-06T14:23:28.428Z",
-  "completedAt": "2026-04-06T14:23:28.428Z",
+  "status": "warn",
+  "startedAt": "2026-04-06T20:56:19.077Z",
+  "completedAt": "2026-04-06T20:56:19.077Z",
   "durationMs": 0,
   "summary": {
-    "pass": 4,
+    "pass": 5,
     "warn": 1,
     "fail": 0,
-    "critical": 1
+    "critical": 0
   },
   "checks": [
     {
       "name": "safety.no_private_key_usage",
-      "status": "critical",
-      "details": "1 private key reference(s) found: PRIVATE_KEY @ /home/emperor/.openclaw/workspace/agent/prime/prime-evaluate.js:25",
-      "severity": "critical",
-      "durationMs": 342,
-      "hits": [
-        {
-          "pattern": "PRIVATE_KEY",
-          "file": "/home/emperor/.openclaw/workspace/agent/prime/prime-evaluate.js",
-          "line": 25
-        }
-      ]
+      "status": "pass",
+      "details": "No private key usage detected in agent or core source",
+      "severity": "pass",
+      "durationMs": 235
     },
     {
       "name": "safety.no_signer_send_transaction",
       "status": "pass",
       "details": "No signer/wallet sendTransaction calls detected",
       "severity": "pass",
-      "durationMs": 190
+      "durationMs": 130
     },
     {
       "name": "safety.unsigned_only_guarantee",
@@ -51,7 +44,7 @@
       "status": "warn",
       "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
       "severity": "warn",
-      "durationMs": 2266
+      "durationMs": 145
     },
     {
       "name": "safety.signing_manifest_integrity",
@@ -64,6 +57,6 @@
   "metrics": {
     "durationMs": 0
   },
-  "elapsedMs": 2799,
+  "elapsedMs": 511,
   "errors": []
 }

@@ -1,12 +1,12 @@
 {
   "reportType": "master",
   "status": "warn",
-  "startedAt": "2026-04-06T20:52:23.153Z",
-  "completedAt": "2026-04-06T20:52:24.516Z",
+  "startedAt": "2026-04-06T20:56:17.932Z",
+  "completedAt": "2026-04-06T20:56:19.797Z",
   "totalDurationMs": 0,
   "summary": {
-    "pass": 18,
-    "warn": 3,
+    "pass": 23,
+    "warn": 4,
     "fail": 0,
     "critical": 0
   },
@@ -18,6 +18,17 @@
       "summary": {
         "pass": 9,
         "warn": 0,
+        "fail": 0,
+        "critical": 0
+      }
+    },
+    {
+      "auditType": "safety",
+      "status": "warn",
+      "durationMs": 0,
+      "summary": {
+        "pass": 5,
+        "warn": 1,
         "fail": 0,
         "critical": 0
       }
@@ -50,19 +61,19 @@
       "name": "workspace_boundary",
       "status": "pass",
       "details": "No workspace boundary violations detected",
-      "durationMs": 141
+      "durationMs": 138
     },
     {
       "name": "forbidden_signing_calls",
       "status": "pass",
       "details": "No forbidden signing patterns found in worker code",
-      "durationMs": 342
+      "durationMs": 329
     },
     {
       "name": "forbidden_broadcast_calls",
       "status": "pass",
       "details": "No forbidden broadcast patterns found in worker code",
-      "durationMs": 103
+      "durationMs": 100
     },
     {
       "name": "env_contracts",
@@ -74,7 +85,7 @@
       "name": "required_files",
       "status": "pass",
       "details": "All required files present",
-      "durationMs": 0
+      "durationMs": 1
     },
     {
       "name": "config_env_required",
@@ -92,13 +103,55 @@
       "name": "unsigned_handoff_only",
       "status": "pass",
       "details": "No signing logic found in worker code — unsigned handoff doctrine upheld",
-      "durationMs": 25
+      "durationMs": 26
     },
     {
       "name": "no_private_key_usage",
       "status": "pass",
       "details": "No private key references found in worker code",
-      "durationMs": 52
+      "durationMs": 53
+    },
+    {
+      "name": "safety.no_private_key_usage",
+      "status": "pass",
+      "details": "No private key usage detected in agent or core source",
+      "severity": "pass",
+      "durationMs": 235
+    },
+    {
+      "name": "safety.no_signer_send_transaction",
+      "status": "pass",
+      "details": "No signer/wallet sendTransaction calls detected",
+      "severity": "pass",
+      "durationMs": 130
+    },
+    {
+      "name": "safety.unsigned_only_guarantee",
+      "status": "pass",
+      "details": "No artifact files found — unsigned-only guarantee holds by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.anti_replay_freshness",
+      "status": "pass",
+      "details": "No artifacts to check — freshness requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
+    },
+    {
+      "name": "safety.pre_sign_simulation_policy",
+      "status": "warn",
+      "details": "No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced",
+      "severity": "warn",
+      "durationMs": 145
+    },
+    {
+      "name": "safety.signing_manifest_integrity",
+      "status": "pass",
+      "details": "No signing manifests found — integrity requirement satisfied by absence",
+      "severity": "pass",
+      "durationMs": null
     },
     {
       "name": "protocol.chainid_validation",
@@ -138,21 +191,21 @@
       "status": "pass",
       "details": "ABI decoding utilities verified for AGI contract signatures",
       "severity": "pass",
-      "durationMs": 1
+      "durationMs": null
     },
     {
       "name": "protocol.erc20_approval_flow",
       "status": "pass",
       "details": "ERC20 approve calldata encodes correctly — selector=0x095ea7b3, spender=0xB3AAeb69b630f0299791679c063d68d6687481d1",
       "severity": "pass",
-      "durationMs": 1
+      "durationMs": null
     },
     {
       "name": "protocol.prime_deadline_logic",
       "status": "warn",
       "details": "No deadline-related code found in agent/core — PRIME deadline logic may be missing",
       "severity": "warn",
-      "durationMs": 351
+      "durationMs": 358
     },
     {
       "name": "doctrine.max_one_llm_call_per_job",
@@ -166,21 +219,21 @@
       "status": "warn",
       "details": "LLM audit log not found — cannot verify pre-assignment calls",
       "severity": "warn",
-      "durationMs": 1
+      "durationMs": null
     },
     {
       "name": "doctrine.unsigned_handoff_only",
       "status": "pass",
       "details": "All 0 tx package(s) are unsigned — handoff boundary intact",
       "severity": "pass",
-      "durationMs": null
+      "durationMs": 1
     },
     {
       "name": "doctrine.deterministic_scoring_required",
       "status": "pass",
       "details": "No nondeterministic constructs detected in agent/core source",
       "severity": "pass",
-      "durationMs": 77
+      "durationMs": 79
     },
     {
       "name": "doctrine.workspace_scope_only",
@@ -191,11 +244,6 @@
     }
   ],
   "profile": "fast",
-  "errors": [
-    {
-      "family": "safety",
-      "error": "runner not found"
-    }
-  ],
-  "elapsedMs": 1363
+  "errors": [],
+  "elapsedMs": 1865
 }

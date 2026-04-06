@@ -4,8 +4,8 @@
 
 | Metric | Value |
 |---|---|
-| Started | 2026-04-06T20:52:24.246Z |
-| Completed | 2026-04-06T20:52:24.246Z |
+| Started | 2026-04-06T20:56:19.525Z |
+| Completed | 2026-04-06T20:56:19.525Z |
 | Duration | 0ms |
 | Pass | 6 |
 | Warn | 1 |
@@ -36,14 +36,12 @@ _Duration: 1ms_
 ### ✅ protocol.calldata_decoding — pass
 
 ABI decoding utilities verified for AGI contract signatures
-_Duration: 1ms_
 
 ### ✅ protocol.erc20_approval_flow — pass
 
 ERC20 approve calldata encodes correctly — selector=0x095ea7b3, spender=0xB3AAeb69b630f0299791679c063d68d6687481d1
-_Duration: 1ms_
 
 ### ⚠️ protocol.prime_deadline_logic — warn
 
 No deadline-related code found in agent/core — PRIME deadline logic may be missing
-_Duration: 351ms_
+_Duration: 358ms_

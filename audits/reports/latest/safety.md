@@ -1,28 +1,28 @@
 # safety Audit Report
 
-🚨 **Status: CRITICAL**
+⚠️ **Status: WARN**
 
 | Metric | Value |
 |---|---|
-| Started | 2026-04-06T14:23:28.428Z |
-| Completed | 2026-04-06T14:23:28.428Z |
+| Started | 2026-04-06T20:56:19.077Z |
+| Completed | 2026-04-06T20:56:19.077Z |
 | Duration | 0ms |
-| Pass | 4 |
+| Pass | 5 |
 | Warn | 1 |
 | Fail | 0 |
-| Critical | 1 |
+| Critical | 0 |
 
 ## Checks
 
-### 🚨 safety.no_private_key_usage — critical
+### ✅ safety.no_private_key_usage — pass
 
-1 private key reference(s) found: PRIVATE_KEY @ /home/emperor/.openclaw/workspace/agent/prime/prime-evaluate.js:25
-_Duration: 342ms_
+No private key usage detected in agent or core source
+_Duration: 235ms_
 
 ### ✅ safety.no_signer_send_transaction — pass
 
 No signer/wallet sendTransaction calls detected
-_Duration: 190ms_
+_Duration: 130ms_
 
 ### ✅ safety.unsigned_only_guarantee — pass
 
@@ -35,7 +35,7 @@ No artifacts to check — freshness requirement satisfied by absence
 ### ⚠️ safety.pre_sign_simulation_policy — warn
 
 No simulation call detected in agent/core source — pre-sign simulation policy may not be enforced
-_Duration: 2.3s_
+_Duration: 145ms_
 
 ### ✅ safety.signing_manifest_integrity — pass
 

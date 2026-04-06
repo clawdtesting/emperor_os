@@ -32,12 +32,6 @@ function isFalsePositive(hit) {
    );
 }
  
-function isFalsePositive(hit) {
-   return KNOWN_FALSE_POSITIVES.some(fp =>
-      hit.file.endsWith(fp.file) && hit.pattern === fp.pattern
-   );
-}
- 
 export async function run(ctx) {
   const start = Date.now();
   const hits = [];
