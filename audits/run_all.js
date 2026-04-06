@@ -6,6 +6,7 @@
 import { fileURLToPath, pathToFileURL } from "url";
 import { resolve } from "path";
 import { fileURLToPath as toFilePath } from "url";
+import { existsSync } from "fs";
 import { buildMasterReport, reportToMarkdown } from "./lib/report_builder.js";
 import { writeFullReport } from "./lib/result_writer.js";
 import { getEnabledFamilies, getAuditMeta, getAuditRunnerPath } from "./lib/audit_registry.js";
@@ -26,12 +27,20 @@ function parseArgs(argv) {
 
 async function loadRunner(family) {
   const runnerPath = getAuditRunnerPath(family)
+  if (!existsSync(runnerPath)) {
+    return { runner: null, error: `runner file missing at ${runnerPath}` }
+  }
+
   try {
     const mod = await import(pathToFileURL(runnerPath).href)
-    if (typeof mod.run !== "function") throw new Error("no run() export")
-    return mod
+    const run = mod.run || mod.default?.run
+    if (typeof run !== "function") {
+      return { runner: null, error: `missing run() export in ${runnerPath}` }
+    }
+
+    return { runner: { run }, error: null }
   } catch (err) {
-    return null
+    return { runner: null, error: err?.message || "failed to import runner" }
   }
 }
 
@@ -53,10 +62,11 @@ export async function runAll(opts = {}) {
 
     console.error(`[audit] running ${label}...`)
 
-    const runner = await loadRunner(family)
+    const { runner, error } = await loadRunner(family)
     if (!runner) {
-      console.error(`[audit] SKIP ${family} — runner not found or missing run()`)
-      errors.push({ family, error: "runner not found" })
+      const reason = error || "runner not found or missing run()"
+      console.error(`[audit] SKIP ${family} — ${reason}`)
+      errors.push({ family, error: reason })
       continue
     }
 
