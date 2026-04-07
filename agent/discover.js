@@ -1,12 +1,12 @@
-// /home/emperor/.openclaw/workspace/agent/discover.js
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { listJobs, getJob, fetchJobSpec } from "./mcp.js";
-import { listAllJobStates, getJobState, setJobState, normalizeJobId } from "./state.js";
+import { listAllJobStates, getJobState, setJobState, normalizeJobId, buildVersionedJobId } from "./state.js";
 import { CONFIG } from "./config.js";
 import { normalizeJob, parsePayoutNumber } from "./job-normalize.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson } from "./artifact-manager.js";
+import { getActiveAdapters, buildStateKey, buildArtifactDirName } from "../contracts/registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +98,20 @@ async function countActivePipelineStates() {
   ).length;
 }
 
+async function discoverFromVersion(version, adapter) {
+  const tagged = [];
+  try {
+    const jobs = await listJobs();
+    await writeDebugJson(`list_jobs_${version}.json`, jobs);
+    for (const entry of jobs) {
+      tagged.push(adapter.tagJob(entry));
+    }
+  } catch (err) {
+    console.error(`[discover:${version}] list_jobs failed: ${err.message}`);
+  }
+  return tagged;
+}
+
 export async function discover() {
   const activeCount = await countActivePipelineStates();
   if (activeCount >= CONFIG.MAX_ACTIVE_JOBS) {
@@ -105,10 +119,15 @@ export async function discover() {
     return;
   }
 
-  const jobs = await listJobs();
-  await writeDebugJson("list_jobs.json", jobs);
+  const activeAdapters = getActiveAdapters();
+  const allRawJobs = [];
 
-  const sliced = jobs.slice(0, CONFIG.DISCOVER_LIMIT);
+  for (const { version, adapter } of activeAdapters) {
+    const versionJobs = await discoverFromVersion(version, adapter);
+    allRawJobs.push(...versionJobs);
+  }
+
+  const sliced = allRawJobs.slice(0, CONFIG.DISCOVER_LIMIT);
 
   let discovered = 0;
   let skipped = 0;
@@ -116,12 +135,15 @@ export async function discover() {
 
   for (const entry of sliced) {
     const rough = normalizeJob(entry);
+    const version = entry._contractVersion || "v1";
 
     if (!rough?.jobId && rough?.jobId !== 0) {
       console.log("[discover] skip: missing jobId in list_jobs entry");
       skipped += 1;
       continue;
     }
+
+    const versionedJobId = buildStateKey(version, rough.jobId);
 
     try {
       normalizeJobId(rough.jobId);
@@ -131,9 +153,9 @@ export async function discover() {
       continue;
     }
 
-    const existing = await getJobState(rough.jobId);
+    const existing = await getJobState(versionedJobId);
     if (existing) {
-      console.log(`[discover] skip ${rough.jobId}: already in state (${existing.status})`);
+      console.log(`[discover] skip ${versionedJobId}: already in state (${existing.status})`);
       skipped += 1;
       continue;
     }
@@ -141,9 +163,9 @@ export async function discover() {
     let fullJobRaw;
     try {
       fullJobRaw = await getJob(rough.jobId);
-      await writeDebugJson(`get_job_${rough.jobId}.json`, fullJobRaw);
+      await writeDebugJson(`get_job_${versionedJobId}.json`, fullJobRaw);
     } catch (err) {
-      console.error(`[discover] skip ${rough.jobId}: get_job failed: ${err.message}`);
+      console.error(`[discover] skip ${versionedJobId}: get_job failed: ${err.message}`);
       skipped += 1;
       continue;
     }
@@ -151,7 +173,7 @@ export async function discover() {
     const fullJob = normalizeJob(fullJobRaw);
 
     if (!fullJob || (fullJob.jobId == null && fullJob.jobId !== 0)) {
-      console.log(`[discover] skip ${rough.jobId}: normalized get_job missing jobId`);
+      console.log(`[discover] skip ${versionedJobId}: normalized get_job missing jobId`);
       skipped += 1;
       continue;
     }
@@ -167,13 +189,14 @@ export async function discover() {
     let spec = null;
     try {
       spec = await fetchJobSpec(fullJob.jobId);
-      await writeDebugJson(`fetch_job_spec_${fullJob.jobId}.json`, spec);
+      await writeDebugJson(`fetch_job_spec_${versionedJobId}.json`, spec);
     } catch (err) {
-      console.error(`[discover] spec fetch failed for ${fullJob.jobId}: ${err.message}`);
+      console.error(`[discover] spec fetch failed for ${versionedJobId}: ${err.message}`);
     }
 
-    await ensureJobArtifactDir(fullJob.jobId);
-    const artifactPaths = getJobArtifactPaths(fullJob.jobId);
+    const artifactDirName = buildArtifactDirName(version, fullJob.jobId);
+    await ensureJobArtifactDir(artifactDirName);
+    const artifactPaths = getJobArtifactPaths(artifactDirName);
 
     if (spec) {
       await writeJson(artifactPaths.rawSpec, spec);
@@ -187,8 +210,9 @@ export async function discover() {
       inferDurationSeconds(spec, null) ?? parseDurationToSeconds(fullJob.raw?.duration);
 
     if (classification.action === "track-assigned") {
-      await setJobState(fullJob.jobId, {
+      await setJobState(versionedJobId, {
         status: "assigned",
+        contractVersion: version,
         source: "agialpha-mcp",
         discoveredAt: new Date().toISOString(),
         title,
@@ -204,13 +228,14 @@ export async function discover() {
         artifactDir: artifactPaths.dir
       });
 
-      console.log(`[discover] tracked already-assigned job ${fullJob.jobId} for our wallet`);
+      console.log(`[discover] tracked already-assigned job ${versionedJobId} for our wallet`);
       trackedAssigned += 1;
       continue;
     }
 
-    await setJobState(fullJob.jobId, {
+    await setJobState(versionedJobId, {
       status: "queued",
+      contractVersion: version,
       source: "agialpha-mcp",
       discoveredAt: new Date().toISOString(),
       title,
@@ -225,7 +250,7 @@ export async function discover() {
     });
 
     console.log(
-      `[discover] queued ${fullJob.jobId}: payout=${payout} category=${category} title=${JSON.stringify(title)}`
+      `[discover] queued ${versionedJobId}: payout=${payout} category=${category} title=${JSON.stringify(title)}`
     );
 
     discovered += 1;

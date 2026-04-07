@@ -6,6 +6,7 @@ import { execute } from "./execute.js";
 import { validate } from "./validate.js";
 import { submit } from "./submit.js";
 import { reconcileCompletion } from "./reconcile-completion.js";
+import { getActiveAdapters } from "../contracts/registry.js";
 
 const PIPELINE = [
   { name: "discover", run: discover },
@@ -26,4 +27,8 @@ export async function runOrchestratorCycle() {
 
 export function getPipelineStepNames() {
   return PIPELINE.map((step) => step.name);
+}
+
+export function getActiveVersions() {
+  return getActiveAdapters().map(({ version }) => version);
 }

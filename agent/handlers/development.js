@@ -1,6 +1,6 @@
 // Handler: development + technical jobs
 
-import { claude } from '../../AgiJobManager/work.js'
+import { claude } from '../../loops/v1/work.js'
 
 const SYSTEM = `You are a senior software engineer producing paid deliverables for a decentralized AI job market. Human validators will approve or reject your work based on whether it satisfies every acceptance criterion in the job spec.
 

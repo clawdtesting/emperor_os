@@ -21,6 +21,8 @@ export async function ensureStateDirs() {
   await ensureDir(JOBS_DIR);
 }
 
+const VERSIONED_JOB_ID_RE = /^(v\d+|prime)_\d+$/;
+
 export function normalizeJobId(jobId) {
   const raw = String(jobId ?? "").trim();
   if (!/^\d+$/.test(raw)) {
@@ -29,9 +31,29 @@ export function normalizeJobId(jobId) {
   return raw;
 }
 
+export function buildVersionedJobId(version, rawJobId) {
+  return `${version}_${normalizeJobId(rawJobId)}`;
+}
+
+export function isVersionedJobId(id) {
+  return VERSIONED_JOB_ID_RE.test(String(id ?? "").trim());
+}
+
+export function parseVersionedJobId(id) {
+  const raw = String(id ?? "").trim();
+  const match = raw.match(/^(v\d+|prime)_(\d+)$/);
+  if (!match) return { version: null, jobId: raw };
+  return { version: match[1], jobId: match[2] };
+}
+
+export function resolveJobId(id) {
+  if (isVersionedJobId(id)) return id;
+  return id;
+}
+
 export function jobStatePath(jobId) {
-  const normalizedJobId = normalizeJobId(jobId);
-  return path.join(JOBS_DIR, `${normalizedJobId}.json`);
+  const resolved = resolveJobId(jobId);
+  return path.join(JOBS_DIR, `${resolved}.json`);
 }
 
 export async function readJson(filePath, fallback = null) {

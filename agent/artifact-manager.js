@@ -8,8 +8,7 @@ export const ARTIFACTS_ROOT = path.join(CONFIG.WORKSPACE_ROOT, "artifacts");
 export const DEBUG_ROOT = path.join(CONFIG.WORKSPACE_ROOT, "debug");
 
 export function getJobArtifactDir(jobId) {
-  const normalizedJobId = normalizeJobId(jobId);
-  return path.join(ARTIFACTS_ROOT, `job_${normalizedJobId}`);
+  return path.join(ARTIFACTS_ROOT, String(jobId).includes("_") ? jobId : `job_${normalizeJobId(jobId)}`);
 }
 
 export async function ensureWorkspaceArtifactDirs() {
