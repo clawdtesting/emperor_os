@@ -1,0 +1,10 @@
+{
+  "last_checked": {
+    "heartbeat_file": "2026-04-07T00:00:00Z",
+    "procurements": "2026-04-07T00:00:00Z",
+    "jobs": "2026-04-07T00:00:00Z",
+    "opportunities": "2026-04-07T00:00:00Z",
+    "archive_extraction": "2026-04-07T00:00:00Z"
+  },
+  "notes": "Initial heartbeat state bootstrap created for startup protocol compliance."
+}
