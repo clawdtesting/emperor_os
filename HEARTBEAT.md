@@ -79,7 +79,7 @@
 
 | # | Description | Status |
 |---|---|---|
-| 1 | `isAuthorizedAgent` reverts on Contract 2 even after ENS resolver set | Low priority — may not block actual job applications; under investigation |
+| 1 | `isAuthorizedAgent` check is misattributed to Contract 2; legacy scripts call it on Contract 1 (`0xB3AA...`) and Contract 2 ABI does not expose this function in current runtime | Investigated 2026-04-07 — update scripts/docs before further auth debugging |
 
 ---
 
