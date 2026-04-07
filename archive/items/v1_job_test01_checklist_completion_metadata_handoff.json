@@ -1,0 +1,39 @@
+{
+  "schema": "emperor-os/archive-item/v2",
+  "id": "v1_job_test01_checklist_completion_metadata_handoff",
+  "source": "v1",
+  "procurementId": "job_test_01",
+  "jobId": "test_01",
+  "phase": "completion",
+  "title": "Completion Metadata + Handoff Checklist",
+  "summary": "Checklist for CID provenance, fetch-back verification, and unsigned completion handoff.",
+  "tags": ["checklist", "completion", "ipfs", "handoff", "unsigned-tx"],
+  "domain": "completion-packaging",
+  "deliverableType": "checklist",
+  "content": {
+    "checklist": [
+      "Deliverable pinned to IPFS and CID recorded",
+      "Completion metadata JSON pinned to IPFS and CID recorded",
+      "Fetch-back verification succeeded for both CIDs",
+      "Completion metadata includes jobId + deliverable CID linkage",
+      "Unsigned requestJobCompletion envelope generated",
+      "Decoded call parameters reviewed against metadata",
+      "Review manifest prepared for operator"
+    ],
+    "operatorReviewFields": [
+      "jobId",
+      "deliverableCID",
+      "metadataCID",
+      "unsignedTxPath",
+      "reviewChecklistPath"
+    ]
+  },
+  "artifactPath": "archive/items/v1_job_test01_checklist_completion_metadata_handoff.json",
+  "sourceArtifactPath": "ipfs://QmQgm4cinJBa1wVZqAvgXbnBPWdrZGpMNMNG8zwtxuoV8f",
+  "qualityScore": 0.8,
+  "wasAccepted": true,
+  "outcomeStatus": "validated-test-run",
+  "outcomeScore": 0.8,
+  "timestamp": "2026-03-27T00:00:00.000Z",
+  "extractedAt": "2026-04-07T00:00:00.000Z"
+}

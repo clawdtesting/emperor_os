@@ -1,0 +1,39 @@
+{
+  "schema": "emperor-os/archive-item/v2",
+  "id": "v1_job_test01_template_research_report_structure",
+  "source": "v1",
+  "procurementId": "job_test_01",
+  "jobId": "test_01",
+  "phase": "completion",
+  "title": "Research Report Deliverable Template (Contract 1 test_01)",
+  "summary": "Reusable markdown structure for explanatory smart-contract research deliverables.",
+  "tags": ["template", "research", "markdown", "contract-1", "completion"],
+  "domain": "smart-contract-explanation",
+  "deliverableType": "template",
+  "content": {
+    "templateType": "deliverable_markdown",
+    "sections": [
+      "Executive Summary",
+      "Contract Context",
+      "Mechanism Walkthrough",
+      "Assumptions and Constraints",
+      "Risk and Failure Modes",
+      "Validation Notes",
+      "Operator Handoff"
+    ],
+    "qualityChecks": [
+      "Uses deterministic headings and stable ordering",
+      "Cites contract addresses or identifiers where available",
+      "Includes at least one explicit risk/failure mode section",
+      "Separates factual observations from recommendations"
+    ]
+  },
+  "artifactPath": "archive/items/v1_job_test01_template_research_report_structure.json",
+  "sourceArtifactPath": "ipfs://Qmb9UQFLQggGbVf3PoZB7x8mLn1syirc24rbLa6TGipvs4",
+  "qualityScore": 0.75,
+  "wasAccepted": true,
+  "outcomeStatus": "validated-test-run",
+  "outcomeScore": 0.75,
+  "timestamp": "2026-03-27T00:00:00.000Z",
+  "extractedAt": "2026-04-07T00:00:00.000Z"
+}
