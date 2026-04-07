@@ -1,13 +1,12 @@
 {
-  "name": "agent",
+  "name": "emperor-os",
   "version": "1.0.0",
   "type": "module",
-  "main": "runner.js",
   "scripts": {
-    "start": "node runner.js"
+    "start": "node loops/v1/runner.js"
   },
   "dependencies": {
     "dotenv": "^17.0.0",
-    "ethers": "^6.0.0"
+    "ethers": "^6.13.0"
   }
 }
