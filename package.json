@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node loops/AGIJobManager-v1/runner.js",
+    "test": "node tests/restart-reorg-integration.test.js && node validation/validation.test.js && node tests/test_prime_chaos_restart/run.js",
     "validate:contracts": "node scripts/validate-contracts.mjs"
   },
   "dependencies": {
