@@ -11,7 +11,7 @@ These were kept because they are executable modules, ABIs, package metadata, or 
 - Job normalization/state: `job-normalize.js`, `state.js`, `state-retention.js`, `artifact-manager.js`, `build-brief.js`, `strategy.js`, `templates.js`
 - Integration utilities: `rpc.js`, `mcp.js`, `config.js`, `ipfs-verify.js`, `abi-registry.js`
 - ABI/assets: `AGIJobManager.json`, `ERC20.json`
-- Process/ops docs retained as implementation guidance: `instructions_final.md`, `metamask_ledger_handoff.md`, `prod-paranoid-failure-scenarios.md`, `production_readiness_review_2026-03-30.md`, `preflight_real_job_checklist_2026-03-30.md`
+- Process/ops docs retained as implementation guidance: `OPERATOR_INSTRUCTIONS.md`, `METAMASK_LEDGER_SIGNING_GUIDE.md`, `PRODUCTION_FAILURE_SCENARIOS.md`, `production_readiness_review_2026-03-30.md`, `preflight_real_job_checklist_2026-03-30.md`
 
 ## Moved to `junk/whatisthis`
 These appear to be stale artifacts or placeholders and are not required to run the managers:

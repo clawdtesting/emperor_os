@@ -81,8 +81,8 @@ Check:
 If found, mark as violation and do not expand those paths.
 
 ### Audit outputs (required)
-- `docs/prime_gap_analysis.md`
-- `docs/prime_system_map.md`
+- `docs/audits/PRIME_GAP_ANALYSIS_2026-04-01.md`
+- `docs/audits/PRIME_SYSTEM_MAP_2026-04-01.md`
 
 ---
 

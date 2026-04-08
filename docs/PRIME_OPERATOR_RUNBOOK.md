@@ -122,7 +122,7 @@ await transitionProcStatus(42, PROC_STATUS.COMMIT_READY);
 
 **Operator action:**
 1. Open `artifacts/proc_42/application/unsigned_commit_tx.json`
-2. Verify all fields (see `prime_unsigned_handoff_spec.md`)
+2. Verify all fields (see `PRIME_UNSIGNED_TX_SPEC.md`)
 3. Sign and broadcast via MetaMask + Ledger
 4. Record tx hash:
 ```js

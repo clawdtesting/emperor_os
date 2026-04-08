@@ -69,7 +69,7 @@ All 11 modules called for in the original gap analysis exist, plus 9 additional 
 - Prime artifact bundle schemas are implemented (`agent/prime-artifact-builder.js`).
 - Prime unsigned tx builders are implemented (`agent/prime-tx-builder.js`).
 - Retrieval-before-solve and archive writeback are implemented (`agent/prime-retrieval.js`).
-- Prime operator docs now exist (`docs/prime_operator_runbook.md`, `docs/prime_unsigned_handoff_spec.md`, `docs/prime_phase_model.md`).
+- Prime operator docs now exist (`docs/PRIME_OPERATOR_RUNBOOK.md`, `docs/PRIME_UNSIGNED_TX_SPEC.md`, `docs/PRIME_PHASE_MODEL.md`).
 
 ---
 
