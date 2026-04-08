@@ -34,7 +34,7 @@ const CATEGORY_MODELS = {
   'writing':                                'glm4:9b',
 }
 
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'gemma4:31b-cloud'
+const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b'
 
 export function selectModel(spec) {
   const props    = spec?.properties || {}
