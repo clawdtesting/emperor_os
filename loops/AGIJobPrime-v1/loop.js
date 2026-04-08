@@ -1,6 +1,5 @@
-// agi-agent/procurement_agent.js
+// loops/AGIJobPrime-v1/loop.js
 // AGIJobDiscoveryPrime commit-reveal application flow for Emperor_OS
-throw new Error("Legacy procurement_agent is disabled in production runtime. Use agent/prime/* unsigned-handoff pipeline.");
 //
 // Handles: discover → evaluate → commit → reveal → acceptFinalist → submitTrial
 //
@@ -150,20 +149,21 @@ async function claudeChat(system, user, maxTokens = 4096, timeoutMs = CLAUDE_TIM
   return text.trim()
 }
 
-async function evaluate(specContent) {
-  const system = `You are Emperor_OS, an autonomous AI agent participating in the AGIJobManager marketplace on Ethereum. You evaluate job specs and decide whether to apply.`
-  const user   = `Here is a job spec:\n\n${specContent}\n\nShould Emperor_OS apply for this job?\nRespond ONLY in JSON: { "shouldApply": true, "reason": "one sentence" }`
+async function evaluateAndDraft(specContent, agentAddress) {
+  const system = `You are Emperor_OS, an autonomous AI agent participating in the AGIJobManager marketplace on Ethereum. You evaluate job specs and, when suitable, draft the application — all in a single response to minimise API calls.`
+  const user   = `Job spec:\n\n${specContent}\n\nAgent address: ${agentAddress}\n\nDecide whether Emperor_OS should apply, then draft the application if yes.\n\nRespond in this exact format:\n\n\`\`\`json\n{"shouldApply": true_or_false, "reason": "one sentence"}\n\`\`\`\n\nIf shouldApply is true, write the complete application document in Markdown immediately after the JSON block. Cover: who Emperor_OS is, why it suits this job, proposed approach, estimated timeline. Be specific, no filler.\n\nIf shouldApply is false, stop after the JSON block.`
 
-  const raw    = await claudeChat(system, user, 256)
-  const clean  = raw.replace(/```json|```/g, '').trim()
-  return JSON.parse(clean)
-}
+  const raw      = await claudeChat(system, user, 4352)
+  const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/)
+  if (!jsonMatch) throw new Error('evaluateAndDraft: missing JSON block in response')
 
-async function draftApplication(specContent, agentAddress) {
-  const system = `You are Emperor_OS, an autonomous AI agent. Write a professional application document in Markdown for an AGIJobManager procurement job.`
-  const user   = `Job spec:\n\n${specContent}\n\nAgent address: ${agentAddress}\n\nWrite a complete application document covering:\n- Who Emperor_OS is and its capabilities\n- Why it is suited for this specific job\n- Proposed approach and methodology\n- Estimated delivery timeline\n- Any relevant past context\n\nFormat as clean Markdown. Be specific to the job. No generic filler.`
+  const decision = JSON.parse(jsonMatch[1].trim())
+  if (!decision.shouldApply) return { shouldApply: false, reason: decision.reason, application: null }
 
-  return await claudeChat(system, user, 4096)
+  const application = raw.slice(jsonMatch.index + jsonMatch[0].length).trim()
+  if (!application) throw new Error('evaluateAndDraft: shouldApply=true but application body is empty')
+
+  return { shouldApply: true, reason: decision.reason, application }
 }
 
 async function draftTrial(specContent, agentAddress) {
@@ -287,27 +287,26 @@ async function handleNewProcurement(state, procurementId, jobId) {
     const specContent = await fetchJobSpec(jobId).catch(e => { log(`spec fetch failed: ${e.message}`); return null })
     if (!specContent) return
 
-    // Evaluate
-    let decision
+    // Evaluate and draft in one LLM call
+    let result
     try {
-      decision = await evaluate(specContent)
+      result = await evaluateAndDraft(specContent, wallet().address)
     } catch (e) {
-      log(`#${procurementId} evaluate error: ${e.message} — skipping`)
+      log(`#${procurementId} evaluateAndDraft error: ${e.message} — skipping`)
       return
     }
 
-    if (!decision.shouldApply) {
-      log(`#${procurementId} skip — ${decision.reason}`)
-      notify(`⚫ Procurement #${procurementId} skipped\nJob ${jobId} — ${decision.reason}`)
+    if (!result.shouldApply) {
+      log(`#${procurementId} skip — ${result.reason}`)
+      notify(`⚫ Procurement #${procurementId} skipped\nJob ${jobId} — ${result.reason}`)
       state.seen_procurements.push(procurementId)
       return
     }
 
-    log(`#${procurementId} applying — ${decision.reason}`)
-    notify(`🔍 Procurement #${procurementId} — applying\nJob ${jobId}: ${decision.reason}`)
+    log(`#${procurementId} applying — ${result.reason}`)
+    notify(`🔍 Procurement #${procurementId} — applying\nJob ${jobId}: ${result.reason}`)
 
-    // Draft application
-    const appMarkdown = await draftApplication(specContent, wallet().address)
+    const appMarkdown = result.application
 
     // Pin to IPFS
     const applicationURI = await pinWithRetry(appMarkdown, `application-${procurementId}.md`)
