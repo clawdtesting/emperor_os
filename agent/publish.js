@@ -1,7 +1,7 @@
 // ./agent/publish.js
 import path from "path";
 import { uploadToIpfs } from "./mcp.js";
-import { listAllJobStates, setJobState } from "./state.js";
+import { listAllJobStates, setJobState, rawJobId } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { getJobArtifactPaths, readText, writeJson } from "./artifact-manager.js";
 
@@ -39,7 +39,7 @@ export async function publish() {
     const publishManifest = {
       kind: "publish-manifest",
       generatedAt: new Date().toISOString(),
-      jobId: Number(job.jobId),
+      jobId: rawJobId(job.jobId),
       publicArtifacts: [
         {
           name: path.basename(artifactPaths.deliverable),

@@ -1,14 +1,32 @@
 // ./agent/submit.js
 import path from "path";
 import { createHash } from "crypto";
+import { promises as fs } from "fs";
 import { uploadToIpfs, requestJobCompletion } from "./mcp.js";
-import { claimJobStageIdempotency, listAllJobStates, setJobState, getJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState, getJobState, rawJobId } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 import { buildUnsignedTxPackage } from "./tx-builder.js";
 import { buildSigningManifest } from "./signing-manifest.js";
 import { runPreSignChecks, sha256FromJsonFile } from "./pre-sign-checks.js";
 import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
+
+async function assertArtifactBundleReady(job) {
+  const required = [
+    { label: "executionValidation", path: job.executionValidationPath },
+    { label: "publicationValidation", path: job.publicationValidationPath },
+    { label: "deliverable", path: job.artifactPath },
+    { label: "brief", path: job.briefPath },
+  ];
+  const missing = [];
+  for (const { label, path: p } of required) {
+    if (!p) { missing.push(`${label}: path not set`); continue; }
+    try { await fs.access(p); } catch { missing.push(`${label}: ${p}`); }
+  }
+  if (missing.length > 0) {
+    throw new Error(`READY artifact bundle incomplete — missing: ${missing.join(", ")}`);
+  }
+}
 
 function guessAssetType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -51,7 +69,7 @@ function buildCompletionMetadata(job, deliverableUpload) {
       locale: CONFIG.LOCALE,
       title: job.title ?? `Job ${job.jobId}`,
       summary: `Submitted deliverable for job ${job.jobId}.`,
-      jobId: Number(job.jobId),
+      jobId: rawJobId(job.jobId),
       jobSpecURI: job.specUri ?? null,
       finalDeliverables: [
         {
@@ -100,16 +118,7 @@ export async function submit() {
         continue;
       }
       const artifactPaths = getJobArtifactPaths(job.jobId);
-      if (!job.executionValidationPath || !job.publicationValidationPath) {
-        throw new Error(
-          `missing validation provenance (expected execution + publication validation paths)`
-        );
-      }
-      if (!job.artifactPath || !job.briefPath) {
-        throw new Error(
-          `missing execution provenance (expected artifactPath + briefPath)`
-        );
-      }
+      await assertArtifactBundleReady(job);
 
       const completionMetadata = buildCompletionMetadata(job, job.deliverableIpfs);
       await writeJson(artifactPaths.jobCompletion, completionMetadata);
@@ -125,7 +134,7 @@ export async function submit() {
       }
 
       const preparedTx = await requestJobCompletion(
-        Number(job.jobId),
+        rawJobId(job.jobId),
         completionUpload.ipfsUri,
         CONFIG.AGENT_SUBDOMAIN
       );

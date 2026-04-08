@@ -1,1 +1,1 @@
-export * from "../../core/tx-builder.js";
+export * from "../tx-builder.js";

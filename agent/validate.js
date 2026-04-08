@@ -1,6 +1,6 @@
 // ./agent/validate.js
 import { CONFIG } from "./config.js";
-import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState, rawJobId } from "./state.js";
 import { uploadToIpfs } from "./mcp.js";
 import { getJobArtifactPaths, readText, writeJson } from "./artifact-manager.js";
 import { sha256Text, verifyIpfsTextHash } from "./ipfs-verify.js";
@@ -103,7 +103,7 @@ export async function validate() {
         const publishManifest = {
           kind: "publish-manifest",
           generatedAt: new Date().toISOString(),
-          jobId: Number(job.jobId),
+          jobId: rawJobId(job.jobId),
           publicArtifacts: [
             {
               name: "deliverable.md",
@@ -132,7 +132,7 @@ export async function validate() {
       const validationReport = {
         kind: "publication-validation",
         generatedAt: new Date().toISOString(),
-        jobId: Number(job.jobId),
+        jobId: rawJobId(job.jobId),
         expectedSha256,
         ...verify
       };

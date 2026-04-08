@@ -1,5 +1,5 @@
 import { getJob } from "./mcp.js";
-import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState, rawJobId } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { normalizeJob, isAssignedToAddress } from "./job-normalize.js";
 import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
@@ -28,7 +28,7 @@ export async function confirm() {
     if (!claim.claimed) continue;
     let remote;
     try {
-      remote = normalizeJob(await getJob(Number(localJob.jobId)));
+      remote = normalizeJob(await getJob(rawJobId(localJob.jobId)));
     } catch (err) {
       console.error(`[confirm] get_job failed for ${localJob.jobId}: ${err.message}`);
       continue;

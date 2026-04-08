@@ -2,6 +2,7 @@
 // Uses canonical unsigned-handoff runtime (`agent/prime-monitor.js`) and exits.
 
 import { startPrimeMonitor } from '../../agent/prime-monitor.js'
+import { runPreflight } from '../../agent/preflight.js'
 
 if (!process.env.ETH_RPC_URL) {
   console.error('ETH_RPC_URL not set')
@@ -14,6 +15,8 @@ if (!derivedAgentAddress) {
   console.error('AGENT_ADDRESS must be set')
   process.exit(1)
 }
+
+await runPreflight()
 
 console.log(`[procurement] starting single Prime monitor cycle for agent=${derivedAgentAddress}`)
 await startPrimeMonitor({ agentAddress: derivedAgentAddress, once: true })

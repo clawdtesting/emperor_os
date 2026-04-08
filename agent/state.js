@@ -46,6 +46,15 @@ export function parseVersionedJobId(id) {
   return { version: match[1], jobId: match[2] };
 }
 
+/**
+ * Extract the raw numeric job ID from a potentially versioned ID.
+ * "v2_123" → 123, "v1_456" → 456, "789" → 789
+ */
+export function rawJobId(id) {
+  const { jobId } = parseVersionedJobId(id);
+  return Number(jobId);
+}
+
 export function resolveJobId(id) {
   if (isVersionedJobId(id)) return id;
   return id;
