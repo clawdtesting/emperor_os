@@ -15,9 +15,8 @@ jobs:
       ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
       ANTHROPIC_MODEL:      ${{ secrets.ANTHROPIC_MODEL || 'claude-sonnet-4-6' }}
       ETH_RPC_URL:          ${{ secrets.ETH_RPC_URL }}
-      WALLET_PRIVATE_KEY:   ${{ secrets.WALLET_PRIVATE_KEY }}
-      WALLET_ADDRESS:       ${{ secrets.WALLET_ADDRESS }}
-      ENS_SUBDOMAIN:        ${{ secrets.ENS_SUBDOMAIN }}
+      AGENT_ADDRESS:        ${{ secrets.WALLET_ADDRESS }}
+      AGENT_SUBDOMAIN:      ${{ secrets.ENS_SUBDOMAIN }}
       PINATA_JWT:           ${{ secrets.PINATA_JWT }}
       TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID:     ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -29,12 +28,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: AgiJobManager/package.json
+          cache-dependency-path: package.json
 
       - name: Install dependencies
         run: npm install
-        working-directory: AgiJobManager
+
+      - name: Validate contracts
+        run: node scripts/validate-contracts.mjs
 
       - name: Run agent loop
-        run: node loop.js
-        working-directory: AgiJobManager
+        run: node loops/AGIJobManager-v1/runner.js

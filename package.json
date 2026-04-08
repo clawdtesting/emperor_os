@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node loops/v1/runner.js",
+    "start": "node loops/AGIJobManager-v1/runner.js",
     "validate:contracts": "node scripts/validate-contracts.mjs"
   },
   "dependencies": {
