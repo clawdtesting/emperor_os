@@ -1,7 +1,6 @@
 // Single-cycle Prime monitor entry point for GitHub Actions.
 // Uses canonical unsigned-handoff runtime (`agent/prime-monitor.js`) and exits.
 
-import { ethers } from 'ethers'
 import { startPrimeMonitor } from '../../agent/prime-monitor.js'
 
 if (!process.env.ETH_RPC_URL) {
@@ -10,10 +9,9 @@ if (!process.env.ETH_RPC_URL) {
 }
 
 const derivedAgentAddress = process.env.AGENT_ADDRESS
-  || (process.env.AGENT_PRIVATE_KEY ? new ethers.Wallet(process.env.AGENT_PRIVATE_KEY).address : '')
 
 if (!derivedAgentAddress) {
-  console.error('AGENT_ADDRESS or AGENT_PRIVATE_KEY must be set')
+  console.error('AGENT_ADDRESS must be set')
   process.exit(1)
 }
 
