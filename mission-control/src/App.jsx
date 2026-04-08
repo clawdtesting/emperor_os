@@ -14,6 +14,7 @@ import { IpfsTab } from './components/IpfsTab'
 import OperationsLane from './components/OperationsLane'
 import { ActionsPanel } from './components/ActionsPanel'
 import { PipelineRegistry } from './components/PipelineRegistry'
+import { MissionControlTab } from './components/MissionControlTab'
 import { useWallet } from './hooks/useWallet'
 
 function compareJobIdDesc(a, b) {
@@ -34,7 +35,7 @@ export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
   const { unreadCount } = useActions()
   const [selected, setSelected] = useState(null)
-  const [tab, setTab] = useState('jobs')
+  const [tab, setTab] = useState('mission')
   const wallet = useWallet()
 
   const assigned  = jobs.filter(j => j.status === 'Assigned')
@@ -78,7 +79,7 @@ export default function App() {
         <div className="grid md:grid-cols-[180px,1fr] gap-4">
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-2 h-fit">
         <div className="flex flex-col gap-1">
-          {['jobs', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'ops', 'actions', 'workflows', 'pipelines', 'events', 'test', 'ipfs'].filter(Boolean).map(t => (
+          {['mission', 'jobs', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'ops', 'actions', 'workflows', 'pipelines', 'events', 'test', 'ipfs'].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -98,6 +99,17 @@ export default function App() {
         </div>
         </div>
         <div>
+
+        {tab === 'mission' && (
+          <MissionControlTab
+            wallet={wallet}
+            jobsCount={jobsDesc.length}
+            assignedCount={assigned.length}
+            unreadCount={unreadCount}
+            onOpenTab={setTab}
+          />
+        )}
+
         {tab === 'jobs' && (
           <div className="space-y-2">
             {loading && <div className="text-slate-600 text-xs text-center py-8">Loading...</div>}
