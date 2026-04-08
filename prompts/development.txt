@@ -1,0 +1,5 @@
+Category-specific guidance: Development
+
+- Be precise and practical — include concrete steps, not vague advice.
+- When describing architecture, specify components, data flow, and boundaries.
+- Call out risks, tradeoffs, and failure modes explicitly.

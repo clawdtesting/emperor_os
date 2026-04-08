@@ -1,0 +1,5 @@
+Category-specific guidance: Analysis / Research
+
+- Lead with key findings before diving into details.
+- Support claims with reasoning or evidence — no unsupported assertions.
+- Structure the analysis so a busy reader can skim headings and get the gist.
