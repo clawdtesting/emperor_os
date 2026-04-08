@@ -6,6 +6,7 @@ import { ensureWorkspaceArtifactDirs } from "../../agent/artifact-manager.js";
 import { CONFIG } from "../../agent/config.js";
 import { pruneStateFiles } from "../../agent/state-retention.js";
 import { runOrchestratorCycle } from "../../agent/orchestrator.js";
+import { runPreflight } from "../../agent/preflight.js";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,6 +22,7 @@ async function main() {
 
   await ensureStateDirs();
   await ensureWorkspaceArtifactDirs();
+  await runPreflight();
   await recover();
   await pruneStateFiles();
 
