@@ -2,23 +2,19 @@
 // Central registry of active contract adapters.
 // Add new versions here when they go live — nothing else needs to change.
 
+import v1Adapter from './AGIJobManager-v1/adapter.js';
+import v2Adapter from './AGIJobManager-v2/adapter.js';
+
 const ADAPTERS = [
-  {
-    version: 'v1',
-    adapter: {
-      // Tag each raw list_jobs entry with its contract version
-      tagJob(entry) {
-        return { ...entry, _contractVersion: 'v1' }
-      }
-    }
-  }
-]
+  { version: 'v1', adapter: v1Adapter },
+  { version: 'v2', adapter: v2Adapter }
+];
 
 /**
  * Returns active { version, adapter } pairs used by discover + orchestrator.
  */
 export function getActiveAdapters() {
-  return ADAPTERS
+  return ADAPTERS;
 }
 
 /**
@@ -26,7 +22,7 @@ export function getActiveAdapters() {
  * Matches buildVersionedJobId() in agent/state.js.
  */
 export function buildStateKey(version, jobId) {
-  return `${version}_${jobId}`
+  return `${version}_${jobId}`;
 }
 
 /**
@@ -34,5 +30,5 @@ export function buildStateKey(version, jobId) {
  * artifact-manager.js detects the underscore and uses it as-is.
  */
 export function buildArtifactDirName(version, jobId) {
-  return `${version}_${jobId}`
+  return `${version}_${jobId}`;
 }

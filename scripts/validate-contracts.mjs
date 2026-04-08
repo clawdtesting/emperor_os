@@ -5,7 +5,7 @@ import { pathToFileURL } from 'url';
 const CONTRACTS_DIR = path.resolve('contracts');
 const TARGETS = [
   { name: 'AGIJobManager-v1', adapter: 'contracts/AGIJobManager-v1/adapter.js', abi: 'contracts/AGIJobManager-v1/AGIJobManager.v1.json' },
-  { name: 'AGIJobManager-v2', adapter: 'contracts/AGIJobManager-v2/adapter.js', abi: 'contracts/AGIJobManager-v2/AGIJobmanager.v2.json' },
+  { name: 'AGIJobManager-v2', adapter: 'contracts/AGIJobManager-v2/adapter.js', abi: 'contracts/AGIJobManager-v2/AGIJobManager.v2.json' },
   { name: 'AGIJobPrime-v1', adapter: 'contracts/AGIJobPrime-v1/adapter.js', abi: 'contracts/AGIJobPrime-v1/AGIJobPrime.v1.json' }
 ];
 
