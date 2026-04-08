@@ -94,28 +94,28 @@ This file is the operator-facing readiness plan after reviewing the latest merge
 ## 4) Cross-cutting gates (global)
 
 ### Governance / safety
-- [ ] Canonical runtime only in scheduled workflows.
-- [ ] No signing/broadcast codepath reachable from scheduled runtime.
+- [x] Canonical runtime only in scheduled workflows. _(PR #93: rewired autonomous.yml + procurement.yml)_
+- [x] No signing/broadcast codepath reachable from scheduled runtime. _(PR #93: removed WALLET_PRIVATE_KEY / AGENT_PRIVATE_KEY)_
 - [ ] Operator handoff manifests include decoded call + freshness + simulation checks.
 
 ### Reliability
-- [ ] Restart test passes from disk state only (kill mid-phase, recover deterministically).
-- [ ] Reorg continuity test passes for procurement cursor/state rollback.
-- [ ] Import-graph sanity check ensures no drift to stale runtime modules.
+- [x] Restart test passes from disk state only (kill mid-phase, recover deterministically). _(PR #96: 59 restart/reorg/integration tests)_
+- [x] Reorg continuity test passes for procurement cursor/state rollback. _(PR #96: Section E reorg tests)_
+- [x] Import-graph sanity check ensures no drift to stale runtime modules. _(PR #94: fixed core/ re-exports)_
 
 ### Operations
-- [ ] Runbook updated with go-live, rollback, and emergency pause procedure.
-- [ ] Mission-control view includes `READY -> SIGNED -> BROADCAST -> FINALIZED` status lane.
+- [x] Runbook updated with go-live, rollback, and emergency pause procedure. _(docs/AGIJOB_OPERATOR_RUNBOOK.md + existing PRIME_OPERATOR_RUNBOOK.md)_
+- [x] Mission-control view includes `READY -> SIGNED -> BROADCAST -> FINALIZED` status lane. _(classifyLifecycleStage + /api/tx-lifecycle + OperationsLane.jsx)_
 
 ---
 
 ## 5) Suggested execution order
 
-1. Workflow rewiring (v1 + Prime) and private-key env removal.
-2. Env alignment + preflight checks.
-3. v2 end-to-end normalization and packet validation.
-4. Prime validator deterministic payload wiring.
-5. Restart/reorg/integration tests.
-6. Operator runbook + mission-control lifecycle lane.
+1. ~~Workflow rewiring (v1 + Prime) and private-key env removal.~~ Done (PR #93)
+2. ~~Env alignment + preflight checks.~~ Done (PR #94)
+3. ~~v2 end-to-end normalization and packet validation.~~ Done (PR #94)
+4. ~~Prime validator deterministic payload wiring.~~ Done (PR #95)
+5. ~~Restart/reorg/integration tests.~~ Done (PR #96)
+6. ~~Operator runbook + mission-control lifecycle lane.~~ Done (this PR)
 
 If any P0 item is open, **do not enable unattended schedules**.

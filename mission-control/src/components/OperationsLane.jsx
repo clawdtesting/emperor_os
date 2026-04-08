@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 
 const STAGES = [
   { key: 'ready_for_signature', label: 'Ready for Signature', color: 'border-amber-500', bg: 'bg-amber-950/30', text: 'text-amber-400' },
+  { key: 'signed_awaiting_broadcast', label: 'Signed / Broadcast', color: 'border-purple-500', bg: 'bg-purple-950/30', text: 'text-purple-400' },
+  { key: 'broadcast_pending', label: 'Broadcast Pending', color: 'border-cyan-500', bg: 'bg-cyan-950/30', text: 'text-cyan-400' },
   { key: 'awaiting_finalization', label: 'Awaiting Finalization', color: 'border-blue-500', bg: 'bg-blue-950/30', text: 'text-blue-400' },
   { key: 'finalized', label: 'Finalized', color: 'border-green-500', bg: 'bg-green-950/30', text: 'text-green-400' },
   { key: 'idle', label: 'Idle / Waiting', color: 'border-slate-600', bg: 'bg-slate-900/30', text: 'text-slate-400' },
@@ -160,7 +162,7 @@ export default function OperationsLane() {
         <h2 className="text-lg font-bold text-slate-100">Operations Lane</h2>
         <div className="flex gap-2">
           <button onClick={() => setTab('prime')} className={`px-3 py-1 rounded text-xs ${tab === 'prime' ? 'bg-cyan-900 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>Prime</button>
-          <button onClick={() => setTab('jobs')} className={`px-3 py-1 rounded text-xs ${tab === 'jobs' ? 'bg-cyan-900 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>Jobs</button>
+          <button onClick={() => setTab('jobs')} className={`px-3 py-1 rounded text-xs ${tab === 'jobs' ? 'bg-cyan-900 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>Jobs (v1/v2)</button>
         </div>
       </div>
 
@@ -177,7 +179,7 @@ export default function OperationsLane() {
       </div>
 
       {/* Kanban columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {STAGES.map(stage => {
           const items = filtered.filter(i => i.lifecycleStage === stage.key)
           return (

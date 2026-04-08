@@ -814,12 +814,41 @@ app.post('/api/intake-run', (req, res) => {
 
 // ── Operations Lane ───────────────────────────────────────────────────────────
 
-function classifyLifecycleStage(status) {
+function classifyLifecycleStage(status, txPackages, receipts) {
   const s = (status || '').toLowerCase()
-  if (['commit_ready', 'reveal_ready', 'finalist_accept_ready', 'trial_ready', 'completion_ready', 'ready_for_signature'].includes(s)) return 'ready_for_signature'
-  if (['awaiting_finalization', 'in_progress', 'assigned'].includes(s)) return 'awaiting_finalization'
+  const pkgs = txPackages || []
+  const rcpts = receipts || []
+
+  // Terminal / finalized
   if (['completed', 'done', 'finalized', 'selected'].includes(s)) return 'finalized'
+
+  // Check tx receipts for broadcast-pending (txHash exists but not yet finalized)
+  const hasBroadcast = rcpts.some(r => r.txHash && r.status !== 'finalized')
+  if (hasBroadcast) return 'broadcast_pending'
+
+  // Check for signed packages awaiting broadcast
+  const hasSigned = pkgs.some(p => p.signed && !p.broadcastTxHash)
+  if (hasSigned) return 'signed_awaiting_broadcast'
+
+  // Unsigned tx ready for operator signature
+  if (['commit_ready', 'reveal_ready', 'finalist_accept_ready', 'trial_ready', 'completion_ready',
+       'ready_for_signature', 'validator_score_commit_ready', 'validator_score_reveal_ready'].includes(s)) return 'ready_for_signature'
+
+  // In-flight states
+  if (['commit_submitted', 'reveal_submitted', 'finalist_accept_submitted', 'trial_submitted',
+       'completion_submitted', 'validator_score_commit_submitted', 'validator_score_reveal_submitted',
+       'awaiting_finalization', 'in_progress', 'assigned'].includes(s)) return 'awaiting_finalization'
+
   return 'idle'
+}
+
+function classifyTxLifecycle(txPkg) {
+  if (!txPkg) return 'unknown'
+  if (txPkg.finalizedAt) return 'finalized'
+  if (txPkg.broadcastTxHash) return 'broadcast'
+  if (txPkg.signed) return 'signed'
+  if (txPkg.file || txPkg.unsignedTx) return 'ready'
+  return 'unknown'
 }
 
 app.get('/api/operations-lane', async (req, res) => {
@@ -852,7 +881,7 @@ app.get('/api/operations-lane', async (req, res) => {
             finalizedAt: r.finalizedAt || null,
           })),
           deadlines: state.deadlines || null,
-          lifecycleStage: classifyLifecycleStage(state.status),
+          lifecycleStage: classifyLifecycleStage(state.status, state.txPackages, state.receipts),
           updatedAt: state.lastChainSync || state.updatedAt || null,
         })
       }
@@ -880,7 +909,7 @@ app.get('/api/operations-lane', async (req, res) => {
             status: r.status || '',
             finalizedAt: r.finalizedAt || null,
           })),
-          lifecycleStage: classifyLifecycleStage(state.status),
+          lifecycleStage: classifyLifecycleStage(state.status, state.txPackages, state.receipts),
           updatedAt: state.updatedAt || state.lastSync || null,
         })
       }
@@ -893,6 +922,76 @@ app.get('/api/operations-lane', async (req, res) => {
     })
   } catch (e) {
     console.error('[ops-lane] error:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ── TX Lifecycle Tracker ─────────────────────────────────────────────────
+
+app.get('/api/tx-lifecycle', (req, res) => {
+  try {
+    const entries = []
+
+    // Scan procurement tx packages
+    if (existsSync(PROC_ARTIFACTS_DIR)) {
+      const dirs = readdirSync(PROC_ARTIFACTS_DIR).filter(d => d.startsWith('proc_') && statSync(join(PROC_ARTIFACTS_DIR, d)).isDirectory())
+      for (const dir of dirs) {
+        const state = readJsonSafe(join(PROC_ARTIFACTS_DIR, dir, 'state.json'), null)
+        if (!state) continue
+        const procId = dir.replace('proc_', '')
+        for (const pkg of (state.txPackages || [])) {
+          entries.push({
+            source: 'procurement',
+            sourceId: procId,
+            lane: state._contractVersion || 'prime',
+            action: pkg.action || pkg.file || 'unknown',
+            stage: classifyTxLifecycle(pkg),
+            createdAt: pkg.createdAt || null,
+            signedAt: pkg.signedAt || null,
+            broadcastTxHash: pkg.broadcastTxHash || null,
+            broadcastAt: pkg.broadcastAt || null,
+            finalizedAt: pkg.finalizedAt || null,
+            expired: pkg.expired || false,
+            ageMin: pkg.ageMin ?? 0,
+          })
+        }
+      }
+    }
+
+    // Scan job tx packages
+    if (existsSync(AGENT_STATE_DIR)) {
+      const files = readdirSync(AGENT_STATE_DIR).filter(f => f.endsWith('.json'))
+      for (const file of files) {
+        const state = readJsonSafe(join(AGENT_STATE_DIR, file), null)
+        if (!state) continue
+        const jobId = state.jobId || file.replace('.json', '')
+        const version = /^v2_/.test(String(jobId)) ? 'v2' : 'v1'
+        for (const pkg of (state.txPackages || [])) {
+          entries.push({
+            source: 'job',
+            sourceId: jobId,
+            lane: version,
+            action: pkg.action || pkg.file || 'unknown',
+            stage: classifyTxLifecycle(pkg),
+            createdAt: pkg.createdAt || null,
+            signedAt: pkg.signedAt || null,
+            broadcastTxHash: pkg.broadcastTxHash || null,
+            broadcastAt: pkg.broadcastAt || null,
+            finalizedAt: pkg.finalizedAt || null,
+            expired: pkg.expired || false,
+            ageMin: pkg.ageMin ?? 0,
+          })
+        }
+      }
+    }
+
+    // Summary counts by stage
+    const summary = { ready: 0, signed: 0, broadcast: 0, finalized: 0, unknown: 0 }
+    for (const e of entries) summary[e.stage] = (summary[e.stage] || 0) + 1
+
+    res.json({ entries, summary, scannedAt: new Date().toISOString() })
+  } catch (e) {
+    console.error('[tx-lifecycle] error:', e.message)
     res.status(500).json({ error: e.message })
   }
 })
