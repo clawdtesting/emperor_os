@@ -1,5 +1,5 @@
 import { applyForJob } from "./mcp.js";
-import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState, rawJobId } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 import { buildUnsignedApplyTxPackage } from "./tx-builder.js";
@@ -32,7 +32,7 @@ export async function apply() {
     return;
   }
 
-  const preparedTx = await applyForJob(Number(job.jobId), CONFIG.AGENT_SUBDOMAIN);
+  const preparedTx = await applyForJob(rawJobId(job.jobId), CONFIG.AGENT_SUBDOMAIN);
 
   if (!preparedTx || typeof preparedTx !== "object") {
     throw new Error(`[apply] invalid MCP response for job ${job.jobId}`);

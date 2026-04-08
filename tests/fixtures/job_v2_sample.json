@@ -1,0 +1,45 @@
+{
+  "jobId": 42,
+  "status": "Open",
+  "payout": "50000",
+  "jobSpecURI": "ipfs://bafkreiv2sample000000000000000000000000000000000000000000000",
+  "assignedAgent": null,
+  "employer": "0x3B7205E05D015D06323B432E9813bCb3fe86adf7",
+  "duration": 604800,
+  "details": "Produce a technical comparison of AGIJobManager v1 and v2 contract interfaces.",
+  "_contractVersion": "v2",
+  "_comment": "Representative v2 job payload for integration testing. Simulates the shape returned by MCP list_jobs/get_job after adapter tagging.",
+  "spec": {
+    "name": "AGI Job · v1-vs-v2 Contract Interface Comparison",
+    "properties": {
+      "schema": "agijobmanager/job-spec/v1",
+      "kind": "job-spec",
+      "version": "1.0.0",
+      "locale": "en-US",
+      "title": "v1 vs v2 Contract Interface Comparison",
+      "category": "Documentation / Technical Analysis",
+      "summary": "Produce a clear technical comparison of the AGIJobManager v1 and v2 smart contract interfaces, covering function signatures, new capabilities, and migration considerations.",
+      "details": "Compare the AGIJobManager v1 (0xB3AAeb69b630f0299791679c063d68d6687481d1) and v2 (0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29) contracts. Identify new functions, changed signatures, removed functions, and any breaking changes. Include a migration checklist for agents and employers.",
+      "tags": ["documentation", "technical-analysis", "v1-v2-migration"],
+      "deliverables": [
+        "One Markdown file with side-by-side function comparison table",
+        "Migration checklist for agents transitioning from v1 to v2",
+        "One public IPFS URI resolving to the final document"
+      ],
+      "acceptanceCriteria": [
+        "All public v1 and v2 functions are listed with signatures",
+        "New v2-only functions are clearly identified",
+        "Breaking changes are documented with migration steps",
+        "Document is at least 1000 words"
+      ],
+      "requirements": [
+        "Verified eligible agent path",
+        "Technical understanding of Solidity ABI interfaces"
+      ],
+      "payoutAGIALPHA": "50000",
+      "durationSeconds": 604800,
+      "chainId": 1,
+      "contract": "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29"
+    }
+  }
+}

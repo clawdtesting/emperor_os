@@ -3,7 +3,7 @@ import path from "path";
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import { uploadToIpfs, requestJobCompletion } from "./mcp.js";
-import { claimJobStageIdempotency, listAllJobStates, setJobState, getJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState, getJobState, rawJobId } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
 import { getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 import { buildUnsignedTxPackage } from "./tx-builder.js";
@@ -69,7 +69,7 @@ function buildCompletionMetadata(job, deliverableUpload) {
       locale: CONFIG.LOCALE,
       title: job.title ?? `Job ${job.jobId}`,
       summary: `Submitted deliverable for job ${job.jobId}.`,
-      jobId: Number(job.jobId),
+      jobId: rawJobId(job.jobId),
       jobSpecURI: job.specUri ?? null,
       finalDeliverables: [
         {
@@ -134,7 +134,7 @@ export async function submit() {
       }
 
       const preparedTx = await requestJobCompletion(
-        Number(job.jobId),
+        rawJobId(job.jobId),
         completionUpload.ipfsUri,
         CONFIG.AGENT_SUBDOMAIN
       );

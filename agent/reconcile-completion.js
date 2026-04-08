@@ -1,5 +1,5 @@
 import { getJob } from "./mcp.js";
-import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
+import { claimJobStageIdempotency, listAllJobStates, setJobState, rawJobId } from "./state.js";
 import { normalizeJob } from "./job-normalize.js";
 import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
 
@@ -28,7 +28,7 @@ export async function reconcileCompletion() {
         `reconcile_completion:${job.jobId}:${job.updatedAt ?? "na"}`
       );
       if (!claim.claimed) continue;
-      const remote = normalizeJob(await getJob(Number(job.jobId)));
+      const remote = normalizeJob(await getJob(rawJobId(job.jobId)));
       const remoteStatus = String(remote?.status ?? "").toLowerCase();
 
       if (remoteStatus === "completed") {
