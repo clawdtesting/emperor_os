@@ -1,0 +1,329 @@
+{
+  "$schema": "./requirements.schema.json",
+  "specVersion": "1.0.0",
+  "source": {
+    "path": "docs/audits/EXECUTION_TIER_ARCHITECTURE.md",
+    "versionDate": "2026-04-09"
+  },
+  "requirements": [
+    {
+      "id": "TP-001",
+      "category": "tier_policy",
+      "normativeLevel": "NEVER",
+      "statement": "Never use an execution tier that is not explicitly allowed by the active protocol policy.",
+      "machineCheck": {
+        "type": "forbidden_value",
+        "field": "selectedTier",
+        "allowedField": "protocol.allowedExecutionTiers"
+      },
+      "acceptanceTestId": "AT-TP-001"
+    },
+    {
+      "id": "CL-001",
+      "category": "classification",
+      "normativeLevel": "MUST",
+      "statement": "Before execution, each job must be classified using the required feature set.",
+      "machineCheck": {
+        "type": "required_fields",
+        "field": "jobFeatures",
+        "required": [
+          "deliverableCount",
+          "crossArtifactDependencies",
+          "ambiguityScore",
+          "externalToolsRequired",
+          "validationAvailable",
+          "iterationRisk"
+        ]
+      },
+      "acceptanceTestId": "AT-CL-001"
+    },
+    {
+      "id": "TS-001",
+      "category": "tier_selection",
+      "normativeLevel": "MUST",
+      "statement": "Tier selection must evaluate allowed tiers from lowest cost to highest and select the first tier satisfying constraints.",
+      "machineCheck": {
+        "type": "ordered_selection",
+        "field": "tierEvaluationOrder",
+        "order": [
+          "T1_ONE_SHOT",
+          "T2_REPAIR_LOOP",
+          "T3_PLANNER_EXECUTOR",
+          "T4_ORCHESTRATED"
+        ],
+        "respectAllowedTiers": true
+      },
+      "acceptanceTestId": "AT-TS-001"
+    },
+    {
+      "id": "AG-001",
+      "category": "apply_gate",
+      "normativeLevel": "MUST",
+      "statement": "The apply decision must reject jobs with no feasible allowed tier.",
+      "machineCheck": {
+        "type": "boolean_gate",
+        "field": "applyDecision",
+        "mustBeFalseWhen": "executionFeasibility == false"
+      },
+      "acceptanceTestId": "AT-AG-001"
+    },
+    {
+      "id": "AG-002",
+      "category": "apply_gate",
+      "normativeLevel": "MUST",
+      "statement": "The apply decision must reject jobs that fail deterministic validation feasibility.",
+      "machineCheck": {
+        "type": "boolean_gate",
+        "field": "applyDecision",
+        "mustBeFalseWhen": "validationFeasible == false"
+      },
+      "acceptanceTestId": "AT-AG-002"
+    },
+    {
+      "id": "EC-001",
+      "category": "economics",
+      "normativeLevel": "MUST",
+      "statement": "Apply is permitted only when payout_usd is at least 1.25 times execution_cost_usd.",
+      "machineCheck": {
+        "type": "numeric_threshold",
+        "left": "payoutUsd",
+        "operator": ">=",
+        "rightExpression": "executionCostUsd * 1.25"
+      },
+      "acceptanceTestId": "AT-EC-001"
+    },
+    {
+      "id": "EC-002",
+      "category": "economics",
+      "normativeLevel": "DO_NOT_APPLY",
+      "statement": "Do not apply when payout_usd is below execution_cost_usd * 1.25.",
+      "machineCheck": {
+        "type": "boolean_gate",
+        "field": "applyDecision",
+        "mustBeFalseWhen": "payoutUsd < executionCostUsd * 1.25"
+      },
+      "acceptanceTestId": "AT-EC-002"
+    },
+    {
+      "id": "ES-001",
+      "category": "escalation",
+      "normativeLevel": "ONLY_IF",
+      "statement": "Escalation is allowed only when next tier is protocol-allowed, budget remains, failure is repairable, and max escalations is not exceeded.",
+      "machineCheck": {
+        "type": "all_conditions_true",
+        "conditions": [
+          "nextTierAllowed == true",
+          "budgetRemaining == true",
+          "failureRepairable == true",
+          "escalationCount <= maxEscalations"
+        ]
+      },
+      "acceptanceTestId": "AT-ES-001"
+    },
+    {
+      "id": "AR-001",
+      "category": "artifacts",
+      "normativeLevel": "MUST",
+      "statement": "Each job must persist tier_selection.json with selected tier, reasoning, complexity features, and economic check.",
+      "machineCheck": {
+        "type": "artifact_schema",
+        "pathPattern": "artifacts/job_<id>/tier_selection.json",
+        "required": [
+          "selectedTier",
+          "reasoning",
+          "complexityFeatures",
+          "economicCheck"
+        ]
+      },
+      "acceptanceTestId": "AT-AR-001"
+    },
+    {
+      "id": "AR-002",
+      "category": "artifacts",
+      "normativeLevel": "MUST",
+      "statement": "Execution tracking artifacts must include pass directories, validation.json, and repair_logs.json.",
+      "machineCheck": {
+        "type": "artifact_presence",
+        "requiredPaths": [
+          "artifacts/job_<id>/pass_1/",
+          "artifacts/job_<id>/validation.json",
+          "artifacts/job_<id>/repair_logs.json"
+        ]
+      },
+      "acceptanceTestId": "AT-AR-002"
+    },
+    {
+      "id": "NN-001",
+      "category": "non_negotiables",
+      "normativeLevel": "NEVER",
+      "statement": "Never exceed allowed model call limits for the active tier.",
+      "machineCheck": {
+        "type": "numeric_threshold",
+        "left": "modelCallCount",
+        "operator": "<=",
+        "right": "tier.maxModelCalls"
+      },
+      "acceptanceTestId": "AT-NN-001"
+    },
+    {
+      "id": "NN-002",
+      "category": "non_negotiables",
+      "normativeLevel": "NEVER",
+      "statement": "Never exceed the execution token budget.",
+      "machineCheck": {
+        "type": "numeric_threshold",
+        "left": "tokenUsage",
+        "operator": "<=",
+        "right": "tokenBudget"
+      },
+      "acceptanceTestId": "AT-NN-002"
+    },
+    {
+      "id": "NN-003",
+      "category": "non_negotiables",
+      "normativeLevel": "NEVER",
+      "statement": "Never sign transactions automatically.",
+      "machineCheck": {
+        "type": "forbidden_call",
+        "forbiddenPatterns": [
+          "signTransaction",
+          "sendTransaction"
+        ]
+      },
+      "acceptanceTestId": "AT-NN-003"
+    },
+    {
+      "id": "NN-004",
+      "category": "non_negotiables",
+      "normativeLevel": "ALWAYS",
+      "statement": "Always persist state before advancing workflow stage.",
+      "machineCheck": {
+        "type": "state_transition_guard",
+        "requiredArtifact": "stateWriteReceipt"
+      },
+      "acceptanceTestId": "AT-NN-004"
+    },
+    {
+      "id": "NN-005",
+      "category": "non_negotiables",
+      "normativeLevel": "ALWAYS",
+      "statement": "Always produce required artifacts before stage completion.",
+      "machineCheck": {
+        "type": "artifact_gate",
+        "field": "requiredArtifactsPresent",
+        "expected": true
+      },
+      "acceptanceTestId": "AT-NN-005"
+    },
+    {
+      "id": "NN-006",
+      "category": "non_negotiables",
+      "normativeLevel": "ALWAYS",
+      "statement": "Always validate successfully before submission/finalization.",
+      "machineCheck": {
+        "type": "pre_submit_gate",
+        "field": "validationPassed",
+        "expected": true
+      },
+      "acceptanceTestId": "AT-NN-006"
+    }
+  ],
+  "acceptanceTests": [
+    {
+      "id": "AT-TP-001",
+      "coversRequirementId": "TP-001",
+      "description": "Reject tier selections not in protocol allowedExecutionTiers.",
+      "type": "invariant"
+    },
+    {
+      "id": "AT-CL-001",
+      "coversRequirementId": "CL-001",
+      "description": "Fail classification when any required feature is absent.",
+      "type": "unit"
+    },
+    {
+      "id": "AT-TS-001",
+      "coversRequirementId": "TS-001",
+      "description": "Verify lowest-to-highest tier evaluation selects first viable tier.",
+      "type": "unit"
+    },
+    {
+      "id": "AT-AG-001",
+      "coversRequirementId": "AG-001",
+      "description": "Apply decision is false when no feasible tier exists.",
+      "type": "unit"
+    },
+    {
+      "id": "AT-AG-002",
+      "coversRequirementId": "AG-002",
+      "description": "Apply decision is false when deterministic validation is infeasible.",
+      "type": "unit"
+    },
+    {
+      "id": "AT-EC-001",
+      "coversRequirementId": "EC-001",
+      "description": "Margin rule enforces payout >= cost * 1.25.",
+      "type": "unit"
+    },
+    {
+      "id": "AT-EC-002",
+      "coversRequirementId": "EC-002",
+      "description": "Negative-margin jobs are rejected.",
+      "type": "unit"
+    },
+    {
+      "id": "AT-ES-001",
+      "coversRequirementId": "ES-001",
+      "description": "Escalation blocked when any precondition is false.",
+      "type": "invariant"
+    },
+    {
+      "id": "AT-AR-001",
+      "coversRequirementId": "AR-001",
+      "description": "tier_selection.json must exist and include mandatory fields.",
+      "type": "artifact"
+    },
+    {
+      "id": "AT-AR-002",
+      "coversRequirementId": "AR-002",
+      "description": "Execution tracking artifacts must be present before stage completion.",
+      "type": "artifact"
+    },
+    {
+      "id": "AT-NN-001",
+      "coversRequirementId": "NN-001",
+      "description": "Model call count cannot exceed tier call limit.",
+      "type": "invariant"
+    },
+    {
+      "id": "AT-NN-002",
+      "coversRequirementId": "NN-002",
+      "description": "Token usage cannot exceed configured token budget.",
+      "type": "invariant"
+    },
+    {
+      "id": "AT-NN-003",
+      "coversRequirementId": "NN-003",
+      "description": "Runtime code paths contain no automatic transaction signing/broadcast calls.",
+      "type": "static"
+    },
+    {
+      "id": "AT-NN-004",
+      "coversRequirementId": "NN-004",
+      "description": "State persistence receipt must be present before stage transition.",
+      "type": "integration"
+    },
+    {
+      "id": "AT-NN-005",
+      "coversRequirementId": "NN-005",
+      "description": "Missing required artifacts blocks stage completion.",
+      "type": "integration"
+    },
+    {
+      "id": "AT-NN-006",
+      "coversRequirementId": "NN-006",
+      "description": "Submission transition is blocked when validation has not passed.",
+      "type": "integration"
+    }
+  ]
+}
