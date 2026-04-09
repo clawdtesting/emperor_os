@@ -49,3 +49,11 @@ The source markdown mixes numbered headings and free text in a way that is human
 - `agent/execution-tier/economics.js` — deterministic execution-cost estimation, payout normalization, and margin-policy evaluation.
 - `agent/execution-tier/apply-gate.js` — single `shouldApply` decision gate with structured rejection reasons.
 - `tests/execution-tier-phase3.test.js` — checks execution feasibility, margin policy, validation feasibility, and confidence threshold gating.
+
+## Phase 4 outputs
+
+- `agent/execution-tier/runtime-guards.js` — hard model-call/token budget guardrails, repairability detection, and validation gate enforcement.
+- `agent/execution-tier/runners.js` — tier-specific bounded runners for T1 one-shot, T2 repair-loop, and T3 planner-executor execution.
+- `agent/execution-tier/escalation-controller.js` — bounded escalation policy controller.
+- `agent/execution-tier/runtime-orchestrator.js` — end-to-end runtime execution with apply gate, bounded escalation, and pre-finalize validation gating.
+- `tests/execution-tier-phase4.test.js` — verifies budget guards, validation gates, repairability behavior, escalation behavior, and orchestration outcomes.
