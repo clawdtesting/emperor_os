@@ -16,6 +16,12 @@ export async function recover() {
         recoveryNote: "Recovered from interrupted working state"
       });
       console.log(`[recovery] reset ${job.jobId} from working -> assigned`);
+      continue;
+    }
+
+    if (job.status === "publication_pending") {
+      // publication_pending is durable/retry-safe by design; validate() will retry when publication is available.
+      console.log(`[recovery] publication pending preserved for ${job.jobId}`);
     }
   }
 

@@ -4,7 +4,6 @@ import { buildBrief } from "./build-brief.js";
 import { buildPrompt } from "./templates.js";
 import { validateOutput } from "./validate.js";
 import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
-import { CONFIG } from "./config.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson, writeText } from "./artifact-manager.js";
 import { llmCall } from "../config/llm_router.js";
 
@@ -28,10 +27,6 @@ export async function execute() {
         console.log(`[execute] idempotency skip for ${job.jobId}`);
         continue;
       }
-      await setJobState(job.jobId, {
-        status: "working",
-        workingAt: new Date().toISOString()
-      });
 
       await ensureJobArtifactDir(job.jobId);
       const artifactPaths = getJobArtifactPaths(job.jobId);
@@ -73,6 +68,7 @@ export async function execute() {
 
       await writeText(artifactPaths.deliverable, markdown);
 
+      // Artifact-first boundary: state advances only after the full execute artifact bundle is durable.
       await setJobState(job.jobId, {
         status: "deliverable_ready",
         artifactDir: artifactPaths.dir,

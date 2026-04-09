@@ -76,7 +76,7 @@ export async function readJson(filePath, fallback = null) {
 }
 
 export async function writeJson(filePath, data) {
-  const tmp = `${filePath}.tmp.${Date.now()}.${Buffer.from(filePath).toString('hex').slice(0, 6)}`;
+  const tmp = `${filePath}.tmp.${Date.now()}.${Buffer.from(filePath).toString("hex").slice(0, 6)}`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
   await fs.rename(tmp, filePath);
 }
@@ -91,8 +91,12 @@ const JOB_STATUS = {
   QUEUED: "queued",
   SCORED: "scored",
   APPLICATION_PENDING_REVIEW: "application_pending_review",
+  APPLIED: "applied",
+  ASSIGNMENT_PENDING: "assignment_pending",
   ASSIGNED: "assigned",
+  WORKING: "working",
   DELIVERABLE_READY: "deliverable_ready",
+  PUBLICATION_PENDING: "publication_pending",
   COMPLETION_PENDING_REVIEW: "completion_pending_review",
   SUBMITTED: "submitted",
   COMPLETED: "completed",
@@ -115,9 +119,39 @@ const TERMINAL_STATUSES = new Set([
 const VALID_TRANSITIONS = {
   [JOB_STATUS.QUEUED]: [JOB_STATUS.SCORED, JOB_STATUS.SKIPPED],
   [JOB_STATUS.SCORED]: [JOB_STATUS.APPLICATION_PENDING_REVIEW, JOB_STATUS.SKIPPED],
-  [JOB_STATUS.APPLICATION_PENDING_REVIEW]: [JOB_STATUS.ASSIGNED, JOB_STATUS.REJECTED, JOB_STATUS.EXPIRED],
-  [JOB_STATUS.ASSIGNED]: [JOB_STATUS.DELIVERABLE_READY, JOB_STATUS.FAILED],
-  [JOB_STATUS.DELIVERABLE_READY]: [JOB_STATUS.COMPLETION_PENDING_REVIEW, JOB_STATUS.FAILED],
+  [JOB_STATUS.APPLICATION_PENDING_REVIEW]: [
+    JOB_STATUS.ASSIGNMENT_PENDING,
+    JOB_STATUS.APPLIED,
+    JOB_STATUS.ASSIGNED,
+    JOB_STATUS.REJECTED,
+    JOB_STATUS.EXPIRED,
+    JOB_STATUS.FAILED,
+  ],
+  [JOB_STATUS.APPLIED]: [
+    JOB_STATUS.ASSIGNMENT_PENDING,
+    JOB_STATUS.ASSIGNED,
+    JOB_STATUS.REJECTED,
+    JOB_STATUS.EXPIRED,
+    JOB_STATUS.FAILED,
+  ],
+  [JOB_STATUS.ASSIGNMENT_PENDING]: [
+    JOB_STATUS.ASSIGNED,
+    JOB_STATUS.REJECTED,
+    JOB_STATUS.EXPIRED,
+    JOB_STATUS.FAILED,
+  ],
+  [JOB_STATUS.ASSIGNED]: [JOB_STATUS.WORKING, JOB_STATUS.DELIVERABLE_READY, JOB_STATUS.FAILED],
+  [JOB_STATUS.WORKING]: [JOB_STATUS.ASSIGNED, JOB_STATUS.DELIVERABLE_READY, JOB_STATUS.FAILED],
+  [JOB_STATUS.DELIVERABLE_READY]: [
+    JOB_STATUS.PUBLICATION_PENDING,
+    JOB_STATUS.COMPLETION_PENDING_REVIEW,
+    JOB_STATUS.FAILED,
+  ],
+  [JOB_STATUS.PUBLICATION_PENDING]: [
+    JOB_STATUS.DELIVERABLE_READY,
+    JOB_STATUS.COMPLETION_PENDING_REVIEW,
+    JOB_STATUS.FAILED,
+  ],
   [JOB_STATUS.COMPLETION_PENDING_REVIEW]: [JOB_STATUS.SUBMITTED, JOB_STATUS.FAILED],
   [JOB_STATUS.SUBMITTED]: [JOB_STATUS.COMPLETED, JOB_STATUS.DISPUTED, JOB_STATUS.FAILED],
 };
@@ -149,10 +183,7 @@ export async function transitionJobStatus(jobId, newStatus, extra = {}) {
     ...current,
     ...extra,
     status: newStatus,
-    statusHistory: [
-      ...(current.statusHistory ?? []),
-      { status: newStatus, at: now },
-    ],
+    statusHistory: [...(current.statusHistory ?? []), { status: newStatus, at: now }],
     updatedAt: now,
   };
 
@@ -190,10 +221,7 @@ export async function setJobState(jobId, patch) {
 
   if ("status" in patch && patch.status !== current.status) {
     assertValidJobTransition(current.status, patch.status);
-    next.statusHistory = [
-      ...(current.statusHistory ?? []),
-      { status: patch.status, at: now },
-    ];
+    next.statusHistory = [...(current.statusHistory ?? []), { status: patch.status, at: now }];
   }
 
   await writeJson(jobStatePath(jobId), next);
@@ -358,7 +386,7 @@ export async function pruneStateFiles() {
   await ensureArchiveIndexDir();
 
   for (const jobId of toRemove) {
-    const job = jobs.find(j => String(j.jobId) === jobId);
+    const job = jobs.find((j) => String(j.jobId) === jobId);
     if (job) {
       job.removalReason = ttlMs > 0 && nowMs - toTimestamp(job.updatedAt ?? job.createdAt) > ttlMs
         ? "ttl-expired"

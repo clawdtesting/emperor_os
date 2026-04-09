@@ -94,7 +94,7 @@ function classifyJob(job, ourAddress) {
 async function countActivePipelineStates() {
   const all = await listAllJobStates();
   return all.filter((j) =>
-    ["queued", "scored", "assignment_pending", "assigned", "working", "deliverable_ready", "completion_pending_review"].includes(j.status)
+    ["queued", "scored", "assignment_pending", "assigned", "working", "deliverable_ready", "publication_pending", "completion_pending_review"].includes(j.status)
   ).length;
 }
 

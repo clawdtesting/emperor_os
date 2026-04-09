@@ -6,6 +6,7 @@
 //   - All writes go through prime-state.js artifact model.
 //   - This module exists only to fetch truth from the chain.
 
+import "dotenv/config";
 import { ethers } from "ethers";
 import { createRequire } from "module";
 import { fileURLToPath } from "url";

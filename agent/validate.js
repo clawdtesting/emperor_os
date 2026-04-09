@@ -61,17 +61,42 @@ export function validateOutput(content, brief) {
   };
 }
 
-export async function validate() {
-  if (!CONFIG.PINATA_JWT) {
-    console.log("[validate] PINATA_JWT not set, skipping publication verification step");
-    return;
-  }
+async function writeLocalValidationPendingPublication(job, artifactPaths) {
+  const localDeliverable = await readText(artifactPaths.deliverable);
+  const expectedSha256 = sha256Text(localDeliverable);
+  const publicationValidationPath = artifactPaths.publicationValidation;
 
+  const validationReport = {
+    kind: "publication-validation",
+    generatedAt: new Date().toISOString(),
+    jobId: rawJobId(job.jobId),
+    ok: false,
+    mode: "local_only",
+    pendingPublication: true,
+    reason: "PINATA_JWT not configured; IPFS publication/verification deferred",
+    expectedSha256,
+    ipfsUri: job.deliverableIpfs?.ipfsUri ?? null,
+  };
+
+  await writeJson(publicationValidationPath, validationReport);
+
+  // Explicit non-terminal state keeps the pipeline retry-safe and deterministic until publication is possible.
+  await setJobState(job.jobId, {
+    status: "publication_pending",
+    validatedAt: new Date().toISOString(),
+    publicationValidationPath,
+    publicationPendingReason: "PINATA_JWT missing"
+  });
+
+  console.log(`[validate] publication pending for ${job.jobId} (PINATA_JWT missing)`);
+}
+
+export async function validate() {
   const jobs = await listAllJobStates();
-  const ready = jobs.filter((j) => j.status === "deliverable_ready");
+  const ready = jobs.filter((j) => j.status === "deliverable_ready" || j.status === "publication_pending");
 
   if (ready.length === 0) {
-    console.log("[validate] no deliverable-ready jobs");
+    console.log("[validate] no deliverable-ready/publication-pending jobs");
     return;
   }
 
@@ -80,13 +105,19 @@ export async function validate() {
       const claim = await claimJobStageIdempotency(
         job.jobId,
         "validate",
-        `validate:${job.jobId}:${job.artifactPath ?? "na"}:${job.deliverableIpfs?.ipfsUri ?? "na"}`
+        `validate:${job.jobId}:${job.artifactPath ?? "na"}:${job.deliverableIpfs?.ipfsUri ?? "na"}:${CONFIG.PINATA_JWT ? "pinata_on" : "pinata_off"}`
       );
       if (!claim.claimed) {
         console.log(`[validate] idempotency skip for ${job.jobId}`);
         continue;
       }
+
       const artifactPaths = getJobArtifactPaths(job.jobId);
+
+      if (!CONFIG.PINATA_JWT) {
+        await writeLocalValidationPendingPublication(job, artifactPaths);
+        continue;
+      }
 
       if (!job.deliverableIpfs?.ipfsUri) {
         const raw = await readText(artifactPaths.deliverable);
@@ -152,6 +183,7 @@ export async function validate() {
       await setJobState(job.jobId, {
         status: "deliverable_ready",
         publicationValidationPath,
+        publicationPendingReason: null,
         validatedAt: new Date().toISOString()
       });
 
