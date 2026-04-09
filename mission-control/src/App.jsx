@@ -212,7 +212,7 @@ export default function App() {
         )}
 
 
-        {tab === 'request' && <JobRequestTab />}
+        {tab === 'request' && <JobRequestTab wallet={wallet} />}
 
         {tab === 'wallet' && <WalletPanel wallet={wallet} />}
         {tab === 'prime' && <PrimeContractTab wallet={wallet} jobs={jobs} />}
