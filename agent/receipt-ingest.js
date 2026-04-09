@@ -1,4 +1,4 @@
-import { getProvider, assertMainnet } from "../core/rpc.js";
+import { getProvider, assertMainnet } from "./rpc.js";
 import { bindFinalizedOperatorReceipt, getJobState } from "./state.js";
 
 const FINALITY_DEPTH = Number(process.env.JOB_FINALITY_DEPTH ?? "12");

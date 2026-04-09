@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { PRIME_CONTRACT, AGIALPHA_TOKEN } from "./prime-client.js";
 import { CONFIG } from "./config.js";
 import primeAbi from "./abi/AGIJobDiscoveryPrime.json" with { type: "json" };
-import agiJobManagerAbi from "../core/AGIJobManager.json" with { type: "json" };
+import agiJobManagerAbi from "./abi/AGIJobManager.json" with { type: "json" };
 
 const PRIME_IFACE = new ethers.Interface(primeAbi);
 const JOB_IFACE = new ethers.Interface(agiJobManagerAbi);

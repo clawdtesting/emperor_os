@@ -1,1 +1,1 @@
-export * from "../../core/pre-sign-checks.js";
+export * from "../pre-sign-checks.js";

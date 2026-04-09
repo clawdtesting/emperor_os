@@ -1,1 +1,1 @@
-export * from "../../core/build-brief.js";
+export * from "../build-brief.js";

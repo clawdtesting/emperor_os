@@ -1,1 +1,1 @@
-export * from "../../core/signing-manifest.js";
+export * from "../signing-manifest.js";

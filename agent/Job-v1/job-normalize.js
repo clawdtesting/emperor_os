@@ -1,1 +1,1 @@
-export * from "../../core/job-normalize.js";
+export * from "../job-normalize.js";

@@ -1,1 +1,1 @@
-export * from "../../core/ipfs-verify.js";
+export * from "../ipfs-verify.js";

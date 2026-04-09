@@ -1,1 +1,1 @@
-export { CONFIG, requireEnv } from "../../core/config.js";
+export { CONFIG, requireEnv } from "../config.js";
