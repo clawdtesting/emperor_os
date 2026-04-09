@@ -31,6 +31,18 @@ export async function createJobRequest(payload) {
   return data
 }
 
+
+export async function pinJsonToIpfs(payload, name = 'mission-control-job-request.json') {
+  const res = await fetch(BASE + '/api/ipfs/pin-json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload, name }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data?.error || 'Failed to upload JSON to IPFS')
+  return data
+}
+
 export async function fetchActions(filter = 'pending') {
   const res = await fetch(BASE + '/api/actions?filter=' + filter)
   if (!res.ok) throw new Error('HTTP ' + res.status)

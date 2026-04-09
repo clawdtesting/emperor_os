@@ -33,6 +33,7 @@ const GITHUB_TOKEN  = String(
   || process.env.GITHUB_PAT
   || ''
 ).trim()
+const PINATA_JWT = String(process.env.PINATA_JWT || '').trim()
 
 mkdirSync(NOTIF_STATE_DIR, { recursive: true })
 
@@ -307,6 +308,35 @@ function normalizeAssetUri(value) {
     : ''
 }
 
+
+
+async function pinJsonViaPinata(payload, name) {
+  if (!PINATA_JWT) throw new Error('PINATA_JWT is not configured on server')
+  const res = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${PINATA_JWT}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      pinataMetadata: { name },
+      pinataContent: payload,
+    }),
+    signal: AbortSignal.timeout(30000),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data?.IpfsHash) {
+    throw new Error(data?.error?.reason || data?.message || `Pinata HTTP ${res.status}`)
+  }
+  const cid = data.IpfsHash
+  return {
+    cid,
+    uri: `ipfs://${cid}`,
+    gatewayUrl: `https://ipfs.io/ipfs/${cid}`,
+    provider: 'pinata',
+  }
+}
+
 function unpackMcp(result) {
   if (!result) return result
   if (result.content && Array.isArray(result.content)) {
@@ -555,6 +585,45 @@ app.get('/api/job-spec/:jobId', async (req, res) => {
     const data = await callMcp('get_job', { jobId: Number(req.params.jobId) })
     res.json(data)
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+
+app.post('/api/ipfs/pin-json', async (req, res) => {
+  try {
+    const payload = req.body?.payload
+    const name = String(req.body?.name || 'mission-control-job-request.json').trim()
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ error: 'payload object is required' })
+    }
+
+    let result = null
+    let mcpErr = null
+    try {
+      if (PINATA_JWT) {
+        const mcp = await callMcp('upload_to_ipfs', { pinataJwt: PINATA_JWT, metadata: payload, name })
+        if (mcp?.ipfsUri || mcp?.uri) {
+          const uri = String(mcp.ipfsUri || mcp.uri)
+          const cid = uri.replace('ipfs://', '').split('/')[0]
+          result = {
+            cid,
+            uri,
+            gatewayUrl: `https://ipfs.io/ipfs/${cid}`,
+            provider: 'mcp',
+          }
+        }
+      }
+    } catch (e) {
+      mcpErr = e
+    }
+
+    if (!result) {
+      result = await pinJsonViaPinata(payload, name)
+    }
+
+    return res.json({ ok: true, ...result, mcpFallbackReason: mcpErr ? mcpErr.message : null })
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'IPFS upload failed' })
+  }
 })
 
 app.post('/api/job-requests', async (req, res) => {
