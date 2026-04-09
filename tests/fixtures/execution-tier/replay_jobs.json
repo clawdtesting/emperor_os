@@ -1,0 +1,78 @@
+[
+  {
+    "jobId": "replay-001",
+    "protocolId": "AGIJobManager:v1",
+    "jobSpec": {
+      "deliverableCount": 1,
+      "crossArtifactDependencies": false,
+      "ambiguityScore": 2,
+      "externalToolsRequired": 0,
+      "validationAvailable": true,
+      "iterationRisk": 2,
+      "payout": 30,
+      "payoutCurrency": "USD",
+      "confidenceScore": 0.9
+    },
+    "expected": {
+      "selectedTier": "T1_ONE_SHOT",
+      "shouldApply": true
+    }
+  },
+  {
+    "jobId": "replay-002",
+    "protocolId": "AGIJobManager:v1",
+    "jobSpec": {
+      "deliverableCount": 2,
+      "crossArtifactDependencies": false,
+      "ambiguityScore": 5,
+      "externalToolsRequired": 0,
+      "validationAvailable": true,
+      "iterationRisk": 5,
+      "payout": 25,
+      "payoutCurrency": "USD",
+      "confidenceScore": 0.9
+    },
+    "expected": {
+      "selectedTier": "T2_REPAIR_LOOP",
+      "shouldApply": true
+    }
+  },
+  {
+    "jobId": "replay-003",
+    "protocolId": "AGIJobManager:v1",
+    "jobSpec": {
+      "deliverableCount": 4,
+      "crossArtifactDependencies": true,
+      "ambiguityScore": 8,
+      "externalToolsRequired": 3,
+      "validationAvailable": true,
+      "iterationRisk": 8,
+      "payout": 100,
+      "payoutCurrency": "USD",
+      "confidenceScore": 0.9
+    },
+    "expected": {
+      "selectedTier": null,
+      "shouldApply": false
+    }
+  },
+  {
+    "jobId": "replay-004",
+    "protocolId": "AGIJobManager:v1",
+    "jobSpec": {
+      "deliverableCount": 1,
+      "crossArtifactDependencies": false,
+      "ambiguityScore": 2,
+      "externalToolsRequired": 0,
+      "validationAvailable": true,
+      "iterationRisk": 2,
+      "payout": 0.0001,
+      "payoutCurrency": "USD",
+      "confidenceScore": 0.9
+    },
+    "expected": {
+      "selectedTier": "T1_ONE_SHOT",
+      "shouldApply": false
+    }
+  }
+]

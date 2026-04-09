@@ -64,3 +64,9 @@ The source markdown mixes numbered headings and free text in a way that is human
 - Stage artifact requirements enforced before transition (`tier_selection.json`, `economic_check.json`, `apply_decision.json`, `validation.json`, `repair_logs.json`).
 - Signing-boundary enforcement blocks private-key/signed-tx style payloads from execution-tier artifacts.
 - `tests/execution-tier-phase5.test.js` — validates stage transitions, artifact/schema gating, atomic persistence behavior, and signing-boundary guards.
+
+## Phase 6 outputs
+
+- `agent/execution-tier/rollout.js` — phased rollout controller (`dry_run`, `shadow`, `enforce`) with telemetry for rejection reasons and margin outcomes.
+- `tests/execution-tier-phase6.test.js` — invariants and rollout-mode simulation checks.
+- `tests/execution-tier-replay.test.js` + `tests/fixtures/execution-tier/replay_jobs.json` — audit replay harness for comparing expected tier/apply decisions across historical fixtures.
