@@ -43,3 +43,9 @@ The source markdown mixes numbered headings and free text in a way that is human
 - `agent/execution-tier/complexity-score.js` — interpretable complexity score + component-level reasoning.
 - `agent/execution-tier/tier-selector.js` — lowest-to-highest allowed-tier selection with rejection reasons for lower tiers.
 - `tests/execution-tier-phase2.test.js` — scenario tests for feature extraction, classification, complexity scoring, tier selection, and explainability payloads.
+
+## Phase 3 outputs
+
+- `agent/execution-tier/economics.js` — deterministic execution-cost estimation, payout normalization, and margin-policy evaluation.
+- `agent/execution-tier/apply-gate.js` — single `shouldApply` decision gate with structured rejection reasons.
+- `tests/execution-tier-phase3.test.js` — checks execution feasibility, margin policy, validation feasibility, and confidence threshold gating.
