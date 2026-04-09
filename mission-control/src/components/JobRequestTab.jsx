@@ -6,21 +6,19 @@ import {
   createDefaultJobRequestDraft,
   toLegacyJobRequestPayload,
 } from '../models/jobSpecV2'
+import {
+  buildDraftJobSpec,
+  getMissingRequiredQuestions,
+  getQuestionsForCategory,
+  inferRequestCategory,
+  validateDraftJobSpec,
+} from '../features/request/requestBuilder'
 
-const DURATION_OPTIONS = [
-  { label: '4 hours', value: '4h' },
-  { label: '8 hours', value: '8h' },
-  { label: '1 day', value: '1d' },
-  { label: '3 days', value: '3d' },
-  { label: '1 week', value: '7d' },
-]
-
-
-function normalizeIpfsUri(value) {
-  const trimmed = (value || '').trim()
-  return trimmed.startsWith('ipfs://') || trimmed.startsWith('https://') || trimmed.startsWith('http://')
-    ? trimmed
-    : ''
+const DURATION_OPTIONS = {
+  urgent_24h: '4h',
+  soon_3d: '3d',
+  normal_1w: '7d',
+  flexible: '7d',
 }
 
 function makeIpfsUri(payload) {
@@ -31,105 +29,224 @@ function makeIpfsUri(payload) {
   return `ipfs://${encoded}`
 }
 
-export function JobRequestTab() {
-  const [title, setTitle] = useState('')
-  const [summary, setSummary] = useState('')
-  const [category, setCategory] = useState('other')
-  const [locale, setLocale] = useState('en-US')
-  const [tagsInput, setTagsInput] = useState('')
-  const [deliverablesInput, setDeliverablesInput] = useState('')
-  const [acceptanceCriteriaInput, setAcceptanceCriteriaInput] = useState('')
-  const [requirementsInput, setRequirementsInput] = useState('')
-  const [duration, setDuration] = useState(DURATION_OPTIONS[2].value)
-  const [payout, setPayout] = useState('100')
-  const [chainId, setChainId] = useState('1')
-  const [contract, setContract] = useState('')
-  const [createdBy, setCreatedBy] = useState('')
-  const [plainText, setPlainText] = useState('')
-  const [imageIpfsInput, setImageIpfsInput] = useState('')
+function parseLines(raw) {
+  return String(raw || '').split('\n').map(v => v.trim()).filter(Boolean)
+}
+
+function toLineBlock(list) {
+  return Array.isArray(list) ? list.join('\n') : ''
+}
+
+function statusPill(label, value) {
+  return (
+    <span className="text-[11px] px-2 py-1 rounded border border-slate-700 bg-slate-950 text-slate-300">
+      {label}: <span className="text-slate-100">{value}</span>
+    </span>
+  )
+}
+
+export function JobRequestTab({ wallet }) {
+  const [rawRequest, setRawRequest] = useState('')
+  const [step, setStep] = useState(1)
+  const [category, setCategory] = useState('general')
+  const [questions, setQuestions] = useState([])
+  const [answers, setAnswers] = useState({})
+  const [questionIndex, setQuestionIndex] = useState(0)
+  const [draft, setDraft] = useState(null)
+
+  const [editingTitle, setEditingTitle] = useState('')
+  const [editingSummary, setEditingSummary] = useState('')
+  const [editingScope, setEditingScope] = useState('')
+  const [editingDeliverables, setEditingDeliverables] = useState('')
+  const [editingAcceptance, setEditingAcceptance] = useState('')
+
   const [posting, setPosting] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
 
-  const tags = useMemo(
-    () => tagsInput
-      .split(',')
-      .map(v => v.trim())
-      .filter(Boolean),
-    [tagsInput],
-  )
-  const deliverables = useMemo(
-    () => deliverablesInput
-      .split('\n')
-      .map(v => v.trim())
-      .filter(Boolean),
-    [deliverablesInput],
-  )
-  const acceptanceCriteria = useMemo(
-    () => acceptanceCriteriaInput
-      .split('\n')
-      .map(v => v.trim())
-      .filter(Boolean),
-    [acceptanceCriteriaInput],
-  )
-  const requirements = useMemo(
-    () => requirementsInput
-      .split('\n')
-      .map(v => v.trim())
-      .filter(Boolean),
-    [requirementsInput],
-  )
+  const walletReady = Boolean(wallet?.isConnected)
 
-  const draft = useMemo(() => ({
-    ...createDefaultJobRequestDraft(),
-    title: title.trim(),
-    summary: summary.trim(),
-    details: plainText.trim(),
-    category,
-    locale: locale.trim() || 'en-US',
-    tags,
-    deliverables,
-    acceptanceCriteria,
-    requirements,
-    payoutAGIALPHA: Number(payout),
-    durationSeconds: DURATION_SECONDS_BY_UI_VALUE[duration] || DURATION_SECONDS_BY_UI_VALUE['1d'],
-    chainId: Number(chainId),
-    contract: contract.trim(),
-    ...(createdBy.trim() ? { createdBy: createdBy.trim() } : {}),
-  }), [
-    title,
-    summary,
-    plainText,
-    category,
-    locale,
-    tags,
-    deliverables,
-    acceptanceCriteria,
-    requirements,
-    payout,
-    duration,
-    chainId,
-    contract,
-    createdBy,
-  ])
+  const currentQuestion = questions[questionIndex]
+  const requiredMissing = useMemo(() => getMissingRequiredQuestions(questions, answers), [questions, answers])
 
-  const ipfsUri = useMemo(() => makeIpfsUri(draft), [draft])
-  const customImageIpfsUri = normalizeIpfsUri(imageIpfsInput)
-  const imageIpfsUri = customImageIpfsUri || DEFAULT_REQUEST_IMAGE
+  const publishPayload = useMemo(() => {
+    if (!draft || !walletReady || !wallet?.account) return null
+    return {
+      walletAddress: wallet.account,
+      rawUserInput: rawRequest.trim(),
+      category,
+      answers,
+      draft,
+      createdAt: new Date().toISOString(),
+    }
+  }, [draft, walletReady, wallet, rawRequest, category, answers])
 
-  async function handlePushJobRequest() {
+  const publishValidationErrors = useMemo(() => {
+    if (!draft) return []
+    return validateDraftJobSpec(draft)
+  }, [draft])
+
+  function resetBuilderState() {
+    setStep(1)
+    setCategory('general')
+    setQuestions([])
+    setAnswers({})
+    setQuestionIndex(0)
+    setDraft(null)
+    setEditingTitle('')
+    setEditingSummary('')
+    setEditingScope('')
+    setEditingDeliverables('')
+    setEditingAcceptance('')
+    setError('')
+    setResult(null)
+  }
+
+  function handleBuildRequest() {
+    setError('')
+    setResult(null)
+
+    if (!walletReady) {
+      setError('Connect MetaMask to create a request.')
+      return
+    }
+    if (!rawRequest.trim()) {
+      setError('Request text is required.')
+      return
+    }
+
+    const inferred = inferRequestCategory(rawRequest)
+    const flow = getQuestionsForCategory(inferred)
+
+    setCategory(inferred)
+    setQuestions(flow)
+    setAnswers({})
+    setQuestionIndex(0)
+    setStep(2)
+  }
+
+  function handleSelectAnswer(value) {
+    if (!currentQuestion) return
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: value }))
+    setError('')
+  }
+
+  function handleNextQuestion() {
+    if (!currentQuestion) return
+    const currentAnswer = String(answers[currentQuestion.id] || '').trim()
+    if (currentQuestion.required && !currentAnswer) {
+      setError('Select an option to continue.')
+      return
+    }
+
+    setError('')
+    if (questionIndex >= questions.length - 1) {
+      const nextDraft = buildDraftJobSpec(rawRequest, category, answers)
+      setDraft(nextDraft)
+      setEditingTitle(nextDraft.title)
+      setEditingSummary(nextDraft.summary)
+      setEditingScope(toLineBlock(nextDraft.scope))
+      setEditingDeliverables(toLineBlock(nextDraft.deliverables))
+      setEditingAcceptance(toLineBlock(nextDraft.acceptanceCriteria))
+      setStep(3)
+      return
+    }
+
+    setQuestionIndex(index => index + 1)
+  }
+
+  function handlePrevQuestion() {
+    if (questionIndex <= 0) return
+    setQuestionIndex(index => index - 1)
+    setError('')
+  }
+
+  function handleApplyEditsAndContinue() {
+    if (!draft) return
+
+    const nextDraft = {
+      ...draft,
+      title: editingTitle.trim(),
+      summary: editingSummary.trim(),
+      scope: parseLines(editingScope),
+      deliverables: parseLines(editingDeliverables),
+      acceptanceCriteria: parseLines(editingAcceptance),
+    }
+
+    const validation = validateDraftJobSpec(nextDraft)
+    if (validation.length > 0) {
+      setError(validation[0])
+      return
+    }
+
+    setDraft(nextDraft)
+    setError('')
+    setStep(4)
+  }
+
+  async function handleCreateJobRequest() {
+    if (!publishPayload) {
+      setError('Wallet is required before creating a request.')
+      return
+    }
+    if (requiredMissing.length > 0) {
+      setError('Answer all required questions before publishing.')
+      return
+    }
+    if (publishValidationErrors.length > 0) {
+      setError(publishValidationErrors[0])
+      return
+    }
+
     setPosting(true)
     setError('')
     setResult(null)
+
     try {
-      const response = await createJobRequest(toLegacyJobRequestPayload(draft, {
-        durationUiValue: duration,
+      const draftModel = {
+        ...createDefaultJobRequestDraft(),
+        title: draft.title,
+        summary: draft.summary,
+        details: [
+          `Raw request: ${publishPayload.rawUserInput}`,
+          '',
+          'Scope:',
+          ...draft.scope.map(item => `- ${item}`),
+          '',
+          'Constraints:',
+          ...draft.constraints.map(item => `- ${item}`),
+          '',
+          'Deliverables:',
+          ...draft.deliverables.map(item => `- ${item}`),
+          '',
+          'Acceptance criteria:',
+          ...draft.acceptanceCriteria.map(item => `- ${item}`),
+          '',
+          'Exclusions:',
+          ...draft.exclusions.map(item => `- ${item}`),
+        ].join('\n'),
+        category: draft.category,
+        tags: [draft.category, String(draft.skillLevel || 'beginner').toLowerCase()],
+        deliverables: draft.deliverables,
+        acceptanceCriteria: draft.acceptanceCriteria,
+        requirements: draft.constraints,
+        payoutAGIALPHA: 100,
+        durationSeconds: DURATION_SECONDS_BY_UI_VALUE[DURATION_OPTIONS[String(answers.deadline || 'normal_1w')]] || DURATION_SECONDS_BY_UI_VALUE['7d'],
+        chainId: wallet.chainIdDecimal || 1,
+        contract: '',
+        createdBy: wallet.account,
+      }
+
+      const ipfsUri = makeIpfsUri(publishPayload)
+      const response = await createJobRequest(toLegacyJobRequestPayload(draftModel, {
+        durationUiValue: DURATION_OPTIONS[String(answers.deadline || 'normal_1w')] || '7d',
         ipfsUri,
-        imageUri: imageIpfsUri,
+        imageUri: DEFAULT_REQUEST_IMAGE,
       }))
-      setResult(response)
+
+      setResult({ ...response, publishPayload })
     } catch (e) {
-      setError(e.message || 'Failed to push job request')
+      setError(e.message || 'Failed to publish request payload.')
     } finally {
       setPosting(false)
     }
@@ -138,240 +255,249 @@ export function JobRequestTab() {
   return (
     <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 space-y-4">
       <div>
-        <div className="text-xs text-slate-500 uppercase tracking-wider">Job Request Builder</div>
-        <div className="text-sm text-slate-300 mt-1">Generate a ready-to-post request with an IPFS link and push it from Mission Control.</div>
+        <div className="text-xs text-slate-500 uppercase tracking-wider">Request Builder</div>
+        <div className="text-sm text-slate-300 mt-1">Guided, deterministic request compiler for AGIJobManager.</div>
       </div>
 
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Job title</span>
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="e.g. Build a competitor landscape for AI legal copilots"
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Summary</span>
-        <input
-          value={summary}
-          onChange={e => setSummary(e.target.value)}
-          placeholder="One-line summary for quick scanning"
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <div className="grid sm:grid-cols-2 gap-3">
-        <label className="space-y-1">
-          <span className="text-xs text-slate-400">Category</span>
-          <select
-            value={category}
-            onChange={e => setCategory(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 flex flex-wrap items-center gap-2">
+        {statusPill('wallet', walletReady ? 'connected' : 'not connected')}
+        {statusPill('step', String(step))}
+        {statusPill('category', category)}
+        {!walletReady && (
+          <button
+            onClick={wallet?.connect}
+            disabled={!wallet?.providerAvailable || wallet?.status === 'connecting'}
+            className="text-xs px-3 py-1.5 rounded border border-amber-700 text-amber-200 hover:bg-amber-900/30 disabled:opacity-50"
           >
-            <option value="creative">creative</option>
-            <option value="development">development</option>
-            <option value="research">research</option>
-            <option value="analysis">analysis</option>
-            <option value="operations">operations</option>
-            <option value="other">other</option>
-          </select>
-        </label>
-
-        <label className="space-y-1">
-          <span className="text-xs text-slate-400">Locale</span>
-          <input
-            value={locale}
-            onChange={e => setLocale(e.target.value)}
-            placeholder="en-US"
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-          />
-        </label>
+            {wallet?.status === 'connecting' ? 'Connecting...' : 'Connect MetaMask to create a request'}
+          </button>
+        )}
       </div>
 
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Tags (comma-separated)</span>
-        <input
-          value={tagsInput}
-          onChange={e => setTagsInput(e.target.value)}
-          placeholder="llm, legaltech, market-research"
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Deliverables (one per line)</span>
-        <textarea
-          rows={3}
-          value={deliverablesInput}
-          onChange={e => setDeliverablesInput(e.target.value)}
-          placeholder="- Final report PDF&#10;- Source spreadsheet&#10;- Executive summary"
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Acceptance criteria (one per line)</span>
-        <textarea
-          rows={3}
-          value={acceptanceCriteriaInput}
-          onChange={e => setAcceptanceCriteriaInput(e.target.value)}
-          placeholder="- Includes at least 5 competitors&#10;- Contains clear recommendation"
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Requirements (one per line)</span>
-        <textarea
-          rows={3}
-          value={requirementsInput}
-          onChange={e => setRequirementsInput(e.target.value)}
-          placeholder="- Prior legal-tech research experience&#10;- English-only delivery"
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Image IPFS link (optional)</span>
-        <input
-          value={imageIpfsInput}
-          onChange={e => setImageIpfsInput(e.target.value)}
-          placeholder="ipfs://..."
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-        <div className="text-[11px] text-slate-500">
-          If left empty, Mission Control uses the default job image.
-        </div>
-      </label>
-
-      <div className="grid sm:grid-cols-2 gap-3">
-        <label className="space-y-1">
-          <span className="text-xs text-slate-400">Time</span>
-          <select
-            value={duration}
-            onChange={e => setDuration(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
+      {step === 1 && (
+        <div className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Describe what you need in simple words</span>
+            <textarea
+              rows={5}
+              value={rawRequest}
+              onChange={e => setRawRequest(e.target.value)}
+              disabled={!walletReady}
+              placeholder="Example: I need a free webpage for my AI project and I am a beginner"
+              className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:opacity-60"
+            />
+          </label>
+          <div className="text-[11px] text-slate-500">Tip: write your goal, budget preference, and your technical level.</div>
+          <button
+            onClick={handleBuildRequest}
+            disabled={!walletReady || !rawRequest.trim()}
+            className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500"
           >
-            {DURATION_OPTIONS.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-1">
-          <span className="text-xs text-slate-400">Payout (AGIALPHA)</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={payout}
-            onChange={e => setPayout(e.target.value)}
-            placeholder="100"
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-          />
-        </label>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-3">
-        <label className="space-y-1">
-          <span className="text-xs text-slate-400">Chain ID</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={chainId}
-            onChange={e => setChainId(e.target.value)}
-            placeholder="1"
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-          />
-        </label>
-
-        <label className="space-y-1">
-          <span className="text-xs text-slate-400">Contract address (optional)</span>
-          <input
-            value={contract}
-            onChange={e => setContract(e.target.value)}
-            placeholder="0x..."
-            className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-          />
-        </label>
-      </div>
-
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Created by (optional)</span>
-        <input
-          value={createdBy}
-          onChange={e => setCreatedBy(e.target.value)}
-          placeholder="ens-name.eth or wallet id"
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-400">Plain text job brief</span>
-        <textarea
-          rows={7}
-          value={plainText}
-          onChange={e => setPlainText(e.target.value)}
-          placeholder="Describe exactly what needs to be done, deliverables, and validation criteria..."
-          className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
-        />
-      </label>
-
-      <div className="rounded border border-slate-700 bg-slate-950 p-3">
-        <div className="text-xs text-slate-500 mb-1">IPFS link (auto-generated)</div>
-        <div className="font-mono text-xs text-green-400 break-all">{ipfsUri}</div>
-      </div>
-
-      <div className="rounded border border-slate-700 bg-slate-950 p-3">
-        <div className="text-xs text-slate-500 mb-1">Image link used for request</div>
-        <div className="font-mono text-xs text-cyan-300 break-all">{imageIpfsUri}</div>
-      </div>
-
-      <button
-        onClick={handlePushJobRequest}
-        disabled={
-          posting
-          || !plainText.trim()
-          || Number(payout) <= 0
-          || !Number.isFinite(Number(payout))
-          || Number(chainId) <= 0
-          || !Number.isFinite(Number(chainId))
-          || (imageIpfsInput.trim() && !customImageIpfsUri)
-        }
-        className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500"
-      >
-        {posting ? 'Pushing…' : 'Push job request'}
-      </button>
-
-      {Number(payout) <= 0 || !Number.isFinite(Number(payout)) ? (
-        <div className="text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded p-2">
-          Payout must be a positive number.
+            Build my request
+          </button>
         </div>
-      ) : null}
+      )}
 
-      {Number(chainId) <= 0 || !Number.isFinite(Number(chainId)) ? (
-        <div className="text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded p-2">
-          Chain ID must be a positive number.
+      {step === 2 && currentQuestion && (
+        <div className="space-y-3">
+          <div className="text-xs text-slate-500">Question {questionIndex + 1} of {questions.length}</div>
+          <div className="rounded border border-slate-700 bg-slate-950 p-3">
+            <div className="text-sm text-slate-100 font-semibold">{currentQuestion.prompt}</div>
+            <div className="mt-3 space-y-2">
+              {currentQuestion.options.map(option => {
+                const checked = answers[currentQuestion.id] === option.value
+                return (
+                  <label
+                    key={option.id}
+                    className={`flex items-center gap-2 px-3 py-2 rounded border text-sm cursor-pointer ${checked ? 'border-blue-500 bg-blue-950/30 text-blue-100' : 'border-slate-700 text-slate-300 hover:bg-slate-900'}`}
+                  >
+                    <input
+                      type="radio"
+                      name={currentQuestion.id}
+                      checked={checked}
+                      onChange={() => handleSelectAnswer(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrevQuestion}
+              disabled={questionIndex === 0}
+              className="text-xs px-3 py-2 rounded border border-slate-700 text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+            >
+              Back
+            </button>
+            <button
+              onClick={handleNextQuestion}
+              className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200 hover:bg-blue-900/20"
+            >
+              {questionIndex === questions.length - 1 ? 'Generate draft' : 'Next'}
+            </button>
+          </div>
         </div>
-      ) : null}
+      )}
 
-      {imageIpfsInput.trim() && !customImageIpfsUri && (
-        <div className="text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded p-2">
-          Image link must start with <span className="font-mono">ipfs://</span>.
-          You can also use <span className="font-mono">https://</span>.
+      {step === 3 && draft && (
+        <div className="space-y-3">
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 3 · Draft job specification</div>
+
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Title</span>
+            <input
+              value={editingTitle}
+              onChange={e => setEditingTitle(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Summary</span>
+            <textarea
+              rows={3}
+              value={editingSummary}
+              onChange={e => setEditingSummary(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+          </label>
+
+          <div className="grid md:grid-cols-2 gap-3 text-xs">
+            <div className="rounded border border-slate-800 bg-slate-950 p-3">
+              <div className="text-slate-500">Category</div>
+              <div className="text-slate-200 mt-1">{draft.category}</div>
+            </div>
+            <div className="rounded border border-slate-800 bg-slate-950 p-3">
+              <div className="text-slate-500">Audience / skill level</div>
+              <div className="text-slate-200 mt-1">{draft.skillLevel || 'Beginner'}</div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">Scope (one per line)</span>
+              <textarea
+                rows={5}
+                value={editingScope}
+                onChange={e => setEditingScope(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">Deliverables (one per line)</span>
+              <textarea
+                rows={5}
+                value={editingDeliverables}
+                onChange={e => setEditingDeliverables(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
+              />
+            </label>
+          </div>
+
+          <label className="block space-y-1">
+            <span className="text-xs text-slate-400">Acceptance criteria (one per line)</span>
+            <textarea
+              rows={4}
+              value={editingAcceptance}
+              onChange={e => setEditingAcceptance(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+          </label>
+
+          <div className="grid md:grid-cols-2 gap-3 text-xs">
+            <div className="rounded border border-slate-800 bg-slate-950 p-3">
+              <div className="text-slate-500 mb-1">Constraints</div>
+              <ul className="space-y-1 text-slate-300 list-disc pl-4">
+                {draft.constraints.map((item, index) => <li key={index}>{item}</li>)}
+              </ul>
+            </div>
+            <div className="rounded border border-slate-800 bg-slate-950 p-3">
+              <div className="text-slate-500 mb-1">Exclusions</div>
+              <ul className="space-y-1 text-slate-300 list-disc pl-4">
+                {draft.exclusions.map((item, index) => <li key={index}>{item}</li>)}
+              </ul>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStep(2)}
+              className="text-xs px-3 py-2 rounded border border-slate-700 text-slate-200 hover:bg-slate-800"
+            >
+              Back to questions
+            </button>
+            <button
+              onClick={handleApplyEditsAndContinue}
+              className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200 hover:bg-blue-900/20"
+            >
+              Continue to final review
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 4 && draft && (
+        <div className="space-y-3">
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 4 · Final review and create job</div>
+          <div className="rounded border border-slate-700 bg-slate-950 p-3 text-xs space-y-2">
+            <div><span className="text-slate-500">Title:</span> <span className="text-slate-100">{draft.title}</span></div>
+            <div><span className="text-slate-500">Category:</span> <span className="text-slate-100">{draft.category}</span></div>
+            <div><span className="text-slate-500">Complexity:</span> <span className="text-slate-100">{draft.complexity || '—'}</span></div>
+            <div><span className="text-slate-500">Reward hint:</span> <span className="text-slate-100">{draft.rewardHint || '—'}</span></div>
+            <div><span className="text-slate-500">Wallet:</span> <span className="text-slate-100 font-mono">{wallet?.account || 'not connected'}</span></div>
+          </div>
+
+          {!walletReady && (
+            <div className="text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded p-2">
+              Connect MetaMask before creating the request.
+            </div>
+          )}
+
+          {publishValidationErrors.length > 0 && (
+            <div className="text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded p-2">
+              {publishValidationErrors[0]}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setStep(3)}
+              className="text-xs px-3 py-2 rounded border border-slate-700 text-slate-200 hover:bg-slate-800"
+            >
+              Back to draft
+            </button>
+            <button
+              onClick={handleCreateJobRequest}
+              disabled={posting || !walletReady || publishValidationErrors.length > 0}
+              className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-500"
+            >
+              {posting ? 'Creating request...' : 'Create job request'}
+            </button>
+            <button
+              onClick={resetBuilderState}
+              className="text-xs px-3 py-2 rounded border border-slate-700 text-slate-200 hover:bg-slate-800"
+            >
+              Start new request
+            </button>
+          </div>
         </div>
       )}
 
       {error && <div className="text-xs text-red-400 bg-red-950/30 border border-red-900 rounded p-2">{error}</div>}
 
       {result && (
-        <div className="text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-900 rounded p-2">
-          Job request pushed.
-          {result.tool && <span className="ml-1 text-emerald-200">tool: {result.tool}</span>}
-          {result.jobId && <span className="ml-1 text-emerald-200">jobId: {result.jobId}</span>}
+        <div className="text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-900 rounded p-2 space-y-1">
+          <div>Request payload created.</div>
+          {result.tool && <div className="text-emerald-200">tool: {result.tool}</div>}
+          {result.jobId && <div className="text-emerald-200">jobId: {result.jobId}</div>}
+          {result.publishPayload && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-emerald-200">View publish payload</summary>
+              <pre className="mt-2 p-2 rounded bg-slate-950 text-slate-300 overflow-x-auto">{JSON.stringify(result.publishPayload, null, 2)}</pre>
+            </details>
+          )}
         </div>
       )}
     </div>
