@@ -1035,6 +1035,7 @@ app.post('/api/actions/:id/dismiss', (req, res) => {
 // ── JobManager V1 Runner Process Management ─────────────────────────────────
 
 const RUNNER_SCRIPT = resolve(WORKSPACE_ROOT, 'loops', 'AGIJobManager-v1', 'runner.js')
+const WORKSPACE_NODE_MODULES = join(WORKSPACE_ROOT, 'node_modules')
 
 let runnerProc = null
 let runnerStartedAt = null
@@ -1074,15 +1075,29 @@ app.get('/api/runner/logs', (req, res) => {
   res.json({ logs: filtered })
 })
 
-app.post('/api/runner/start', (req, res) => {
+app.post('/api/runner/start', async (req, res) => {
   if (runnerProc && runnerProc.exitCode === null) {
     return res.status(409).json({ error: 'Runner is already running', pid: runnerProc.pid })
   }
 
   try {
+    // Ensure root-level dependencies are installed before spawning
+    if (!existsSync(WORKSPACE_NODE_MODULES)) {
+      pushRunnerLog('info', 'Installing workspace dependencies (npm install)...')
+      const install = spawn('npm', ['install', '--no-audit', '--no-fund'], {
+        cwd: WORKSPACE_ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      await new Promise((resolve, reject) => {
+        install.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install exited ${code}`)))
+        install.on('error', reject)
+      })
+      pushRunnerLog('info', 'Workspace dependencies installed')
+    }
+
     runnerProc = spawn('node', [RUNNER_SCRIPT], {
       cwd: WORKSPACE_ROOT,
-      env: { ...process.env },
+      env: { ...process.env, NODE_PATH: WORKSPACE_NODE_MODULES },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
