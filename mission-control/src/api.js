@@ -44,3 +44,30 @@ export async function dismissAction(id) {
   if (!res.ok) throw new Error('HTTP ' + res.status)
   return res.json()
 }
+
+export async function fetchRunnerStatus() {
+  const res = await fetch(BASE + '/api/runner/status')
+  if (!res.ok) throw new Error('HTTP ' + res.status)
+  return res.json()
+}
+
+export async function startRunner() {
+  const res = await fetch(BASE + '/api/runner/start', { method: 'POST' })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data?.error || 'Failed to start runner')
+  return data
+}
+
+export async function stopRunner() {
+  const res = await fetch(BASE + '/api/runner/stop', { method: 'POST' })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data?.error || 'Failed to stop runner')
+  return data
+}
+
+export async function fetchRunnerLogs(since) {
+  const qs = since ? '?since=' + encodeURIComponent(since) : ''
+  const res = await fetch(BASE + '/api/runner/logs' + qs)
+  if (!res.ok) throw new Error('HTTP ' + res.status)
+  return res.json()
+}

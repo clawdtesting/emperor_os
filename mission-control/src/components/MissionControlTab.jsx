@@ -1,3 +1,5 @@
+import { RunnerToggle } from './RunnerToggle'
+
 const PLAYBOOK = [
   {
     title: '1) Connect signing wallet',
@@ -74,6 +76,8 @@ export function MissionControlTab({ wallet, jobsCount, jobsV1Count, jobsV2Count,
           {statusChip('operator lane', unreadCount === 0)}
         </div>
       </div>
+
+      <RunnerToggle />
 
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
         {PLAYBOOK.map(step => (

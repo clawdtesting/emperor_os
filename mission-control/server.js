@@ -1032,6 +1032,114 @@ app.post('/api/actions/:id/dismiss', (req, res) => {
   res.json({ ok: true, dismissed: id })
 })
 
+// ── JobManager V1 Runner Process Management ─────────────────────────────────
+
+const RUNNER_SCRIPT = resolve(WORKSPACE_ROOT, 'loops', 'AGIJobManager-v1', 'runner.js')
+
+let runnerProc = null
+let runnerStartedAt = null
+let runnerLogs = []          // ring buffer of last 200 lines
+const RUNNER_LOG_MAX = 200
+
+function pushRunnerLog(level, text) {
+  const entry = { ts: new Date().toISOString(), level, text: text.trimEnd() }
+  runnerLogs.push(entry)
+  if (runnerLogs.length > RUNNER_LOG_MAX) runnerLogs.shift()
+  return entry
+}
+
+function broadcastRunnerState() {
+  const payload = getRunnerStatus()
+  const msg = `data: ${JSON.stringify({ type: 'runner', ...payload })}\n\n`
+  sseClients.forEach(c => c.write(msg))
+}
+
+function getRunnerStatus() {
+  const running = runnerProc !== null && runnerProc.exitCode === null
+  return {
+    running,
+    pid: running ? runnerProc.pid : null,
+    startedAt: running ? runnerStartedAt : null,
+    uptimeMs: running ? Date.now() - new Date(runnerStartedAt).getTime() : null,
+  }
+}
+
+app.get('/api/runner/status', (req, res) => {
+  res.json(getRunnerStatus())
+})
+
+app.get('/api/runner/logs', (req, res) => {
+  const since = req.query.since ? new Date(req.query.since).getTime() : 0
+  const filtered = since ? runnerLogs.filter(l => new Date(l.ts).getTime() > since) : runnerLogs
+  res.json({ logs: filtered })
+})
+
+app.post('/api/runner/start', (req, res) => {
+  if (runnerProc && runnerProc.exitCode === null) {
+    return res.status(409).json({ error: 'Runner is already running', pid: runnerProc.pid })
+  }
+
+  try {
+    runnerProc = spawn('node', [RUNNER_SCRIPT], {
+      cwd: WORKSPACE_ROOT,
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    runnerStartedAt = new Date().toISOString()
+    runnerLogs = []
+    pushRunnerLog('info', `Runner started (pid ${runnerProc.pid})`)
+
+    runnerProc.stdout.on('data', chunk => {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        pushRunnerLog('stdout', line)
+      }
+    })
+
+    runnerProc.stderr.on('data', chunk => {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        pushRunnerLog('stderr', line)
+      }
+    })
+
+    runnerProc.on('close', (code, signal) => {
+      pushRunnerLog('info', `Runner exited (code=${code}, signal=${signal})`)
+      broadcastRunnerState()
+    })
+
+    runnerProc.on('error', err => {
+      pushRunnerLog('error', `Runner error: ${err.message}`)
+      broadcastRunnerState()
+    })
+
+    broadcastRunnerState()
+    console.log(`[runner-mgr] started pid ${runnerProc.pid}`)
+    res.json({ ok: true, pid: runnerProc.pid, startedAt: runnerStartedAt })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/runner/stop', (req, res) => {
+  if (!runnerProc || runnerProc.exitCode !== null) {
+    return res.status(409).json({ error: 'Runner is not running' })
+  }
+
+  const pid = runnerProc.pid
+  pushRunnerLog('info', `Stopping runner (pid ${pid})`)
+
+  // Graceful SIGTERM, then SIGKILL after 5s
+  runnerProc.kill('SIGTERM')
+  const forceKill = setTimeout(() => {
+    try { runnerProc.kill('SIGKILL') } catch {}
+  }, 5000)
+
+  runnerProc.on('close', () => clearTimeout(forceKill))
+
+  console.log(`[runner-mgr] stopping pid ${pid}`)
+  res.json({ ok: true, pid, signal: 'SIGTERM' })
+})
+
 // ── Start notification scanner (after sseClients is available) ────────────────
 const SCAN_INTERVAL_MS = 30_000
 console.log('[notify] starting scanner (interval: ' + (SCAN_INTERVAL_MS / 1000) + 's)')
