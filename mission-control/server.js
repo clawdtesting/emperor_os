@@ -70,6 +70,65 @@ function appendActionLog(entry) {
   appendFileSync(NOTIF_LOG_FILE, JSON.stringify(entry) + '\n')
 }
 
+function buildFallbackValidationReport(jobId) {
+  const checks = []
+  const addCheck = (name, passed, detail = null) => checks.push({ name, passed, detail, checkedAt: new Date().toISOString() })
+
+  const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
+  const state = readJsonSafe(statePath, null)
+  addCheck('job_state_exists', Boolean(state), state ? null : `Missing ${statePath}`)
+
+  const status = String(state?.status || '').toLowerCase()
+  const allowed = ['assigned', 'in_progress', 'deliverable_ready', 'completion_pending_review', 'completion_ready', 'submitted', 'completed', 'disputed']
+  addCheck('job_status_known', Boolean(status) && allowed.includes(status), status || 'unknown')
+
+  const artifactDir = join(ARTIFACTS_DIR, `job_${jobId}`)
+  const briefPath = state?.briefPath || join(artifactDir, 'brief.json')
+  const deliverablePath = state?.artifactPath || join(artifactDir, 'deliverable.md')
+
+  const briefRaw = existsSync(briefPath) ? readFileSync(briefPath, 'utf8') : ''
+  const deliverableRaw = existsSync(deliverablePath) ? readFileSync(deliverablePath, 'utf8') : ''
+
+  addCheck('artifact_brief_exists', existsSync(briefPath), briefPath)
+  addCheck('artifact_deliverable_exists', existsSync(deliverablePath), deliverablePath)
+  addCheck('deliverable_nonempty', deliverableRaw.trim().length > 0, `${deliverableRaw.trim().length} chars`)
+  addCheck('deliverable_has_headings', /##\s+/.test(deliverableRaw), 'Expected markdown section headings')
+
+  let requiredSections = []
+  try {
+    const brief = briefRaw ? JSON.parse(briefRaw) : null
+    requiredSections = Array.isArray(brief?.required_sections) ? brief.required_sections : []
+  } catch {
+    addCheck('brief_parseable_json', false, 'brief.json is not valid JSON')
+  }
+
+  if (requiredSections.length > 0) {
+    const missing = requiredSections.filter(section => !deliverableRaw.toLowerCase().includes(String(section).toLowerCase()))
+    addCheck('deliverable_includes_required_sections', missing.length === 0, missing.length ? `Missing: ${missing.join(', ')}` : 'All present')
+  }
+
+  const passed = checks.filter(c => c.passed).length
+  const failed = checks.length - passed
+  const verdict = failed === 0 ? 'DRY_RUN_PASSED' : 'DRY_RUN_FAILED'
+
+  return {
+    schema: 'mission-control/fallback-dryrun/v1',
+    jobId: String(jobId),
+    generatedAt: new Date().toISOString(),
+    checks,
+    summary: {
+      verdict,
+      passed,
+      failed,
+      totalChecks: checks.length,
+      overallPass: failed === 0,
+      recommendation: failed === 0
+        ? 'Fallback validation checks passed. Job appears ready for review.'
+        : `${failed} fallback validation check(s) failed. Resolve issues before proceeding.`,
+    },
+  }
+}
+
 function urgencyLabel(secsUntilDeadline) {
   if (secsUntilDeadline == null || secsUntilDeadline < 0) return { level: 'info', label: 'INFO', color: 'text-slate-400' }
   if (secsUntilDeadline < 3600) return { level: 'urgent', label: 'URGENT', color: 'text-red-400' }
@@ -587,6 +646,45 @@ app.get('/api/job-spec/:jobId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+app.post('/api/jobs/:jobId/validate-dryrun', async (req, res) => {
+  try {
+    const rawJobId = String(req.params.jobId || '').trim()
+    if (!rawJobId) return res.status(400).json({ error: 'jobId is required' })
+    if (!/^\d+$/.test(rawJobId)) {
+      return res.status(400).json({ error: 'jobId must be a numeric string' })
+    }
+
+    let report
+    let mode = 'contract1-dryrun'
+
+    try {
+      const { dryRunContract1Validation } = await import('../validation/contract1-dryrun.js')
+      report = await dryRunContract1Validation(rawJobId)
+    } catch (err) {
+      mode = 'fallback'
+      console.warn('[validate-dryrun] using fallback validator:', err.message)
+      report = buildFallbackValidationReport(rawJobId)
+    }
+
+    const failedChecks = Array.isArray(report?.checks)
+      ? report.checks.filter(c => c?.passed === false).map(c => ({ name: c?.name || 'unnamed_check', detail: c?.detail || '' }))
+      : []
+
+    res.json({
+      ok: true,
+      mode,
+      jobId: rawJobId,
+      verdict: report?.summary?.verdict || 'UNKNOWN',
+      summary: report?.summary || null,
+      failedChecks,
+      generatedAt: report?.generatedAt || null,
+      report,
+    })
+  } catch (e) {
+    console.error('[validate-dryrun] failed:', e.message)
+    res.status(500).json({ error: e.message || 'Validation dry-run failed' })
+  }
+})
 
 app.post('/api/ipfs/pin-json', async (req, res) => {
   try {

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { resolveEns, shortAddr } from '../utils/ens'
+import { validateJobDryRun } from '../api'
+import { summarizeDryRunReport } from '../features/validation/summarizeDryRun'
 
 const IPFS_GW = 'https://ipfs.io/ipfs/'
 
@@ -241,6 +243,20 @@ export function JobDetail({ job, onRunIntake }) {
   const [intakeLog, setIntakeLog]         = useState([])
   const [intakeDone, setIntakeDone]       = useState(false)
   const [intakeExitCode, setIntakeExitCode] = useState(null)
+  const [validationRunning, setValidationRunning] = useState(false)
+  const [validationError, setValidationError] = useState('')
+  const [validationSummary, setValidationSummary] = useState(null)
+
+  const total       = (job?.approvals || 0) + (job?.disapprovals || 0)
+  const approvalPct = total > 0 ? Math.round(((job?.approvals || 0) / total) * 100) : 0
+  const ipfsCid     = job?.specURI?.replace('ipfs://', '')
+  const canRunValidation = /^\d+$/.test(String(job?.jobId || '')) && job?.source !== 'agiprimediscovery'
+
+  useEffect(() => {
+    setValidationRunning(false)
+    setValidationError('')
+    setValidationSummary(null)
+  }, [job?.jobId, job?.source])
 
   if (!job) {
     return (
@@ -249,10 +265,6 @@ export function JobDetail({ job, onRunIntake }) {
       </div>
     )
   }
-
-  const total       = (job.approvals || 0) + (job.disapprovals || 0)
-  const approvalPct = total > 0 ? Math.round((job.approvals / total) * 100) : 0
-  const ipfsCid     = job.specURI?.replace('ipfs://', '')
 
   async function fetchCompletion() {
     setLoadingMeta(true)
@@ -263,7 +275,9 @@ export function JobDetail({ job, onRunIntake }) {
         const err = await res.json().catch(() => ({}))
         setBriefError(err.error || `Failed to fetch completion metadata (HTTP ${res.status})`)
       }
-    } catch {}
+    } catch {
+      // no completion metadata available yet
+    }
     finally { setLoadingMeta(false) }
   }
 
@@ -332,13 +346,29 @@ export function JobDetail({ job, onRunIntake }) {
             const data = JSON.parse(line.slice(5).trim())
             addLog(data)
             if (data.type === 'done') { setIntakeDone(true); setIntakeExitCode(data.code ?? null) }
-          } catch {}
+          } catch {
+            // ignore malformed streamed line
+          }
         }
       }
     } catch (e) {
       addLog({ type: 'error', message: e.message })
     } finally {
       setIntakeRunning(false)
+    }
+  }
+
+  async function handleRunValidation() {
+    setValidationRunning(true)
+    setValidationError('')
+    try {
+      const data = await validateJobDryRun(job.jobId)
+      setValidationSummary(summarizeDryRunReport(data.report))
+    } catch (e) {
+      setValidationSummary(null)
+      setValidationError(e.message || 'Validation failed')
+    } finally {
+      setValidationRunning(false)
     }
   }
 
@@ -376,14 +406,79 @@ export function JobDetail({ job, onRunIntake }) {
         >
           {loadingBrief ? 'fetching IPFS...' : 'view brief'}
         </button>
-        <a
-          href={IPFS_GW + ipfsCid}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1 text-xs py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors text-center"
+        {ipfsCid ? (
+          <a
+            href={IPFS_GW + ipfsCid}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 text-xs py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors text-center"
+          >
+            spec on IPFS
+          </a>
+        ) : (
+          <div className="flex-1 text-xs py-2 rounded-lg border border-slate-800 text-slate-600 text-center">spec unavailable</div>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-slate-400 font-medium">Validation lane</div>
+          {validationSummary?.status && (
+            <span className={`text-[11px] px-2 py-1 rounded border ${
+              validationSummary.status === 'pass'
+                ? 'border-emerald-700 text-emerald-300 bg-emerald-950/30'
+                : validationSummary.status === 'fail'
+                  ? 'border-amber-700 text-amber-300 bg-amber-950/30'
+                  : 'border-red-700 text-red-300 bg-red-950/30'
+            }`}>
+              {validationSummary.status === 'pass' ? 'ready' : validationSummary.status === 'fail' ? 'needs fixes' : 'error'}
+            </span>
+          )}
+        </div>
+
+        <div className="text-xs text-slate-500">
+          Run deterministic dry-run validation for this job and get immediate pass/fail checks before advancing.
+        </div>
+
+        <button
+          onClick={handleRunValidation}
+          disabled={validationRunning || !canRunValidation}
+          className="w-full py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-medium transition-colors"
         >
-          spec on IPFS
-        </a>
+          {validationRunning ? 'Running validation…' : canRunValidation ? 'Validate this job' : 'Validation unavailable for this lane'}
+        </button>
+
+        {!canRunValidation && (
+          <div className="text-xs text-slate-500">Dry-run validation is available for numeric AGIJobManager job IDs.</div>
+        )}
+
+        {validationError && (
+          <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{validationError}</div>
+        )}
+
+        {validationSummary && (
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Verdict: <span className="text-slate-200 font-mono">{validationSummary.verdict || 'UNKNOWN'}</span></span>
+              <span>{validationSummary.passed}/{validationSummary.total} checks passed</span>
+            </div>
+            {validationSummary.recommendation && (
+              <div className="text-slate-400">{validationSummary.recommendation}</div>
+            )}
+            {validationSummary.failedChecks.length > 0 && (
+              <div className="rounded border border-amber-900 bg-amber-950/20 p-2 space-y-1">
+                {validationSummary.failedChecks.slice(0, 5).map((check) => (
+                  <div key={check.name} className="text-amber-200">
+                    • <span className="font-mono">{check.name}</span>{check.detail ? ` — ${check.detail}` : ''}
+                  </div>
+                ))}
+                {validationSummary.failedChecks.length > 5 && (
+                  <div className="text-amber-400">+{validationSummary.failedChecks.length - 5} more failed checks</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Completion metadata for finished/disputed jobs */}
