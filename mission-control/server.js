@@ -258,15 +258,17 @@ async function fetchIpfsJson(ipfsUri) {
   return { ok: false, error: 'All IPFS gateways failed', source: null, data: null }
 }
 
-async function buildV2OperatorView(jobId) {
+async function buildV2OperatorView(jobId, options = {}) {
   const numericJobId = Number(jobId)
+  const contractHint = String(options?.contractHint || '').toLowerCase()
+  const hintIsKnownV2 = KNOWN_V2_CONTRACTS.includes(contractHint)
   const report = {
     schema: 'mission-control/v2-operator-view/v1',
     manager: 'AGIJobManager-v2',
     jobId: String(jobId),
     rpc: ETH_RPC_URL,
     generatedAt: new Date().toISOString(),
-    contract: null,
+    contract: hintIsKnownV2 ? contractHint : AGI_JOB_MANAGER_V2_ALT.toLowerCase(),
     mcpJob: null,
     jobRequest: {
       memo: '',
@@ -288,7 +290,12 @@ async function buildV2OperatorView(jobId) {
     mcpJob = await callMcp('get_job', { jobId: numericJobId })
     if (mcpJob && typeof mcpJob === 'object') {
       report.mcpJob = mcpJob
-      report.contract = String(mcpJob?.links?.contract || '').split('/').pop() || null
+      const mcpContract = String(mcpJob?.links?.contract || '').split('/').pop().toLowerCase()
+      if (KNOWN_V2_CONTRACTS.includes(mcpContract)) {
+        report.contract = mcpContract
+      } else if (mcpContract) {
+        report.errors.push(`mcp contract mismatch: ${mcpContract}`)
+      }
       report.procurement = mcpJob?.procurement || mcpJob?.procurementId || null
       report.jobRequest.memo = String(mcpJob?.details || mcpJob?.description || '')
       report.jobRequest.specURI = String(mcpJob?.specURI || '')
@@ -1044,11 +1051,12 @@ app.get('/api/jobs/:jobId/operator-view', async (req, res) => {
 
     const source = String(req.query?.source || '').toLowerCase()
     const managerVersion = String(req.query?.managerVersion || '').toLowerCase()
+    const contractHint = String(req.query?.contractHint || '').trim()
     if (source !== 'agijobmanager-v2' && managerVersion !== 'v2') {
       return res.status(400).json({ error: 'operator-view currently supports AGIJobManager v2 only' })
     }
 
-    const view = await buildV2OperatorView(numericJobId)
+    const view = await buildV2OperatorView(numericJobId, { contractHint })
     res.json({ ok: true, ...view })
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to build operator view' })

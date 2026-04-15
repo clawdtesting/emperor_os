@@ -88,6 +88,7 @@ export async function fetchV2OperatorView(jobId, options = {}) {
   const params = new URLSearchParams()
   if (options?.source) params.set('source', options.source)
   if (options?.managerVersion) params.set('managerVersion', options.managerVersion)
+  if (options?.contractHint) params.set('contractHint', options.contractHint)
   const qs = params.toString() ? `?${params.toString()}` : ''
   const res = await fetch(BASE + '/api/jobs/' + encodeURIComponent(jobId) + '/operator-view' + qs)
   const data = await res.json().catch(() => ({}))

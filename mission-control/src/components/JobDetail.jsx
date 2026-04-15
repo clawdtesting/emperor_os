@@ -275,7 +275,17 @@ export function JobDetail({ job, onRunIntake }) {
       setOperatorLoading(true)
       setOperatorError('')
       try {
-        const data = await fetchV2OperatorView(job.jobId, { source: job.source, managerVersion: 'v2' })
+        const linkAddr = String(job?.links?.contract || '').split('/').pop()
+        const employerHint = String(job?.employer || '')
+        const contractHint = /^0x[a-fA-F0-9]{40}$/.test(linkAddr)
+          ? linkAddr
+          : (/^0x[a-fA-F0-9]{40}$/.test(employerHint) ? employerHint : '')
+
+        const data = await fetchV2OperatorView(job.jobId, {
+          source: job.source,
+          managerVersion: 'v2',
+          contractHint,
+        })
         if (!cancelled) setOperatorView(data)
       } catch (e) {
         if (!cancelled) {
