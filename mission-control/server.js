@@ -35,6 +35,8 @@ const GITHUB_TOKEN  = String(
 ).trim()
 const PINATA_JWT = String(process.env.PINATA_JWT || '').trim()
 const AGI_JOB_MANAGER_V2 = '0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29'
+const AGI_JOB_MANAGER_V2_ALT = '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2'
+const KNOWN_V2_CONTRACTS = [AGI_JOB_MANAGER_V2.toLowerCase(), AGI_JOB_MANAGER_V2_ALT.toLowerCase()]
 const ETH_RPC_URL = process.env.ETH_RPC_URL || process.env.RPC_URL || 'https://eth.llamarpc.com'
 
 mkdirSync(NOTIF_STATE_DIR, { recursive: true })
@@ -188,8 +190,9 @@ async function buildV2ValidationReport(jobId) {
       const completionRequested = Boolean(mcpJob?.validation?.completionRequested)
 
       const contractLink = String(mcpJob?.links?.contract || '')
+      const linkedAddress = (contractLink.split('/').pop() || '').toLowerCase()
       addCheck('v2_contract_link_present', contractLink.length > 0, contractLink || '(missing)')
-      addCheck('v2_contract_matches_expected', contractLink.toLowerCase().includes(AGI_JOB_MANAGER_V2.toLowerCase()), contractLink || '(missing)')
+      addCheck('v2_contract_is_known_v2', KNOWN_V2_CONTRACTS.includes(linkedAddress), contractLink || '(missing)')
       addCheck('v2_job_exists_employer_nonzero', employer !== '0x0000000000000000000000000000000000000000', employer)
       addCheck('v2_job_has_payout', payoutRaw !== '0', payoutRaw)
       addCheck('v2_job_has_assigned_agent', assignedAgent !== '0x0000000000000000000000000000000000000000', assignedAgent)
