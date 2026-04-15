@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { resolveEns, shortAddr } from '../utils/ens'
-import { fetchV2OperatorView, validateJobDryRun } from '../api'
+import { fetchProcurementArtifacts, fetchV2OperatorView, validateJobDryRun } from '../api'
 import { summarizeDryRunReport } from '../features/validation/summarizeDryRun'
 
 const IPFS_GW = 'https://ipfs.io/ipfs/'
@@ -249,12 +249,20 @@ export function JobDetail({ job, onRunIntake }) {
   const [operatorLoading, setOperatorLoading] = useState(false)
   const [operatorError, setOperatorError] = useState('')
   const [operatorView, setOperatorView] = useState(null)
+  const [procArtifactsLoading, setProcArtifactsLoading] = useState(false)
+  const [procArtifactsError, setProcArtifactsError] = useState('')
+  const [procArtifacts, setProcArtifacts] = useState(null)
 
   const total       = (job?.approvals || 0) + (job?.disapprovals || 0)
   const approvalPct = total > 0 ? Math.round(((job?.approvals || 0) / total) * 100) : 0
   const ipfsCid     = job?.specURI?.replace('ipfs://', '')
   const canRunValidation = /\d+/.test(String(job?.jobId || ''))
   const isV2 = job?.source === 'agijobmanager-v2'
+  const isPrime = job?.source === 'agiprimediscovery'
+  const procurementId = String(
+    job?.procurementId
+      ?? (String(job?.jobId || '').match(/(\d+)/)?.[1] || '')
+  )
 
   useEffect(() => {
     setValidationRunning(false)
@@ -299,6 +307,34 @@ export function JobDetail({ job, onRunIntake }) {
 
     return () => { cancelled = true }
   }, [isV2, job?.jobId, job?.source])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isPrime || !/^\d+$/.test(procurementId)) {
+      setProcArtifactsLoading(false)
+      setProcArtifactsError('')
+      setProcArtifacts(null)
+      return
+    }
+
+    ;(async () => {
+      setProcArtifactsLoading(true)
+      setProcArtifactsError('')
+      try {
+        const data = await fetchProcurementArtifacts(procurementId)
+        if (!cancelled) setProcArtifacts(data)
+      } catch (e) {
+        if (!cancelled) {
+          setProcArtifacts(null)
+          setProcArtifactsError(e.message || 'Failed to load procurement artifacts')
+        }
+      } finally {
+        if (!cancelled) setProcArtifactsLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [isPrime, procurementId])
 
   if (!job) {
     return (
@@ -634,6 +670,49 @@ export function JobDetail({ job, onRunIntake }) {
           </div>
         )}
       </div>
+
+      {isPrime && (
+        <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-slate-400 font-medium">Agent outputs for validation</div>
+            <div className="text-[11px] text-slate-500">procurement #{/^\d+$/.test(procurementId) ? procurementId : 'unknown'}</div>
+          </div>
+
+          <div className="text-xs text-slate-500">
+            Open these files directly to validate trial deliverables and scoring continuity (commit/reveal).
+          </div>
+
+          {procArtifactsLoading && <div className="text-xs text-slate-500">Loading artifact links…</div>}
+          {procArtifactsError && <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{procArtifactsError}</div>}
+
+          {procArtifacts?.artifacts?.length > 0 && (
+            <div className="grid md:grid-cols-2 gap-2 text-xs">
+              {procArtifacts.artifacts.map((artifact) => (
+                <div key={artifact.key} className="rounded border border-slate-800 bg-slate-950/40 p-2 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-slate-300 truncate">{artifact.label}</div>
+                    <div className={artifact.exists ? 'text-emerald-400' : 'text-amber-400'}>
+                      {artifact.exists ? 'available' : 'missing'}
+                    </div>
+                  </div>
+                  {artifact.exists ? (
+                    <a
+                      href={artifact.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30"
+                    >
+                      open
+                    </a>
+                  ) : (
+                    <span className="shrink-0 px-2 py-1 rounded border border-slate-800 text-slate-500">n/a</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Completion metadata for finished/disputed jobs */}
       {job.completionRequested && (

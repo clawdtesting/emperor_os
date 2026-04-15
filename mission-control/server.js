@@ -1130,6 +1130,21 @@ app.get('/api/github/workflows', async (req, res) => {
 
 const AGI_JOB_MANAGER_CONTRACT = (process.env.AGI_JOB_MANAGER_CONTRACT || '0xB3AAeb69b630f0299791679c063d68d6687481d1').toLowerCase()
 
+function getProcArtifactEntries(procurementId) {
+  const procDir = join(PROC_ARTIFACTS_DIR, `proc_${procurementId}`)
+  const entries = [
+    { key: 'state', label: 'state.json', file: join(procDir, 'state.json') },
+    { key: 'next_action', label: 'next_action.json', file: join(procDir, 'next_action.json') },
+    { key: 'trial_manifest', label: 'trial/trial_artifact_manifest.json', file: join(procDir, 'trial', 'trial_artifact_manifest.json') },
+    { key: 'trial_publication', label: 'trial/publication_record.json', file: join(procDir, 'trial', 'publication_record.json') },
+    { key: 'score_commit', label: 'scoring/score_commit_payload.json', file: join(procDir, 'scoring', 'score_commit_payload.json') },
+    { key: 'score_reveal', label: 'scoring/score_reveal_payload.json', file: join(procDir, 'scoring', 'score_reveal_payload.json') },
+    { key: 'score_adjudication', label: 'scoring/adjudication_result.json', file: join(procDir, 'scoring', 'adjudication_result.json') },
+    { key: 'score_evidence', label: 'scoring/evidence_bundle.json', file: join(procDir, 'scoring', 'evidence_bundle.json') },
+  ]
+  return { procDir, entries }
+}
+
 function readNumericCandidate(value) {
   if (value == null) return null
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -1314,6 +1329,60 @@ app.get('/api/jobs/:jobId/operator-view', async (req, res) => {
     res.json({ ok: true, ...view })
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to build operator view' })
+  }
+})
+
+app.get('/api/procurements/:procurementId/artifacts', (req, res) => {
+  try {
+    const procurementId = String(req.params.procurementId || '').trim()
+    if (!/^\d+$/.test(procurementId)) return res.status(400).json({ error: 'procurementId must be numeric' })
+
+    const { procDir, entries } = getProcArtifactEntries(procurementId)
+    const artifacts = entries.map((entry) => ({
+      key: entry.key,
+      label: entry.label,
+      exists: existsSync(entry.file),
+      path: entry.file,
+      url: `/api/procurements/${encodeURIComponent(procurementId)}/artifacts/${encodeURIComponent(entry.key)}`,
+    }))
+
+    res.json({
+      ok: true,
+      procurementId,
+      rootDir: procDir,
+      artifacts,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to list procurement artifacts' })
+  }
+})
+
+app.get('/api/procurements/:procurementId/artifacts/:key', (req, res) => {
+  try {
+    const procurementId = String(req.params.procurementId || '').trim()
+    const key = String(req.params.key || '').trim()
+    if (!/^\d+$/.test(procurementId)) return res.status(400).json({ error: 'procurementId must be numeric' })
+
+    const { procDir, entries } = getProcArtifactEntries(procurementId)
+    const entry = entries.find((x) => x.key === key)
+    if (!entry) return res.status(404).json({ error: 'artifact key not found' })
+
+    const resolved = resolve(entry.file)
+    const procResolved = resolve(procDir)
+    if (!resolved.startsWith(procResolved + '/')) {
+      return res.status(400).json({ error: 'invalid artifact path' })
+    }
+    if (!existsSync(resolved)) return res.status(404).json({ error: 'artifact file not found' })
+
+    const text = readFileSync(resolved, 'utf8')
+    if (resolved.endsWith('.json')) {
+      res.type('application/json; charset=utf-8')
+      return res.send(text)
+    }
+    res.type('text/plain; charset=utf-8')
+    return res.send(text)
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to read artifact file' })
   }
 })
 

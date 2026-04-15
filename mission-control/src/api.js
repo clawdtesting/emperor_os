@@ -96,6 +96,13 @@ export async function fetchV2OperatorView(jobId, options = {}) {
   return data
 }
 
+export async function fetchProcurementArtifacts(procurementId) {
+  const res = await fetch(BASE + '/api/procurements/' + encodeURIComponent(procurementId) + '/artifacts')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch procurement artifacts')
+  return data
+}
+
 export async function validateJobDryRun(jobId, options = {}) {
   const res = await fetch(BASE + '/api/jobs/' + encodeURIComponent(jobId) + '/validate-dryrun', {
     method: 'POST',
