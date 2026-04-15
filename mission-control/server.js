@@ -1444,7 +1444,7 @@ app.post('/api/runner/stop', (req, res) => {
 })
 
 // ── Start notification scanner (after sseClients is available) ────────────────
-const SCAN_INTERVAL_MS = 30_000
+const SCAN_INTERVAL_MS = 60 * 60 * 1000
 console.log('[notify] starting scanner (interval: ' + (SCAN_INTERVAL_MS / 1000) + 's)')
 scanAndNotify()
 setInterval(scanAndNotify, SCAN_INTERVAL_MS)

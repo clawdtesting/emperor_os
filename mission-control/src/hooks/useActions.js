@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { fetchActions, dismissAction } from '../api'
 
-const POLL_INTERVAL = 15000
+const POLL_INTERVAL = 60 * 60 * 1000
 
 export function useActions() {
   const [actions, setActions] = useState([])

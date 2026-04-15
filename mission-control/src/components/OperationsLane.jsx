@@ -138,7 +138,7 @@ export default function OperationsLane() {
 
   useEffect(() => {
     fetchLane()
-    const interval = setInterval(fetchLane, 15000)
+    const interval = setInterval(fetchLane, 60 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -199,7 +199,7 @@ export default function OperationsLane() {
         })}
       </div>
 
-      <div className="mt-4 text-xs text-slate-600">Scanned: {data.scannedAt ? new Date(data.scannedAt).toLocaleTimeString() : '—'} · Auto-refresh: 15s</div>
+      <div className="mt-4 text-xs text-slate-600">Scanned: {data.scannedAt ? new Date(data.scannedAt).toLocaleTimeString() : '—'} · Auto-refresh: 1h</div>
     </div>
   )
 }

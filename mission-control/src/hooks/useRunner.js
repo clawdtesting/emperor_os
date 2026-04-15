@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchRunnerStatus, startRunner, stopRunner, fetchRunnerLogs } from '../api'
 
-const POLL_INTERVAL = 5000
+const POLL_INTERVAL = 60 * 60 * 1000
 
 export function useRunner() {
   const [status, setStatus] = useState({ running: false, pid: null, startedAt: null, uptimeMs: null })

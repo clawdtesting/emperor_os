@@ -87,7 +87,7 @@ export function GitHubFlows() {
     }
 
     loadWorkflows()
-    const t = setInterval(loadWorkflows, 30000)
+    const t = setInterval(loadWorkflows, 60 * 60 * 1000)
     return () => {
       cancelled = true
       clearInterval(t)

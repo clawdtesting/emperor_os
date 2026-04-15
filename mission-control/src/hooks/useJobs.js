@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { fetchJobs } from '../api'
 
-const POLL_INTERVAL = 30000
+const POLL_INTERVAL = 60 * 60 * 1000
 
 export function useJobs() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [countdown, setCountdown] = useState(30)
+  const [countdown, setCountdown] = useState(Math.floor(POLL_INTERVAL / 1000))
   const [events, setEvents] = useState([])
   const seenIds = useRef(new Set())
   const isFirstFetch = useRef(true)
@@ -46,7 +46,7 @@ export function useJobs() {
         return data
       })
       setError(null)
-      setCountdown(30)
+      setCountdown(Math.floor(POLL_INTERVAL / 1000))
     } catch (e) {
       setError(e.message)
       addEvent('error', e.message)
@@ -59,7 +59,7 @@ export function useJobs() {
     poll()
     const pollTimer = setInterval(poll, POLL_INTERVAL)
     const cdTimer = setInterval(() => setCountdown(c => {
-      if (c <= 1) return 30
+      if (c <= 1) return Math.floor(POLL_INTERVAL / 1000)
       return c - 1
     }), 1000)
     return () => { clearInterval(pollTimer); clearInterval(cdTimer) }
