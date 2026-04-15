@@ -34,6 +34,8 @@ const GITHUB_TOKEN  = String(
   || ''
 ).trim()
 const PINATA_JWT = String(process.env.PINATA_JWT || '').trim()
+const AGI_JOB_MANAGER_V2 = '0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29'
+const ETH_RPC_URL = process.env.ETH_RPC_URL || process.env.RPC_URL || 'https://eth.llamarpc.com'
 
 mkdirSync(NOTIF_STATE_DIR, { recursive: true })
 
@@ -68,6 +70,15 @@ function saveNotifState(state) {
 
 function appendActionLog(entry) {
   appendFileSync(NOTIF_LOG_FILE, JSON.stringify(entry) + '\n')
+}
+
+function extractNumericJobId(rawJobId) {
+  const raw = String(rawJobId || '').trim()
+  if (!raw) return null
+  const direct = raw.match(/^\d+$/)
+  if (direct) return direct[0]
+  const tail = raw.match(/(\d+)$/)
+  return tail ? tail[1] : null
 }
 
 function buildFallbackValidationReport(jobId) {
@@ -127,6 +138,101 @@ function buildFallbackValidationReport(jobId) {
         : `${failed} fallback validation check(s) failed. Resolve issues before proceeding.`,
     },
   }
+}
+
+async function buildV2ValidationReport(jobId) {
+  const checks = []
+  const addCheck = (name, passed, detail = null) => checks.push({ name, passed, detail, checkedAt: new Date().toISOString() })
+
+  const report = {
+    schema: 'mission-control/v2-onchain-validation/v1',
+    manager: 'AGIJobManager-v2',
+    contract: AGI_JOB_MANAGER_V2,
+    chainRpc: ETH_RPC_URL,
+    jobId: String(jobId),
+    generatedAt: new Date().toISOString(),
+    checks,
+    summary: null,
+    onchain: null,
+  }
+
+  try {
+    const { ethers } = await import('ethers')
+    const abiPath = join(WORKSPACE_ROOT, 'contracts', 'AGIJobManager-v2', 'AGIJobManager.v2.json')
+    const abiRaw = readJsonSafe(abiPath, [])
+    const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+
+    addCheck('v2_abi_loaded', Array.isArray(abi) && abi.length > 0, abiPath)
+    if (!Array.isArray(abi) || abi.length === 0) throw new Error(`Missing or empty ABI at ${abiPath}`)
+
+    const iface = new ethers.Interface(abi)
+    addCheck('v2_has_request_job_completion', Boolean(iface.getFunction('requestJobCompletion(uint256,string)')))
+    addCheck('v2_has_validate_job', Boolean(iface.getFunction('validateJob(uint256,string,bytes32[])')))
+
+    let mcpJob = null
+    try {
+      mcpJob = await callMcp('get_job', { jobId: Number(jobId) })
+      addCheck('v2_mcp_job_query_success', Boolean(mcpJob), mcpJob ? `jobId=${mcpJob.jobId}` : 'no data')
+    } catch (mcpErr) {
+      addCheck('v2_mcp_job_query_success', false, mcpErr.message)
+    }
+
+    if (mcpJob && typeof mcpJob === 'object') {
+      const employer = String(mcpJob?.employer || '0x0000000000000000000000000000000000000000')
+      const assignedAgent = String(mcpJob?.assignedAgent || '0x0000000000000000000000000000000000000000')
+      const payoutRaw = String(mcpJob?.payoutRaw || '0')
+      const specURI = String(mcpJob?.specURI || '')
+      const completionURI = String(mcpJob?.completionURI || '')
+      const approvals = Number(mcpJob?.validation?.approvals || 0)
+      const disapprovals = Number(mcpJob?.validation?.disapprovals || 0)
+      const completionRequested = Boolean(mcpJob?.validation?.completionRequested)
+
+      const contractLink = String(mcpJob?.links?.contract || '')
+      addCheck('v2_contract_link_present', contractLink.length > 0, contractLink || '(missing)')
+      addCheck('v2_contract_matches_expected', contractLink.toLowerCase().includes(AGI_JOB_MANAGER_V2.toLowerCase()), contractLink || '(missing)')
+      addCheck('v2_job_exists_employer_nonzero', employer !== '0x0000000000000000000000000000000000000000', employer)
+      addCheck('v2_job_has_payout', payoutRaw !== '0', payoutRaw)
+      addCheck('v2_job_has_assigned_agent', assignedAgent !== '0x0000000000000000000000000000000000000000', assignedAgent)
+      addCheck('v2_job_has_spec_uri', Boolean(specURI), specURI || '(empty)')
+      addCheck('v2_completion_requested_or_uri_present', completionRequested || Boolean(completionURI), `requested=${completionRequested}, completionURI=${completionURI || '(empty)'}`)
+      addCheck('v2_validation_signal_present', (approvals + disapprovals) >= 0, `${approvals} approve / ${disapprovals} disapprove`)
+
+      report.onchain = {
+        employer,
+        assignedAgent,
+        payoutRaw,
+        payout: String(mcpJob?.payout || ''),
+        status: String(mcpJob?.status || ''),
+        duration: String(mcpJob?.duration || ''),
+        completed: Boolean(mcpJob?.completed),
+        disputed: Boolean(mcpJob?.disputed),
+        expired: Boolean(mcpJob?.expired),
+        specURI,
+        completionURI,
+        completionRequested,
+        validatorApprovals: approvals,
+        validatorDisapprovals: disapprovals,
+        contractLink,
+      }
+    }
+  } catch (err) {
+    addCheck('v2_validation_runtime_success', false, err.message)
+  }
+
+  const passed = checks.filter(c => c.passed).length
+  const failed = checks.length - passed
+  report.summary = {
+    verdict: failed === 0 ? 'DRY_RUN_PASSED' : 'DRY_RUN_FAILED',
+    passed,
+    failed,
+    totalChecks: checks.length,
+    overallPass: failed === 0,
+    recommendation: failed === 0
+      ? 'V2 validation checks passed.'
+      : `${failed} v2 validation check(s) failed. Review failed checks before progressing.`,
+  }
+
+  return report
 }
 
 function urgencyLabel(secsUntilDeadline) {
@@ -650,20 +756,30 @@ app.post('/api/jobs/:jobId/validate-dryrun', async (req, res) => {
   try {
     const rawJobId = String(req.params.jobId || '').trim()
     if (!rawJobId) return res.status(400).json({ error: 'jobId is required' })
-    if (!/^\d+$/.test(rawJobId)) {
-      return res.status(400).json({ error: 'jobId must be a numeric string' })
+
+    const numericJobId = extractNumericJobId(rawJobId)
+    if (!numericJobId) {
+      return res.status(400).json({ error: 'jobId must include a numeric id (examples: 12, V2-12)' })
     }
+
+    const managerVersion = String(req.body?.managerVersion || '').toLowerCase()
+    const source = String(req.body?.source || '').toLowerCase()
 
     let report
     let mode = 'contract1-dryrun'
 
-    try {
-      const { dryRunContract1Validation } = await import('../validation/contract1-dryrun.js')
-      report = await dryRunContract1Validation(rawJobId)
-    } catch (err) {
-      mode = 'fallback'
-      console.warn('[validate-dryrun] using fallback validator:', err.message)
-      report = buildFallbackValidationReport(rawJobId)
+    if (managerVersion === 'v2' || source === 'agijobmanager-v2') {
+      mode = 'v2-onchain'
+      report = await buildV2ValidationReport(numericJobId)
+    } else {
+      try {
+        const { dryRunContract1Validation } = await import('../validation/contract1-dryrun.js')
+        report = await dryRunContract1Validation(numericJobId)
+      } catch (err) {
+        mode = 'fallback'
+        console.warn('[validate-dryrun] using fallback validator:', err.message)
+        report = buildFallbackValidationReport(numericJobId)
+      }
     }
 
     const failedChecks = Array.isArray(report?.checks)
@@ -673,7 +789,9 @@ app.post('/api/jobs/:jobId/validate-dryrun', async (req, res) => {
     res.json({
       ok: true,
       mode,
-      jobId: rawJobId,
+      managerVersion: managerVersion || (source === 'agijobmanager-v2' ? 'v2' : 'v1'),
+      jobId: numericJobId,
+      rawJobId,
       verdict: report?.summary?.verdict || 'UNKNOWN',
       summary: report?.summary || null,
       failedChecks,

@@ -84,9 +84,11 @@ export async function fetchRunnerLogs(since) {
   return res.json()
 }
 
-export async function validateJobDryRun(jobId) {
+export async function validateJobDryRun(jobId, options = {}) {
   const res = await fetch(BASE + '/api/jobs/' + encodeURIComponent(jobId) + '/validate-dryrun', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data?.error || 'Failed to run validation dry-run')

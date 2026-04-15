@@ -250,7 +250,7 @@ export function JobDetail({ job, onRunIntake }) {
   const total       = (job?.approvals || 0) + (job?.disapprovals || 0)
   const approvalPct = total > 0 ? Math.round(((job?.approvals || 0) / total) * 100) : 0
   const ipfsCid     = job?.specURI?.replace('ipfs://', '')
-  const canRunValidation = /^\d+$/.test(String(job?.jobId || '')) && job?.source !== 'agiprimediscovery'
+  const canRunValidation = /\d+/.test(String(job?.jobId || ''))
 
   useEffect(() => {
     setValidationRunning(false)
@@ -362,7 +362,10 @@ export function JobDetail({ job, onRunIntake }) {
     setValidationRunning(true)
     setValidationError('')
     try {
-      const data = await validateJobDryRun(job.jobId)
+      const data = await validateJobDryRun(job.jobId, {
+        source: job?.source || '',
+        managerVersion: job?.source === 'agijobmanager-v2' ? 'v2' : undefined,
+      })
       setValidationSummary(summarizeDryRunReport(data.report))
     } catch (e) {
       setValidationSummary(null)
@@ -449,7 +452,7 @@ export function JobDetail({ job, onRunIntake }) {
         </button>
 
         {!canRunValidation && (
-          <div className="text-xs text-slate-500">Dry-run validation is available for numeric AGIJobManager job IDs.</div>
+          <div className="text-xs text-slate-500">Validation needs a detectable numeric job id (examples: 12, V2-12).</div>
         )}
 
         {validationError && (
