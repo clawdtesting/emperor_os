@@ -174,16 +174,20 @@ export default function App() {
           <div className="space-y-2">
             <div className="text-xs text-slate-500 uppercase tracking-wider">AGIJobManager v2 lane</div>
             {!jobsV2.length && (
-              <div className="rounded border border-fuchsia-900/60 bg-fuchsia-950/20 p-3 text-xs text-slate-300">
-                <div className="font-semibold text-fuchsia-300">Bootstrap on-chain signal (v2)</div>
-                <div className="text-slate-400 mt-1 break-all">
+              <div className="rounded border border-fuchsia-900/60 bg-fuchsia-950/20 p-3 text-xs text-slate-300 space-y-2">
+                <div className="font-semibold text-fuchsia-300">AGIJobManager v2 discovered, but not indexed yet</div>
+                <div className="text-slate-400">
+                  This lane currently has contract-level bootstrap signals only. It does not yet have full v2 job indexing
+                  (spec URI, payout, assignment, validation counters) like v1/Prime.
+                </div>
+                <div className="text-slate-400 break-all">
                   Contract:{' '}
                   <a className="text-blue-400 hover:text-blue-300" target="_blank" rel="noreferrer" href={`https://etherscan.io/address/${V2_CONTRACT}`}>
                     {V2_CONTRACT}
                   </a>
                 </div>
-                <div className="text-slate-400 mt-1">Recent tx:</div>
-                <ul className="mt-1 space-y-1">
+                <div className="text-slate-500">Bootstrap tx:</div>
+                <ul className="space-y-1">
                   {V2_BOOTSTRAP_TXS.map(tx => (
                     <li key={tx}>
                       <a className="text-blue-400 hover:text-blue-300 break-all" target="_blank" rel="noreferrer" href={`https://etherscan.io/tx/${tx}`}>
@@ -192,6 +196,9 @@ export default function App() {
                     </li>
                   ))}
                 </ul>
+                <div className="rounded border border-fuchsia-800/60 bg-slate-950/40 p-2 text-slate-400">
+                  Immediate action: open a v2 job card and run “Validate this job” to get deterministic checks and mismatch diagnostics.
+                </div>
               </div>
             )}
             {jobsV2Display.map(j => (
