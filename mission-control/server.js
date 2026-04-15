@@ -547,13 +547,24 @@ async function buildV2OperatorView(jobId, options = {}) {
     const iface = new ethers.Interface(abi)
     const topicJobId = ethers.zeroPadValue(ethers.toBeHex(BigInt(numericJobId)), 32)
 
-    const toSimple = (evt, address, rawLog) => ({
-      blockNumber: Number(BigInt(rawLog.blockNumber || '0x0')),
-      txHash: rawLog.transactionHash,
-      contract: String(address || '').toLowerCase(),
-      name: evt.name,
-      args: Object.fromEntries(Object.entries(evt.args || {}).filter(([k]) => Number.isNaN(Number(k)))),
-    })
+    const toSimple = (evt, address, rawLog) => {
+      const named = {}
+      try {
+        const inputs = evt?.fragment?.inputs || []
+        for (let i = 0; i < inputs.length; i++) {
+          const key = String(inputs[i]?.name || '').trim()
+          if (!key) continue
+          named[key] = evt.args?.[i]
+        }
+      } catch {}
+      return {
+        blockNumber: Number(BigInt(rawLog.blockNumber || '0x0')),
+        txHash: rawLog.transactionHash,
+        contract: String(address || '').toLowerCase(),
+        name: evt.name,
+        args: named,
+      }
+    }
 
     const eventsToScan = ['JobCreated', 'JobApplied', 'JobCompletionRequested', 'JobValidated', 'JobDisapproved', 'JobCompleted', 'JobDisputed']
     const all = []
