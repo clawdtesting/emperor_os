@@ -6,10 +6,26 @@ import { summarizeDryRunReport } from '../features/validation/summarizeDryRun'
 
 const IPFS_GW = 'https://ipfs.io/ipfs/'
 
-function IpfsLink({ uri }) {
+function IpfsLink({ uri, label }) {
   if (!uri) return <span className="text-slate-500">—</span>
-  const cid = uri.replace('ipfs://', '')
-  const short = cid.slice(0, 10) + '...' + cid.slice(-6)
+  const raw = String(uri)
+
+  if (/^https?:\/\//i.test(raw)) {
+    const short = label || (raw.length > 48 ? `${raw.slice(0, 32)}...${raw.slice(-12)}` : raw)
+    return (
+      <a href={raw} target="_blank" rel="noopener noreferrer"
+         className="text-blue-400 hover:text-blue-300 font-mono break-all">
+        {short}
+      </a>
+    )
+  }
+
+  if (!raw.startsWith('ipfs://')) {
+    return <span className="text-slate-300 font-mono break-all">{raw}</span>
+  }
+
+  const cid = raw.replace('ipfs://', '')
+  const short = label || (cid.slice(0, 10) + '...' + cid.slice(-6))
   return (
     <a href={IPFS_GW + cid} target="_blank" rel="noopener noreferrer"
        className="text-blue-400 hover:text-blue-300 font-mono break-all">
@@ -143,37 +159,176 @@ export function JobBrief({ spec, onClose }) {
 
 
 
+function asArray(value) {
+  if (Array.isArray(value)) return value
+  if (value == null) return []
+  return [value]
+}
+
+function firstText(...values) {
+  for (const v of values) {
+    if (typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return ''
+}
+
+function toBriefItems(value) {
+  return asArray(value)
+    .map((x) => (typeof x === 'string' ? x : (x?.label || x?.name || x?.title || x?.value || '')))
+    .map((x) => String(x || '').trim())
+    .filter(Boolean)
+}
+
+function normalizeCompletionBrief(data) {
+  const p = data?.properties || {}
+  const finalDeliverables = asArray(p.finalDeliverables || data?.finalDeliverables)
+    .map((item) => {
+      if (!item) return null
+      if (typeof item === 'string') return { name: 'Deliverable', uri: item, description: '' }
+      return {
+        name: item.name || item.title || 'Deliverable',
+        uri: item.uri || item.ipfsURI || item.outputURI || item.deliverableURI || item.gatewayURI || item.url || '',
+        description: item.description || '',
+      }
+    })
+    .filter((x) => x && x.uri)
+
+  return {
+    title: firstText(p.title, data?.title, data?.name) || 'Completion package',
+    summary: firstText(p.summary, data?.summary, data?.description),
+    details: firstText(p.details, p.description, data?.details, data?.deliverable, data?.content, data?.output, data?.report),
+    validatorNote: firstText(p.validatorNote, data?.validatorNote),
+    completionStatus: firstText(p.completionStatus, data?.completionStatus),
+    generatedAt: firstText(p.generatedAt, data?.generatedAt),
+    jobId: firstText(p.jobId, data?.jobId),
+    jobSpecURI: firstText(p.jobSpecURI, data?.jobSpecURI),
+    deliverables: finalDeliverables,
+    requirements: toBriefItems(p.requirements || data?.requirements),
+    acceptanceCriteria: toBriefItems(p.acceptanceCriteria || data?.acceptanceCriteria),
+    tags: toBriefItems(p.tags || data?.tags),
+    links: [
+      ['Primary asset', data?.image || data?.outputURI || data?.deliverableURI],
+      ['Completion metadata', data?.completionURI || data?.metadataURI || data?.uri],
+      ['Attachment', data?.attachmentURI || data?.artifactURI],
+    ].filter(([, value]) => value),
+  }
+}
+
 function CompletionBrief({ data, onClose }) {
-  const maybeLinks = [
-    ['Deliverable', data?.image || data?.outputURI || data?.deliverableURI],
-    ['Metadata', data?.completionURI || data?.metadataURI || data?.uri],
-    ['Attachment', data?.attachmentURI || data?.artifactURI],
-  ].filter(([, value]) => value)
+  const brief = normalizeCompletionBrief(data)
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg max-h-screen overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-xl w-full sm:max-w-2xl max-h-screen overflow-y-auto">
         <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-5 py-4 flex items-center justify-between">
           <div className="text-sm font-semibold text-white">Completion Brief</div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
-          {data?.properties?.validatorNote && (
+        <div className="px-5 py-4 space-y-5">
+          <div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Title</div>
+            <div className="text-base font-medium text-white leading-snug">{brief.title}</div>
+          </div>
+
+          {brief.summary && (
             <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Validator note</div>
-              <div className="text-sm text-slate-300 leading-relaxed bg-slate-800/50 rounded-lg p-3">
-                {typeof data.properties.validatorNote === 'string'
-                  ? data.properties.validatorNote
-                  : JSON.stringify(data.properties.validatorNote, null, 2)}
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Summary</div>
+              <div className="text-sm text-slate-300 leading-relaxed">{brief.summary}</div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-slate-800 rounded-lg p-3 text-center">
+              <div className="text-xs text-slate-500 mb-1">Status</div>
+              <div className="text-sm font-semibold text-emerald-300 break-words">{brief.completionStatus || '—'}</div>
+            </div>
+            <div className="bg-slate-800 rounded-lg p-3 text-center">
+              <div className="text-xs text-slate-500 mb-1">Job ID</div>
+              <div className="text-sm font-semibold text-slate-200">{brief.jobId || '—'}</div>
+            </div>
+            <div className="bg-slate-800 rounded-lg p-3 text-center">
+              <div className="text-xs text-slate-500 mb-1">Generated</div>
+              <div className="text-xs font-semibold text-slate-200 break-words">{brief.generatedAt || '—'}</div>
+            </div>
+          </div>
+
+          {brief.jobSpecURI && (
+            <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+              <div className="text-xs text-slate-500 mb-1">Job spec URI</div>
+              <IpfsLink uri={brief.jobSpecURI} />
+            </div>
+          )}
+
+          {brief.deliverables.length > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Final deliverables</div>
+              <div className="space-y-2">
+                {brief.deliverables.map((d, i) => (
+                  <div key={`${d.uri}-${i}`} className="rounded border border-slate-800 bg-slate-950/40 p-2 space-y-1">
+                    <div className="text-sm text-slate-200">{d.name}</div>
+                    <IpfsLink uri={d.uri} />
+                    {d.description && <div className="text-xs text-slate-400">{d.description}</div>}
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {maybeLinks.length > 0 && (
+          {brief.validatorNote && (
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Validator note</div>
+              <div className="text-sm text-slate-300 leading-relaxed bg-slate-800/50 rounded-lg p-3 whitespace-pre-wrap">{brief.validatorNote}</div>
+            </div>
+          )}
+
+          {brief.details && (
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Details</div>
+              <div className="text-sm text-slate-300 leading-relaxed bg-slate-800/50 rounded-lg p-3 whitespace-pre-wrap">{brief.details}</div>
+            </div>
+          )}
+
+          {brief.acceptanceCriteria.length > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Acceptance criteria</div>
+              <ul className="space-y-1.5">
+                {brief.acceptanceCriteria.map((c, i) => (
+                  <li key={`${c}-${i}`} className="flex gap-2 text-sm text-slate-300">
+                    <span className="text-green-500 shrink-0 mt-0.5">✓</span>
+                    <span>{c}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {brief.requirements.length > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Requirements</div>
+              <ul className="space-y-1.5">
+                {brief.requirements.map((r, i) => (
+                  <li key={`${r}-${i}`} className="flex gap-2 text-sm text-slate-300">
+                    <span className="text-amber-500 shrink-0 mt-0.5">•</span>
+                    <span>{r}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {brief.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {brief.tags.map((t) => (
+                <span key={t} className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">{t}</span>
+              ))}
+            </div>
+          )}
+
+          {brief.links.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs text-slate-500 uppercase tracking-wider">Linked assets</div>
-              {maybeLinks.map(([label, value]) => (
+              {brief.links.map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-3 border border-slate-800 rounded-lg p-2">
                   <span className="text-xs text-slate-500">{label}</span>
                   <IpfsLink uri={value} />
@@ -435,7 +590,9 @@ export function JobDetail({ job, onRunIntake }) {
         if (!res.ok) continue
         const data = await res.json().catch(() => null)
         if (data && typeof data === 'object') return data
-      } catch {}
+      } catch {
+        // try next gateway
+      }
     }
     throw new Error('All IPFS gateways failed')
   }

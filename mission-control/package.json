@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
     "ethers": "^6.16.0",
     "express": "^5.2.1",
     "lucide-react": "^1.0.1",
