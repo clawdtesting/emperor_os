@@ -57,6 +57,53 @@ export async function dismissAction(id) {
   return res.json()
 }
 
+export async function fetchOperatorActions() {
+  const res = await fetch(BASE + '/api/operator-actions')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch operator actions')
+  return data
+}
+
+export async function fetchOperatorActionFile(path) {
+  const res = await fetch(BASE + '/api/operator-actions/file?path=' + encodeURIComponent(path || ''))
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to open operator action file')
+  return data
+}
+
+export async function markOperatorActionSigned(id) {
+  const res = await fetch(BASE + '/api/operator-actions/' + encodeURIComponent(id) + '/mark-signed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to mark operator action signed')
+  return data
+}
+
+export async function markOperatorActionBroadcast(id, txHash) {
+  const res = await fetch(BASE + '/api/operator-actions/' + encodeURIComponent(id) + '/mark-broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txHash }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to mark operator action broadcast')
+  return data
+}
+
+export async function markOperatorActionFinalized(id, txHash = '') {
+  const res = await fetch(BASE + '/api/operator-actions/' + encodeURIComponent(id) + '/mark-finalized', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txHash }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to mark operator action finalized')
+  return data
+}
+
 export async function fetchRunnerStatus() {
   const res = await fetch(BASE + '/api/runner/status')
   if (!res.ok) throw new Error('HTTP ' + res.status)

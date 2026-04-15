@@ -68,6 +68,55 @@ export default function App() {
     if (window.innerWidth < 768) setTab('detail')
   }
 
+  function extractNumericTail(value) {
+    const raw = String(value || '').trim()
+    if (!raw) return null
+    const m = raw.match(/(\d+)$/)
+    return m ? m[1] : null
+  }
+
+  function handleOpenOperatorEntity(actionItem) {
+    const lane = String(actionItem?.lane || '').toLowerCase()
+    const entityId = String(actionItem?.entityId || '').trim()
+    const entityTail = extractNumericTail(entityId)
+
+    let candidate = null
+
+    if (lane === 'prime') {
+      candidate = jobsDesc.find((j) => {
+        if (String(j?.source || '').toLowerCase() !== 'agiprimediscovery') return false
+        const pId = String(j?.procurementId || '').trim()
+        const jId = String(j?.jobId || '').trim()
+        return pId === entityId || jId === entityId || jId === `P-${entityId}`
+      }) || null
+      if (!candidate) {
+        setTab('prime')
+        return
+      }
+    } else {
+      const wantV2 = lane === 'v2'
+      candidate = jobsDesc.find((j) => {
+        const source = String(j?.source || '').toLowerCase()
+        if (wantV2 && source !== 'agijobmanager-v2') return false
+        if (!wantV2 && source === 'agijobmanager-v2') return false
+
+        const jId = String(j?.jobId || '').trim()
+        if (jId === entityId) return true
+
+        const jTail = extractNumericTail(jId)
+        return entityTail && jTail && jTail === entityTail
+      }) || null
+
+      if (!candidate) {
+        setTab(wantV2 ? 'jobs-v2' : 'jobs-v1')
+        return
+      }
+    }
+
+    setSelected(candidate)
+    setTab('detail')
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       <div className="border-b border-slate-800 px-4 py-3 flex items-center justify-between">
@@ -226,7 +275,7 @@ export default function App() {
 
         {tab === 'ops' && (
           <div className="bg-slate-900 rounded-lg border border-slate-800">
-            <OperationsLane />
+            <OperationsLane onOpenEntity={handleOpenOperatorEntity} />
           </div>
         )}
 

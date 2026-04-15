@@ -6,6 +6,8 @@ import { dirname, resolve, join } from 'path'
 import { fileURLToPath } from 'url'
 import { createServer } from 'http'
 import { tmpdir } from 'os'
+import { createHash } from 'crypto'
+import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 
 const app = express()
 app.use(cors())
@@ -22,6 +24,7 @@ const PROC_ARTIFACTS_DIR = join(WORKSPACE_ROOT, 'agent', 'artifacts')
 const NOTIF_STATE_DIR   = resolve(__dirname, 'state')
 const NOTIF_STATE_FILE  = join(NOTIF_STATE_DIR, 'notifications.json')
 const NOTIF_LOG_FILE    = join(NOTIF_STATE_DIR, 'actions.log.jsonl')
+const OPERATOR_TX_LOG_FILE = join(NOTIF_STATE_DIR, 'operator-action-transitions.jsonl')
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID
 const MC_URL             = process.env.MISSION_CONTROL_URL || 'http://100.104.194.128:3000'
@@ -77,6 +80,13 @@ function saveNotifState(state) {
 
 function appendActionLog(entry) {
   appendFileSync(NOTIF_LOG_FILE, JSON.stringify(entry) + '\n')
+}
+
+function appendOperatorTransitionLog(entry) {
+  appendFileSync(OPERATOR_TX_LOG_FILE, JSON.stringify({
+    ...entry,
+    loggedAt: new Date().toISOString(),
+  }) + '\n')
 }
 
 function extractNumericJobId(rawJobId) {
@@ -1964,6 +1974,464 @@ app.get('/api/operations-lane', async (req, res) => {
   } catch (e) {
     console.error('[ops-lane] error:', e.message)
     res.status(500).json({ error: e.message })
+  }
+})
+
+function findReviewManifestNearTx(unsignedTxPath) {
+  try {
+    if (!unsignedTxPath) return null
+    const txPath = resolvePathMaybe(WORKSPACE_ROOT, unsignedTxPath)
+    if (!txPath) return null
+    const parent = dirname(txPath)
+    if (!existsSync(parent) || !statSync(parent).isDirectory()) return null
+    const files = readdirSync(parent)
+    const review = files.find(name => /^review_manifest.*\.json$/i.test(name))
+    if (!review) return null
+    return join(parent, review)
+  } catch {
+    return null
+  }
+}
+
+function actionBlockingReason(state, nextAction) {
+  return (
+    nextAction?.blockedReason
+    || nextAction?.blockingReason
+    || state?.blockingReason
+    || state?.blockedReason
+    || null
+  )
+}
+
+function buildOperatorActionId({ lane, entityId, action, pkg, index = 0 }) {
+  const seed = [
+    String(lane || ''),
+    String(entityId || ''),
+    String(action || ''),
+    String(pkg?.file || ''),
+    String(pkg?.unsignedTxPath || pkg?.unsignedTx || ''),
+    String(index),
+  ].join('|')
+  return `oa_${createHash('sha1').update(seed, 'utf8').digest('hex').slice(0, 20)}`
+}
+
+function extractChecklistFromManifest(reviewManifestPath) {
+  try {
+    if (!reviewManifestPath) return []
+    const resolved = resolvePathMaybe(WORKSPACE_ROOT, reviewManifestPath)
+    if (!resolved || !existsSync(resolved) || !statSync(resolved).isFile()) return []
+    const obj = readJsonSafe(resolved, null)
+    if (!obj || typeof obj !== 'object') return []
+    const candidates = [
+      obj.checklist,
+      obj.reviewChecklist,
+      obj.preconditions,
+      obj.operatorChecklist,
+      obj.review?.checklist,
+    ]
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) {
+        return candidate.map((v) => String(v)).filter(Boolean)
+      }
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+function extractChecklist(pkg, reviewManifestPath) {
+  const direct = [pkg?.checklist, pkg?.reviewChecklist, pkg?.preconditions].find((v) => Array.isArray(v))
+  if (direct) return direct.map((v) => String(v)).filter(Boolean)
+  return extractChecklistFromManifest(reviewManifestPath)
+}
+
+function normalizeChecklist(checklist, action) {
+  const items = Array.isArray(checklist) ? checklist.map((v) => String(v)).filter(Boolean) : []
+  if (items.length > 0) return items
+  return [
+    `Review unsigned ${action} transaction payload before signing`,
+    'Confirm target contract, selector, and calldata match manifest',
+  ]
+}
+
+function collectOperatorActions({ includeRefs = false } = {}) {
+  const actions = []
+
+  if (existsSync(PROC_ARTIFACTS_DIR)) {
+    const dirs = readdirSync(PROC_ARTIFACTS_DIR).filter(d => d.startsWith('proc_') && statSync(join(PROC_ARTIFACTS_DIR, d)).isDirectory())
+    for (const dir of dirs) {
+      const root = join(PROC_ARTIFACTS_DIR, dir)
+      const stateFile = join(root, 'state.json')
+      const state = readJsonSafe(stateFile, null)
+      if (!state) continue
+      const nextAction = readJsonSafe(join(root, 'next_action.json'), null)
+      const blockingReason = actionBlockingReason(state, nextAction)
+      const procurementId = String(state.procurementId || dir.replace('proc_', ''))
+
+      for (let idx = 0; idx < (state.txPackages || []).length; idx += 1) {
+        const pkg = state.txPackages[idx]
+        const normalized = buildOperatorAction({
+          lane: 'prime',
+          entityId: procurementId,
+          status: state.status,
+          pkg,
+          state,
+          baseDir: root,
+          blockingReason,
+        })
+        if (!normalized) continue
+        normalized.reviewManifestPath ||= findReviewManifestNearTx(normalized.unsignedTxPath)
+        if (normalized.queueStage === 'needs_signature' && !normalized.unsignedTxPath) continue
+        normalized.checklist = normalizeChecklist(extractChecklist(pkg, normalized.reviewManifestPath), normalized.action)
+        normalized.id = buildOperatorActionId({ lane: 'prime', entityId: procurementId, action: normalized.action, pkg, index: idx })
+        if (includeRefs) {
+          normalized._ref = { stateFile, txPackageIndex: idx, lane: 'prime', entityId: procurementId, action: normalized.action }
+        }
+        actions.push(normalized)
+      }
+    }
+  }
+
+  if (existsSync(AGENT_STATE_DIR)) {
+    const files = readdirSync(AGENT_STATE_DIR).filter(f => f.endsWith('.json'))
+    for (const file of files) {
+      const stateFile = join(AGENT_STATE_DIR, file)
+      const state = readJsonSafe(stateFile, null)
+      if (!state) continue
+      const jobId = String(state.jobId || file.replace('.json', ''))
+      const lane = inferJobLane(state, jobId)
+      const root = dirname(stateFile)
+      const blockingReason = actionBlockingReason(state, state?.nextAction || null)
+
+      for (let idx = 0; idx < (state.txPackages || []).length; idx += 1) {
+        const pkg = state.txPackages[idx]
+        const normalized = buildOperatorAction({
+          lane,
+          entityId: jobId,
+          status: state.status,
+          pkg,
+          state,
+          baseDir: root,
+          blockingReason,
+        })
+        if (!normalized) continue
+        normalized.reviewManifestPath ||= findReviewManifestNearTx(normalized.unsignedTxPath)
+        if (normalized.queueStage === 'needs_signature' && !normalized.unsignedTxPath) continue
+        normalized.checklist = normalizeChecklist(extractChecklist(pkg, normalized.reviewManifestPath), normalized.action)
+        normalized.id = buildOperatorActionId({ lane, entityId: jobId, action: normalized.action, pkg, index: idx })
+        if (includeRefs) {
+          normalized._ref = { stateFile, txPackageIndex: idx, lane, entityId: jobId, action: normalized.action }
+        }
+        actions.push(normalized)
+      }
+    }
+  }
+
+  actions.sort((a, b) => {
+    if (b.priority !== a.priority) return b.priority - a.priority
+    const laneCmp = String(a.lane).localeCompare(String(b.lane))
+    if (laneCmp !== 0) return laneCmp
+    return String(a.entityId).localeCompare(String(b.entityId))
+  })
+
+  return actions
+}
+
+function findOperatorActionById(id) {
+  const needle = String(id || '').trim()
+  if (!needle) return null
+  const actions = collectOperatorActions({ includeRefs: true })
+  return actions.find((a) => a.id === needle) || null
+}
+
+app.get('/api/operator-actions', (req, res) => {
+  try {
+    const actions = collectOperatorActions({ includeRefs: false })
+    const byLane = actions.reduce((acc, item) => {
+      acc[item.lane] = (acc[item.lane] || 0) + 1
+      return acc
+    }, {})
+
+    res.json({
+      actions,
+      total: actions.length,
+      byLane,
+      scannedAt: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('[operator-actions] error:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+function isPathInsideWorkspace(targetPath) {
+  const resolvedRoot = resolve(WORKSPACE_ROOT)
+  const resolved = resolve(String(targetPath || ''))
+  return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + '/')
+}
+
+app.get('/api/operator-actions/file', (req, res) => {
+  try {
+    const inputPath = String(req.query.path || '').trim()
+    if (!inputPath) return res.status(400).json({ error: 'path query is required' })
+
+    const resolved = resolve(inputPath)
+    if (!isPathInsideWorkspace(resolved)) {
+      return res.status(400).json({ error: 'path outside workspace not allowed' })
+    }
+    if (!existsSync(resolved) || !statSync(resolved).isFile()) {
+      return res.status(404).json({ error: 'file not found' })
+    }
+
+    const text = readFileSync(resolved, 'utf8')
+    let json = null
+    if (resolved.endsWith('.json')) {
+      try { json = JSON.parse(text) } catch {}
+    }
+
+    res.json({
+      ok: true,
+      path: resolved,
+      mime: resolved.endsWith('.json') ? 'application/json' : 'text/plain',
+      json,
+      text,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to read operator action file' })
+  }
+})
+
+function mutateOperatorActionState(actionId, mutator) {
+  const found = findOperatorActionById(actionId)
+  if (!found?._ref?.stateFile) {
+    const err = new Error('operator action id not found')
+    err.status = 404
+    throw err
+  }
+
+  const stateFile = found._ref.stateFile
+  const state = readJsonSafe(stateFile, null)
+  if (!state) {
+    const err = new Error('failed to load state file')
+    err.status = 500
+    throw err
+  }
+
+  const txPackages = Array.isArray(state.txPackages) ? [...state.txPackages] : []
+  const idx = Number(found._ref.txPackageIndex)
+  if (!Number.isInteger(idx) || idx < 0 || idx >= txPackages.length) {
+    const err = new Error('tx package index out of range')
+    err.status = 409
+    throw err
+  }
+
+  const pkg = { ...(txPackages[idx] || {}) }
+  const now = new Date().toISOString()
+  const mutationResult = mutator({ now, pkg, state, action: found.action }) || {}
+
+  txPackages[idx] = pkg
+  const nextState = {
+    ...state,
+    txPackages,
+    updatedAt: now,
+  }
+
+  if (mutationResult.receipts) {
+    nextState.receipts = mutationResult.receipts
+  }
+
+  atomicWriteJson(stateFile, nextState)
+
+  return {
+    action: found,
+    stateFile,
+    updatedAt: now,
+    state: nextState,
+  }
+}
+
+function upsertReceipt(receipts, action, patch) {
+  const out = Array.isArray(receipts) ? [...receipts] : []
+  const idx = out.findIndex((r) => String(r?.action || '') === String(action || ''))
+  if (idx >= 0) {
+    out[idx] = { ...out[idx], ...patch, action: String(action || '') }
+  } else {
+    out.push({ action: String(action || ''), ...patch })
+  }
+  return out
+}
+
+app.post('/api/operator-actions/:id/mark-signed', (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim()
+    if (!id) return res.status(400).json({ error: 'id is required' })
+
+    const result = mutateOperatorActionState(id, ({ now, pkg }) => {
+      pkg.signed = true
+      pkg.signedAt = pkg.signedAt || now
+    })
+
+    appendOperatorTransitionLog({
+      transition: 'mark-signed',
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'signed',
+      stateFile: result.stateFile,
+      signedAt: result.updatedAt,
+    })
+
+    res.json({
+      ok: true,
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'signed',
+      signedAt: result.updatedAt,
+      stateFile: result.stateFile,
+    })
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'Failed to mark operator action as signed' })
+  }
+})
+
+app.post('/api/operator-actions/:id/mark-broadcast', (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim()
+    const txHashRaw = String(req.body?.txHash || '').trim().toLowerCase()
+    if (!id) return res.status(400).json({ error: 'id is required' })
+    if (!/^0x[a-f0-9]{64}$/.test(txHashRaw)) return res.status(400).json({ error: 'txHash must be 0x-prefixed 32-byte hash' })
+
+    const result = mutateOperatorActionState(id, ({ now, pkg, state, action }) => {
+      pkg.signed = true
+      pkg.signedAt = pkg.signedAt || now
+      pkg.broadcastTxHash = txHashRaw
+      pkg.broadcastAt = pkg.broadcastAt || now
+      const receipts = upsertReceipt(state.receipts, action, {
+        txHash: txHashRaw,
+        status: 'broadcast_pending',
+        broadcastAt: now,
+      })
+      return { receipts }
+    })
+
+    appendOperatorTransitionLog({
+      transition: 'mark-broadcast',
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'broadcast_pending',
+      txHash: txHashRaw,
+      stateFile: result.stateFile,
+      broadcastAt: result.updatedAt,
+    })
+
+    res.json({
+      ok: true,
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'broadcast_pending',
+      txHash: txHashRaw,
+      broadcastAt: result.updatedAt,
+      stateFile: result.stateFile,
+    })
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'Failed to mark operator action as broadcast' })
+  }
+})
+
+app.post('/api/operator-actions/:id/mark-finalized', (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim()
+    const txHashRaw = String(req.body?.txHash || '').trim().toLowerCase()
+    if (!id) return res.status(400).json({ error: 'id is required' })
+    if (txHashRaw && !/^0x[a-f0-9]{64}$/.test(txHashRaw)) return res.status(400).json({ error: 'txHash must be 0x-prefixed 32-byte hash' })
+
+    const result = mutateOperatorActionState(id, ({ now, pkg, state, action }) => {
+      pkg.signed = true
+      pkg.signedAt = pkg.signedAt || now
+      if (txHashRaw) {
+        pkg.broadcastTxHash = pkg.broadcastTxHash || txHashRaw
+        pkg.broadcastAt = pkg.broadcastAt || now
+      }
+      pkg.finalizedAt = now
+
+      const receipts = upsertReceipt(state.receipts, action, {
+        txHash: txHashRaw || pkg.broadcastTxHash || '',
+        status: 'finalized',
+        finalizedAt: now,
+      })
+      return { receipts }
+    })
+
+    appendOperatorTransitionLog({
+      transition: 'mark-finalized',
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'finalized',
+      txHash: txHashRaw || null,
+      stateFile: result.stateFile,
+      finalizedAt: result.updatedAt,
+    })
+
+    res.json({
+      ok: true,
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'finalized',
+      txHash: txHashRaw || null,
+      finalizedAt: result.updatedAt,
+      stateFile: result.stateFile,
+    })
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'Failed to mark operator action as finalized' })
+  }
+})
+
+app.post('/api/operator-actions/mark-signed', (req, res) => {
+  try {
+    const id = String(req.body?.id || '').trim()
+    if (!id) return res.status(400).json({ error: 'id is required' })
+
+    const result = mutateOperatorActionState(id, ({ now, pkg }) => {
+      pkg.signed = true
+      pkg.signedAt = pkg.signedAt || now
+    })
+
+    appendOperatorTransitionLog({
+      transition: 'mark-signed',
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'signed',
+      stateFile: result.stateFile,
+      signedAt: result.updatedAt,
+      compatibilityRoute: true,
+    })
+
+    res.json({
+      ok: true,
+      id,
+      lane: result.action.lane,
+      entityId: result.action.entityId,
+      action: result.action.action,
+      status: 'signed',
+      signedAt: result.updatedAt,
+      stateFile: result.stateFile,
+    })
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'Failed to mark operator action as signed' })
   }
 })
 
