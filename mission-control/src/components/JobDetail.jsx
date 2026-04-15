@@ -359,6 +359,26 @@ export function JobDetail({ job, onRunIntake }) {
     finally { setLoadingMeta(false) }
   }
 
+  async function fetchIpfsJsonByUri(uri) {
+    const raw = String(uri || '').trim()
+    if (!raw.startsWith('ipfs://')) throw new Error('Completion URI is not ipfs://')
+    const cid = raw.replace('ipfs://', '').split('/')[0]
+    const gateways = [
+      'https://ipfs.io/ipfs/',
+      'https://cloudflare-ipfs.com/ipfs/',
+      'https://gateway.pinata.cloud/ipfs/',
+    ]
+    for (const gw of gateways) {
+      try {
+        const res = await fetch(gw + cid, { signal: AbortSignal.timeout(8000) })
+        if (!res.ok) continue
+        const data = await res.json().catch(() => null)
+        if (data && typeof data === 'object') return data
+      } catch {}
+    }
+    throw new Error('All IPFS gateways failed')
+  }
+
   async function openBrief() {
     setLoadingBrief(true)
     setBriefError(null)
@@ -433,6 +453,17 @@ export function JobDetail({ job, onRunIntake }) {
       addLog({ type: 'error', message: e.message })
     } finally {
       setIntakeRunning(false)
+    }
+  }
+
+  async function handleOpenCompletionRequest(uri) {
+    try {
+      setBriefError(null)
+      const data = await fetchIpfsJsonByUri(uri)
+      setCompletionMeta(data)
+      setShowCompletionBrief(true)
+    } catch (e) {
+      setBriefError(e.message || 'Failed to fetch completion request payload')
     }
   }
 
@@ -551,10 +582,23 @@ export function JobDetail({ job, onRunIntake }) {
                 <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
                   <div className="text-slate-500 mb-1">Completion requests ({operatorView.completionRequests?.length || 0})</div>
                   {(operatorView.completionRequests || []).length > 0 ? (
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {operatorView.completionRequests.map((c, i) => (
-                        <div key={`${c.txHash}-${i}`} className="text-slate-200 font-mono break-all">
-                          {c.agent || 'unknown agent'} · {c.jobCompletionURI || 'no URI'}
+                        <div key={`${c.txHash}-${i}`} className="rounded border border-slate-800 p-2 space-y-1">
+                          <div className="text-slate-200 font-mono break-all">{c.agent || 'unknown agent'}</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-slate-300 font-mono break-all">
+                              {c.jobCompletionURI ? <IpfsLink uri={c.jobCompletionURI} /> : 'no URI'}
+                            </div>
+                            {c.jobCompletionURI && (
+                              <button
+                                onClick={() => handleOpenCompletionRequest(c.jobCompletionURI)}
+                                className="shrink-0 px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
+                              >
+                                open brief
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
