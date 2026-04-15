@@ -263,7 +263,7 @@ export default function App() {
         {tab === 'detail' && (
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
             <button onClick={() => setTab('jobs')} className="text-xs text-slate-500 mb-3 flex items-center gap-1 hover:text-slate-300">← back to jobs</button>
-            <JobDetail job={selected} onRunIntake={() => {}} />
+            <JobDetail job={selected} wallet={wallet} onRunIntake={() => {}} />
           </div>
         )}
 

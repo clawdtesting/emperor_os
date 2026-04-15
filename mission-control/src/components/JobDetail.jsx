@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { resolveEns, shortAddr } from '../utils/ens'
-import { fetchProcurementArtifacts, fetchV2OperatorView, prepareValidatorV1, scoreCompletionUri, validateJobDryRun } from '../api'
+import {
+  fetchPrimeValidatorTimeline,
+  fetchProcurementArtifacts,
+  fetchV2OperatorView,
+  preparePrimeValidatorCommit,
+  preparePrimeValidatorReveal,
+  prepareValidatorV1,
+  scoreCompletionUri,
+  validateJobDryRun,
+} from '../api'
 import { summarizeDryRunReport } from '../features/validation/summarizeDryRun'
 
 const IPFS_GW = 'https://ipfs.io/ipfs/'
@@ -446,7 +455,7 @@ function EnsRows({ job }) {
   )
 }
 
-export function JobDetail({ job, onRunIntake }) {
+export function JobDetail({ job, wallet, onRunIntake }) {
   const [briefSpec, setBriefSpec]       = useState(null)
   const [loadingBrief, setLoadingBrief] = useState(false)
   const [briefError, setBriefError]     = useState(null)
@@ -472,6 +481,12 @@ export function JobDetail({ job, onRunIntake }) {
   const [procArtifactsLoading, setProcArtifactsLoading] = useState(false)
   const [procArtifactsError, setProcArtifactsError] = useState('')
   const [procArtifacts, setProcArtifacts] = useState(null)
+  const [primeActionLoading, setPrimeActionLoading] = useState('')
+  const [primeActionError, setPrimeActionError] = useState('')
+  const [primeActionResult, setPrimeActionResult] = useState(null)
+  const [primeTimeline, setPrimeTimeline] = useState(null)
+  const [primeTimelineLoading, setPrimeTimelineLoading] = useState(false)
+  const [primeTimelineError, setPrimeTimelineError] = useState('')
 
   const total       = (job?.approvals || 0) + (job?.disapprovals || 0)
   const approvalPct = total > 0 ? Math.round(((job?.approvals || 0) / total) * 100) : 0
@@ -493,6 +508,12 @@ export function JobDetail({ job, onRunIntake }) {
     setValidatorPrepareError('')
     setValidatorPrepareResult(null)
     setValidatorDecision('')
+    setPrimeActionLoading('')
+    setPrimeActionError('')
+    setPrimeActionResult(null)
+    setPrimeTimeline(null)
+    setPrimeTimelineLoading(false)
+    setPrimeTimelineError('')
   }, [job?.jobId, job?.source])
 
   useEffect(() => {
@@ -531,7 +552,7 @@ export function JobDetail({ job, onRunIntake }) {
     })()
 
     return () => { cancelled = true }
-  }, [isV2, job?.jobId, job?.source])
+  }, [isV2, job?.jobId, job?.source, job?.links?.contract, job?.employer])
 
   useEffect(() => {
     let cancelled = false
@@ -555,6 +576,34 @@ export function JobDetail({ job, onRunIntake }) {
         }
       } finally {
         if (!cancelled) setProcArtifactsLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [isPrime, procurementId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isPrime || !/^\d+$/.test(procurementId)) {
+      setPrimeTimelineLoading(false)
+      setPrimeTimelineError('')
+      setPrimeTimeline(null)
+      return
+    }
+
+    ;(async () => {
+      setPrimeTimelineLoading(true)
+      setPrimeTimelineError('')
+      try {
+        const data = await fetchPrimeValidatorTimeline(procurementId)
+        if (!cancelled) setPrimeTimeline(data)
+      } catch (e) {
+        if (!cancelled) {
+          setPrimeTimeline(null)
+          setPrimeTimelineError(e.message || 'Failed to load validator timeline')
+        }
+      } finally {
+        if (!cancelled) setPrimeTimelineLoading(false)
       }
     })()
 
@@ -786,6 +835,48 @@ export function JobDetail({ job, onRunIntake }) {
     if (!candidate) return
     if (candidate.reviewManifestPath) openArtifactPath(candidate.reviewManifestPath)
     if (candidate.unsignedTxPath) openArtifactPath(candidate.unsignedTxPath)
+  }
+
+  async function refreshPrimeTimeline() {
+    if (!isPrime || !/^\d+$/.test(procurementId)) return
+    try {
+      setPrimeTimelineLoading(true)
+      setPrimeTimelineError('')
+      const data = await fetchPrimeValidatorTimeline(procurementId)
+      setPrimeTimeline(data)
+    } catch (e) {
+      setPrimeTimelineError(e.message || 'Failed to load validator timeline')
+    } finally {
+      setPrimeTimelineLoading(false)
+    }
+  }
+
+  async function handleGeneratePrimeValidatorPackage(kind) {
+    if (!isPrime || !/^\d+$/.test(procurementId)) return
+    const actionKey = kind === 'reveal' ? 'reveal' : 'commit'
+    const walletAddress = String(wallet?.account || '').trim()
+    setPrimeActionLoading(actionKey)
+    setPrimeActionError('')
+    try {
+      const payload = {
+        procurementId,
+        walletAddress: walletAddress || undefined,
+        job,
+      }
+      const result = actionKey === 'commit'
+        ? await preparePrimeValidatorCommit(payload)
+        : await preparePrimeValidatorReveal(payload)
+
+      setPrimeActionResult(result)
+      const candidate = actionKey === 'commit' ? result?.txCandidate?.commit : result?.txCandidate?.reveal
+      if (candidate?.reviewManifestPath) openArtifactPath(candidate.reviewManifestPath)
+      if (candidate?.unsignedTxPath) openArtifactPath(candidate.unsignedTxPath)
+      await refreshPrimeTimeline()
+    } catch (e) {
+      setPrimeActionError(e.message || `Failed to generate score ${actionKey} package`)
+    } finally {
+      setPrimeActionLoading('')
+    }
   }
 
   return (
@@ -1114,45 +1205,160 @@ export function JobDetail({ job, onRunIntake }) {
       </div>
 
       {isPrime && (
-        <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-slate-400 font-medium">Agent outputs for validation</div>
-            <div className="text-[11px] text-slate-500">procurement #{/^\d+$/.test(procurementId) ? procurementId : 'unknown'}</div>
-          </div>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-fuchsia-800/60 bg-fuchsia-950/15 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-fuchsia-300 font-medium">Prime validator action generator</div>
+              <div className="text-[11px] text-slate-500">procurement #{/^\d+$/.test(procurementId) ? procurementId : 'unknown'}</div>
+            </div>
 
-          <div className="text-xs text-slate-500">
-            Open these files directly to validate trial deliverables and scoring continuity (commit/reveal).
-          </div>
+            <div className="text-xs text-slate-400">
+              Generate validator score commit/reveal packages in Op-control with pre-checks and reveal safety rails.
+            </div>
 
-          {procArtifactsLoading && <div className="text-xs text-slate-500">Loading artifact links…</div>}
-          {procArtifactsError && <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{procArtifactsError}</div>}
+            <div className="grid sm:grid-cols-2 gap-2">
+              <button
+                onClick={() => handleGeneratePrimeValidatorPackage('commit')}
+                disabled={primeActionLoading === 'commit' || !/^\d+$/.test(procurementId)}
+                className="py-2 rounded-lg bg-fuchsia-700 hover:bg-fuchsia-600 disabled:opacity-50 text-white text-xs font-medium"
+              >
+                {primeActionLoading === 'commit' ? 'Generating…' : 'Generate score commit package'}
+              </button>
+              <button
+                onClick={() => handleGeneratePrimeValidatorPackage('reveal')}
+                disabled={primeActionLoading === 'reveal' || !/^\d+$/.test(procurementId)}
+                className="py-2 rounded-lg bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-medium"
+              >
+                {primeActionLoading === 'reveal' ? 'Generating…' : 'Generate score reveal package'}
+              </button>
+            </div>
 
-          {procArtifacts?.artifacts?.length > 0 && (
-            <div className="grid md:grid-cols-2 gap-2 text-xs">
-              {procArtifacts.artifacts.map((artifact) => (
-                <div key={artifact.key} className="rounded border border-slate-800 bg-slate-950/40 p-2 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-slate-300 truncate">{artifact.label}</div>
-                    <div className={artifact.exists ? 'text-emerald-400' : 'text-amber-400'}>
-                      {artifact.exists ? 'available' : 'missing'}
+            {primeActionError && (
+              <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{primeActionError}</div>
+            )}
+
+            {primeActionResult && (
+              <div className="space-y-2 text-xs">
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500 mb-1">Pre-checks</div>
+                  <div className="text-slate-300">
+                    {primeActionResult.prechecks?.summary?.passed || 0}/{primeActionResult.prechecks?.summary?.total || 0} passed · {primeActionResult.prechecks?.summary?.verdict || 'UNKNOWN'}
+                  </div>
+                  {(primeActionResult.prechecks?.checks || []).map((check) => (
+                    <div key={check.name} className={check.passed ? 'text-emerald-300' : 'text-amber-300'}>
+                      • {check.name}{check.detail ? ` — ${check.detail}` : ''}
+                    </div>
+                  ))}
+                </div>
+
+                {primeActionResult.revealGuard && (
+                  <div className={`rounded border p-2 ${primeActionResult.revealGuard.allowed ? 'border-emerald-800 bg-emerald-950/20' : 'border-amber-800 bg-amber-950/20'}`}>
+                    <div className="text-slate-400">Reveal safety rails</div>
+                    <div className={primeActionResult.revealGuard.allowed ? 'text-emerald-300' : 'text-amber-300'}>
+                      {primeActionResult.revealGuard.allowed ? 'passed' : `blocked: ${primeActionResult.revealGuard.blockingReason || 'mismatch detected'}`}
                     </div>
                   </div>
-                  {artifact.exists ? (
-                    <a
-                      href={artifact.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30"
-                    >
-                      open
-                    </a>
-                  ) : (
-                    <span className="shrink-0 px-2 py-1 rounded border border-slate-800 text-slate-500">n/a</span>
+                )}
+
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {primeActionResult.txCandidate?.commit && (
+                    <div className="rounded border border-slate-800 bg-slate-950/40 p-2 space-y-1">
+                      <div className="text-slate-400">Commit package</div>
+                      <div className="flex gap-2">
+                        <button onClick={() => openArtifactPath(primeActionResult.txCandidate.commit.reviewManifestPath)} className="px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30">Open review</button>
+                        <button onClick={() => openArtifactPath(primeActionResult.txCandidate.commit.unsignedTxPath)} className="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Open unsigned tx</button>
+                      </div>
+                    </div>
+                  )}
+                  {primeActionResult.txCandidate?.reveal && (
+                    <div className="rounded border border-slate-800 bg-slate-950/40 p-2 space-y-1">
+                      <div className="text-slate-400">Reveal package</div>
+                      <div className="flex gap-2">
+                        <button onClick={() => openArtifactPath(primeActionResult.txCandidate.reveal.reviewManifestPath)} className="px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30">Open review</button>
+                        <button onClick={() => openArtifactPath(primeActionResult.txCandidate.reveal.unsignedTxPath)} className="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Open unsigned tx</button>
+                      </div>
+                    </div>
                   )}
                 </div>
-              ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-400 font-medium">Prime validator timeline</div>
+              {primeTimelineLoading && <div className="text-[11px] text-slate-500">loading…</div>}
             </div>
-          )}
+            {primeTimelineError && <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{primeTimelineError}</div>}
+            {primeTimeline?.timeline && (
+              <div className="grid sm:grid-cols-3 gap-2 text-xs">
+                {[
+                  { key: 'commit', label: 'Commit submitted?' },
+                  { key: 'reveal', label: 'Reveal submitted?' },
+                  { key: 'winner', label: 'Winner pending?' },
+                ].map((item) => {
+                  const entry = primeTimeline.timeline[item.key] || {}
+                  const pending = item.key === 'winner' ? entry.pending : !entry.submitted
+                  return (
+                    <div key={item.key} className="rounded border border-slate-800 bg-slate-950/40 p-2 space-y-1">
+                      <div className="text-slate-500">{item.label}</div>
+                      <span className={`inline-flex px-2 py-0.5 rounded border ${pending ? 'border-amber-700 text-amber-300 bg-amber-950/30' : 'border-emerald-700 text-emerald-300 bg-emerald-950/30'}`}>
+                        {pending ? 'pending' : 'yes'}
+                      </span>
+                      {entry.txHash && (
+                        <div>
+                          <a href={entry.txUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:text-blue-200 font-mono break-all">
+                            {entry.txHash}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-400 font-medium">Agent outputs for validation</div>
+              <div className="text-[11px] text-slate-500">procurement #{/^\d+$/.test(procurementId) ? procurementId : 'unknown'}</div>
+            </div>
+
+            <div className="text-xs text-slate-500">
+              Open these files directly to validate trial deliverables and scoring continuity (commit/reveal).
+            </div>
+
+            {procArtifactsLoading && <div className="text-xs text-slate-500">Loading artifact links…</div>}
+            {procArtifactsError && <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{procArtifactsError}</div>}
+
+            {procArtifacts?.artifacts?.length > 0 && (
+              <div className="grid md:grid-cols-2 gap-2 text-xs">
+                {procArtifacts.artifacts.map((artifact) => (
+                  <div key={artifact.key} className="rounded border border-slate-800 bg-slate-950/40 p-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-slate-300 truncate">{artifact.label}</div>
+                      <div className={artifact.exists ? 'text-emerald-400' : 'text-amber-400'}>
+                        {artifact.exists ? 'available' : 'missing'}
+                      </div>
+                    </div>
+                    {artifact.exists ? (
+                      <a
+                        href={artifact.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30"
+                      >
+                        open
+                      </a>
+                    ) : (
+                      <span className="shrink-0 px-2 py-1 rounded border border-slate-800 text-slate-500">n/a</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

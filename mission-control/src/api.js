@@ -182,3 +182,32 @@ export async function scoreCompletionUri(payload) {
   if (!res.ok) throw new Error(data?.error || 'Failed to score completion URI')
   return data
 }
+
+export async function preparePrimeValidatorCommit(payload) {
+  const res = await fetch(BASE + '/api/validator/prime/score-commit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to prepare prime score commit package')
+  return data
+}
+
+export async function preparePrimeValidatorReveal(payload) {
+  const res = await fetch(BASE + '/api/validator/prime/score-reveal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to prepare prime score reveal package')
+  return data
+}
+
+export async function fetchPrimeValidatorTimeline(procurementId) {
+  const res = await fetch(BASE + '/api/validator/prime/' + encodeURIComponent(procurementId) + '/timeline')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch prime validator timeline')
+  return data
+}

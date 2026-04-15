@@ -8,6 +8,7 @@ import { createServer } from 'http'
 import { tmpdir } from 'os'
 import { createHash } from 'crypto'
 import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
+import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
 
 const app = express()
 app.use(cors())
@@ -1199,6 +1200,8 @@ app.get('/api/github/workflows', async (req, res) => {
 
 
 const AGI_JOB_MANAGER_CONTRACT = (process.env.AGI_JOB_MANAGER_CONTRACT || '0xB3AAeb69b630f0299791679c063d68d6687481d1').toLowerCase()
+const AGI_PRIME_CONTRACT = String(process.env.AGI_PRIME_CONTRACT || '0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29').toLowerCase()
+const PRIME_DEFAULT_CHAIN_ID = String(process.env.PRIME_CHAIN_ID || '0x1').toLowerCase()
 
 function getProcArtifactEntries(procurementId) {
   const procDir = join(PROC_ARTIFACTS_DIR, `proc_${procurementId}`)
@@ -1879,6 +1882,557 @@ app.get('/api/jobs/:jobId/operator-view', async (req, res) => {
     res.json({ ok: true, ...view })
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to build operator view' })
+  }
+})
+
+function primeProcDir(procurementId) {
+  return join(PROC_ARTIFACTS_DIR, `proc_${procurementId}`)
+}
+
+function primeScoringDir(procurementId) {
+  return join(primeProcDir(procurementId), 'scoring')
+}
+
+function normalizeWalletAddress(addr) {
+  const v = String(addr || '').trim().toLowerCase()
+  return /^0x[a-f0-9]{40}$/.test(v) ? v : ''
+}
+
+function buildPrimeFinalistContextHash(procState, inputJob) {
+  const finalists = []
+  for (const source of [procState?.finalists, procState?.shortlist, inputJob?.finalists, inputJob?.shortlistedAgents]) {
+    if (Array.isArray(source)) {
+      for (const item of source) {
+        const v = String(item || '').trim().toLowerCase()
+        if (v) finalists.push(v)
+      }
+    }
+  }
+  const unique = Array.from(new Set(finalists)).sort()
+  if (!unique.length) return ''
+  return createHash('sha256').update(JSON.stringify(unique), 'utf8').digest('hex')
+}
+
+function explorerTxUrl(txHash) {
+  const h = String(txHash || '')
+  if (!/^0x[a-fA-F0-9]{64}$/.test(h)) return ''
+  return `https://etherscan.io/tx/${h}`
+}
+
+async function getPrimeContractInterface() {
+  const { ethers } = await import('ethers')
+  const abiPath = join(WORKSPACE_ROOT, 'agent', 'abi', 'AGIJobDiscoveryPrime.json')
+  const abiRaw = readJsonSafe(abiPath, [])
+  const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+  const fallback = [
+    'function scoreCommit(uint256 procurementId, bytes32 scoreCommitment)',
+    'function scoreReveal(uint256 procurementId, uint256 score, bytes32 salt)',
+    'function isAssignedValidator(uint256 procurementId, address validator) view returns (bool)',
+    'function validatorAssigned(uint256 procurementId, address validator) view returns (bool)',
+    'function validatorAssignments(uint256 procurementId, address validator) view returns (bool)',
+    'function agialpha() view returns (address)',
+  ]
+  const mergedAbi = [...(Array.isArray(abi) ? abi : []), ...fallback]
+  return {
+    ethers,
+    iface: new ethers.Interface(mergedAbi),
+  }
+}
+
+function upsertPrimeValidatorState(procurementId, patch = {}) {
+  const procDir = primeProcDir(procurementId)
+  mkdirSync(procDir, { recursive: true })
+  const statePath = join(procDir, 'state.json')
+  const state = readJsonSafe(statePath, null) || {
+    procurementId: String(procurementId),
+    source: 'agiprimediscovery',
+    txPackages: [],
+    receipts: [],
+    createdAt: new Date().toISOString(),
+  }
+  const next = {
+    ...state,
+    ...patch,
+    procurementId: String(procurementId),
+    source: 'agiprimediscovery',
+    updatedAt: new Date().toISOString(),
+  }
+  atomicWriteJson(statePath, next)
+  return { statePath, state: next }
+}
+
+function upsertPrimeValidatorTxPackage(procurementId, pkg) {
+  const { statePath, state } = upsertPrimeValidatorState(procurementId)
+  const txPackages = Array.isArray(state.txPackages) ? [...state.txPackages] : []
+  const keep = txPackages.filter((p) => !(p?.externalPrimeValidator && String(p?.action || '') === String(pkg.action || '')))
+  keep.push({
+    action: pkg.action,
+    file: pkg.unsignedTxPath,
+    unsignedTxPath: pkg.unsignedTxPath,
+    reviewManifestPath: pkg.reviewManifestPath,
+    createdAt: pkg.createdAt,
+    expiresAt: pkg.expiresAt,
+    fresh: Date.parse(pkg.expiresAt) > Date.now(),
+    expired: Date.parse(pkg.expiresAt) <= Date.now(),
+    signed: false,
+    externalPrimeValidator: true,
+    checklist: pkg.checklist,
+  })
+  const next = {
+    ...state,
+    status: pkg.action === 'score_reveal' ? 'validator_score_reveal_ready' : 'validator_score_commit_ready',
+    txPackages: keep,
+    updatedAt: new Date().toISOString(),
+  }
+  atomicWriteJson(statePath, next)
+  return { statePath, state: next }
+}
+
+async function readPrimeRoleAssignment({ procurementId, walletAddress, contractAddr, iface }) {
+  const out = { assigned: false, source: 'state' }
+  if (!walletAddress) return out
+
+  const probes = [
+    'isAssignedValidator(uint256,address)',
+    'validatorAssigned(uint256,address)',
+    'validatorAssignments(uint256,address)',
+  ]
+  for (const sig of probes) {
+    try {
+      const fn = iface.getFunction(sig)
+      const data = iface.encodeFunctionData(fn, [BigInt(procurementId), walletAddress])
+      const raw = await rpcEthCall(contractAddr, data)
+      const decoded = iface.decodeFunctionResult(fn, raw)
+      if (Boolean(decoded?.[0])) return { assigned: true, source: `onchain:${sig}` }
+    } catch {}
+  }
+  return out
+}
+
+async function readPrimeAllowance({ walletAddress, contractAddr }) {
+  const empty = { allowanceRaw: '0', tokenAddress: '', source: 'unavailable' }
+  if (!walletAddress || !/^0x[a-f0-9]{40}$/.test(contractAddr)) return empty
+  try {
+    const selectorAgialpha = '0x658bb543'
+    const tokenRaw = await rpcEthCall(contractAddr, selectorAgialpha)
+    const tokenAddress = `0x${String(tokenRaw || '').replace(/^0x/, '').slice(-40)}`.toLowerCase()
+    if (!/^0x[a-f0-9]{40}$/.test(tokenAddress)) return empty
+
+    const owner = walletAddress.replace(/^0x/, '').padStart(64, '0')
+    const spender = contractAddr.replace(/^0x/, '').padStart(64, '0')
+    const allowanceRawHex = await rpcEthCall(tokenAddress, `0xdd62ed3e${owner}${spender}`)
+    const allowanceRaw = BigInt(String(allowanceRawHex || '0x0')).toString()
+    return { allowanceRaw, tokenAddress, source: 'onchain:erc20.allowance' }
+  } catch {
+    return empty
+  }
+}
+
+async function buildPrimeValidatorContext({ procurementId, requestedWallet = '', inputJob = null }) {
+  const walletAddress = normalizeWalletAddress(requestedWallet)
+  const procDir = primeProcDir(procurementId)
+  const scoringDir = primeScoringDir(procurementId)
+  mkdirSync(scoringDir, { recursive: true })
+
+  const procState = readJsonSafe(join(procDir, 'state.json'), null) || {}
+  const commitPayload = readJsonSafe(join(scoringDir, 'score_commit_payload.json'), null)
+  const revealPayload = readJsonSafe(join(scoringDir, 'score_reveal_payload.json'), null)
+  const adjudication = readJsonSafe(join(scoringDir, 'adjudication_result.json'), null)
+
+  const deadlines = {
+    commitDeadline: normalizeTsSeconds(inputJob?.commitDeadline ?? inputJob?.deadlines?.commitDeadline ?? procState?.deadlines?.commitDeadline),
+    revealDeadline: normalizeTsSeconds(inputJob?.revealDeadline ?? inputJob?.deadlines?.revealDeadline ?? procState?.deadlines?.revealDeadline),
+    finalistAcceptDeadline: normalizeTsSeconds(inputJob?.finalistAcceptDeadline ?? inputJob?.deadlines?.finalistAcceptDeadline ?? procState?.deadlines?.finalistAcceptDeadline),
+    trialDeadline: normalizeTsSeconds(inputJob?.trialDeadline ?? inputJob?.deadlines?.trialDeadline ?? procState?.deadlines?.trialDeadline),
+    scoreCommitDeadline: normalizeTsSeconds(inputJob?.scoreCommitDeadline ?? inputJob?.deadlines?.scoreCommitDeadline ?? procState?.deadlines?.scoreCommitDeadline),
+    scoreRevealDeadline: normalizeTsSeconds(inputJob?.scoreRevealDeadline ?? inputJob?.deadlines?.scoreRevealDeadline ?? procState?.deadlines?.scoreRevealDeadline),
+  }
+
+  const actionCode = String(inputJob?.nextActionCode ?? inputJob?.nextAction ?? procState?.nextActionCode ?? '').toUpperCase()
+  const phase = decodePrimeActionPhase(actionCode)
+  const windowStatus = inferPrimeWindowStatus(phase, deadlines)
+
+  const { iface } = await getPrimeContractInterface()
+  const contractAddr = String(inputJob?.links?.contract || procState?.contract || AGI_PRIME_CONTRACT).toLowerCase()
+  const role = await readPrimeRoleAssignment({ procurementId, walletAddress, contractAddr, iface })
+  const allowance = await readPrimeAllowance({ walletAddress, contractAddr })
+
+  const bondRequiredRaw = String(
+    procState?.validatorScoreBond
+    ?? procState?.validatorBond
+    ?? procState?.procurement?.validatorScoreBond
+    ?? inputJob?.validatorScoreBond
+    ?? inputJob?.validatorBond
+    ?? '0',
+  )
+
+  const prechecks = buildPrimeValidatorPrechecks({
+    roleAssigned: role.assigned,
+    windowStatus,
+    bondRequiredRaw,
+    allowanceRaw: allowance.allowanceRaw,
+    commitPayload,
+    revealPayload,
+  })
+
+  return {
+    walletAddress,
+    contractAddr,
+    chainId: String(await rpcCall('eth_chainId', [], 5000).catch(() => PRIME_DEFAULT_CHAIN_ID) || PRIME_DEFAULT_CHAIN_ID),
+    procDir,
+    scoringDir,
+    procState,
+    commitPayload,
+    revealPayload,
+    adjudication,
+    deadlines,
+    phase,
+    windowStatus,
+    prechecks,
+    role,
+    allowance,
+    bondRequiredRaw,
+    finalistContextHash: buildPrimeFinalistContextHash(procState, inputJob),
+    actionCode,
+  }
+}
+
+function ensurePrimePackageFreshness(expiresAt) {
+  const expiresMs = Date.parse(String(expiresAt || ''))
+  return {
+    fresh: Number.isFinite(expiresMs) ? expiresMs > Date.now() : true,
+    expired: Number.isFinite(expiresMs) ? expiresMs <= Date.now() : false,
+  }
+}
+
+app.post('/api/validator/prime/score-commit', async (req, res) => {
+  try {
+    const procurementId = String(req.body?.procurementId || '').trim()
+    if (!/^\d+$/.test(procurementId)) return res.status(400).json({ error: 'procurementId must be numeric' })
+
+    const context = await buildPrimeValidatorContext({
+      procurementId,
+      requestedWallet: req.body?.walletAddress,
+      inputJob: req.body?.job || null,
+    })
+
+    const scoreValue = Number(
+      req.body?.score
+      ?? context?.commitPayload?.score
+      ?? context?.adjudication?.score
+      ?? context?.procState?.validatorScore
+      ?? 0,
+    )
+    if (!Number.isFinite(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+      return res.status(422).json({ error: 'score must be numeric in [0,100]' })
+    }
+
+    const salt = String(
+      req.body?.salt
+      || context?.commitPayload?.salt
+      || `0x${createHash('sha256').update(`${procurementId}:${scoreValue}:${Date.now()}`, 'utf8').digest('hex')}`,
+    )
+
+    const { computeScoreCommitment } = await import('../validation/scoring-adjudicator.js')
+    const scoreCommitment = computeScoreCommitment(scoreValue, salt)
+
+    const { iface } = await getPrimeContractInterface()
+    const fn = iface.getFunction('scoreCommit(uint256,bytes32)')
+    const calldata = iface.encodeFunctionData(fn, [BigInt(procurementId), scoreCommitment])
+
+    const createdAt = new Date().toISOString()
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+    const unsignedTxPath = join(context.scoringDir, 'unsigned_score_commit_tx.json')
+    const reviewManifestPath = join(context.scoringDir, 'review_manifest_score_commit.json')
+    const commitPayloadPath = join(context.scoringDir, 'score_commit_payload.json')
+
+    const txPkg = {
+      schema: 'op-control/unsigned-tx/v1',
+      lane: 'prime',
+      action: 'score_commit',
+      procurementId,
+      to: context.contractAddr,
+      chainId: context.chainId,
+      value: '0x0',
+      method: 'scoreCommit(uint256,bytes32)',
+      args: { procurementId, scoreCommitment },
+      data: calldata,
+      createdAt,
+      expiresAt,
+      walletAddress: context.walletAddress || null,
+      finalistContextHash: context.finalistContextHash,
+      preconditions: [
+        'Wallet is assigned validator for this procurement',
+        'Score commit phase window is open',
+        'AGIALPHA allowance covers validator bond requirement',
+        'Commitment is derived from score + salt consistently',
+      ],
+    }
+
+    writeJsonFile(commitPayloadPath, {
+      procurementId,
+      score: scoreValue,
+      salt,
+      scoreCommitment,
+      walletAddress: context.walletAddress || '',
+      finalistContextHash: context.finalistContextHash,
+      generatedAt: createdAt,
+    })
+    writeJsonFile(unsignedTxPath, txPkg)
+
+    const checklist = [
+      'Confirm wallet role assignment and correct procurement id.',
+      'Confirm commit window is open and allowance/bond check passes.',
+      'Confirm commitment hash equals score + salt from score_commit_payload.json.',
+      'Sign unsigned tx only after review manifest confirmation.',
+    ]
+
+    writeJsonFile(reviewManifestPath, {
+      schema: 'op-control/review-manifest/v1',
+      lane: 'prime',
+      action: 'score_commit',
+      procurementId,
+      generatedAt: createdAt,
+      guardrails: {
+        contract: context.contractAddr,
+        chainId: context.chainId,
+        walletAddress: context.walletAddress || '(not provided)',
+        phase: context.phase,
+        windowStatus: context.windowStatus,
+      },
+      checklist,
+      prechecks: context.prechecks,
+      files: {
+        scoreCommitPayload: commitPayloadPath,
+        unsignedTxPath,
+      },
+    })
+
+    upsertPrimeValidatorTxPackage(procurementId, {
+      action: 'score_commit',
+      unsignedTxPath,
+      reviewManifestPath,
+      createdAt,
+      expiresAt,
+      checklist,
+      ...ensurePrimePackageFreshness(expiresAt),
+    })
+
+    const timelineState = readJsonSafe(join(context.procDir, 'state.json'), {})
+
+    res.json({
+      ok: true,
+      schema: 'op-control/prime-validator-score-commit/v1',
+      procurementId,
+      txCandidate: {
+        commit: {
+          action: 'score_commit',
+          unsignedTxPath,
+          reviewManifestPath,
+          createdAt,
+          expiresAt,
+        },
+      },
+      prechecks: context.prechecks,
+      guardrails: {
+        contract: context.contractAddr,
+        chainId: context.chainId,
+        walletAddress: context.walletAddress || '(not provided)',
+        phase: context.phase,
+        windowStatus: context.windowStatus,
+        roleSource: context.role.source,
+        allowanceSource: context.allowance.source,
+      },
+      timeline: buildPrimeValidatorTimeline(timelineState),
+    })
+  } catch (e) {
+    console.error('[validator-prime-score-commit] failed:', e.message)
+    res.status(500).json({ error: e.message || 'Failed to generate prime score commit package' })
+  }
+})
+
+app.post('/api/validator/prime/score-reveal', async (req, res) => {
+  try {
+    const procurementId = String(req.body?.procurementId || '').trim()
+    if (!/^\d+$/.test(procurementId)) return res.status(400).json({ error: 'procurementId must be numeric' })
+
+    const context = await buildPrimeValidatorContext({
+      procurementId,
+      requestedWallet: req.body?.walletAddress,
+      inputJob: req.body?.job || null,
+    })
+
+    if (!context.commitPayload) {
+      return res.status(422).json({ error: 'Missing score_commit_payload.json; generate score commit package first' })
+    }
+
+    const scoreValue = Number(req.body?.score ?? context.commitPayload?.score)
+    const salt = String(req.body?.salt || context.commitPayload?.salt || '')
+    if (!Number.isFinite(scoreValue) || scoreValue < 0 || scoreValue > 100) {
+      return res.status(422).json({ error: 'score must be numeric in [0,100]' })
+    }
+    if (!salt) return res.status(422).json({ error: 'salt missing for score reveal' })
+
+    const { computeScoreCommitment } = await import('../validation/scoring-adjudicator.js')
+    const recomputedCommitment = computeScoreCommitment(scoreValue, salt)
+
+    const revealPayload = {
+      procurementId,
+      score: scoreValue,
+      salt,
+      walletAddress: context.walletAddress || normalizeWalletAddress(context.commitPayload?.walletAddress),
+      finalistContextHash: context.finalistContextHash || String(context.commitPayload?.finalistContextHash || ''),
+      expectedCommitment: String(context.commitPayload?.scoreCommitment || ''),
+      recomputedCommitment,
+      generatedAt: new Date().toISOString(),
+    }
+
+    const revealGuard = verifyRevealSafety({
+      requestedWallet: context.walletAddress,
+      commitPayload: context.commitPayload,
+      revealPayload,
+    })
+
+    if (!revealGuard.allowed) {
+      return res.status(422).json({
+        error: `Reveal blocked: ${revealGuard.blockingReason}`,
+        revealGuard,
+        prechecks: context.prechecks,
+      })
+    }
+
+    const { iface } = await getPrimeContractInterface()
+    const fn = iface.getFunction('scoreReveal(uint256,uint256,bytes32)')
+    const calldata = iface.encodeFunctionData(fn, [BigInt(procurementId), BigInt(Math.round(scoreValue)), salt])
+
+    const createdAt = new Date().toISOString()
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+    const unsignedTxPath = join(context.scoringDir, 'unsigned_score_reveal_tx.json')
+    const reviewManifestPath = join(context.scoringDir, 'review_manifest_score_reveal.json')
+    const revealPayloadPath = join(context.scoringDir, 'score_reveal_payload.json')
+
+    const txPkg = {
+      schema: 'op-control/unsigned-tx/v1',
+      lane: 'prime',
+      action: 'score_reveal',
+      procurementId,
+      to: context.contractAddr,
+      chainId: context.chainId,
+      value: '0x0',
+      method: 'scoreReveal(uint256,uint256,bytes32)',
+      args: { procurementId, score: String(Math.round(scoreValue)), salt },
+      data: calldata,
+      createdAt,
+      expiresAt,
+      walletAddress: revealPayload.walletAddress || null,
+      finalistContextHash: revealPayload.finalistContextHash || '',
+      preconditions: [
+        'Reveal must use same wallet as score commit package',
+        'Reveal score and salt must match committed values',
+        'Procurement and finalist context must match committed context',
+        'Commitment recomputation must match committed hash before signing',
+      ],
+    }
+
+    writeJsonFile(revealPayloadPath, revealPayload)
+    writeJsonFile(unsignedTxPath, txPkg)
+
+    const checklist = [
+      'Confirm same wallet as score commit package.',
+      'Confirm same score and same salt as committed values.',
+      'Confirm procurement and finalist context hash match commit payload.',
+      'Confirm recomputed commitment matches committed commitment.',
+    ]
+
+    writeJsonFile(reviewManifestPath, {
+      schema: 'op-control/review-manifest/v1',
+      lane: 'prime',
+      action: 'score_reveal',
+      procurementId,
+      generatedAt: createdAt,
+      revealGuard,
+      guardrails: {
+        contract: context.contractAddr,
+        chainId: context.chainId,
+        walletAddress: revealPayload.walletAddress || '(not provided)',
+        phase: context.phase,
+        windowStatus: context.windowStatus,
+      },
+      checklist,
+      files: {
+        scoreCommitPayload: join(context.scoringDir, 'score_commit_payload.json'),
+        scoreRevealPayload: revealPayloadPath,
+        unsignedTxPath,
+      },
+    })
+
+    upsertPrimeValidatorTxPackage(procurementId, {
+      action: 'score_reveal',
+      unsignedTxPath,
+      reviewManifestPath,
+      createdAt,
+      expiresAt,
+      checklist,
+      ...ensurePrimePackageFreshness(expiresAt),
+    })
+
+    const timelineState = readJsonSafe(join(context.procDir, 'state.json'), {})
+
+    res.json({
+      ok: true,
+      schema: 'op-control/prime-validator-score-reveal/v1',
+      procurementId,
+      txCandidate: {
+        reveal: {
+          action: 'score_reveal',
+          unsignedTxPath,
+          reviewManifestPath,
+          createdAt,
+          expiresAt,
+        },
+      },
+      prechecks: context.prechecks,
+      revealGuard,
+      guardrails: {
+        contract: context.contractAddr,
+        chainId: context.chainId,
+        walletAddress: revealPayload.walletAddress || '(not provided)',
+        phase: context.phase,
+        windowStatus: context.windowStatus,
+      },
+      timeline: buildPrimeValidatorTimeline(timelineState),
+    })
+  } catch (e) {
+    console.error('[validator-prime-score-reveal] failed:', e.message)
+    res.status(500).json({ error: e.message || 'Failed to generate prime score reveal package' })
+  }
+})
+
+app.get('/api/validator/prime/:procurementId/timeline', (req, res) => {
+  try {
+    const procurementId = String(req.params.procurementId || '').trim()
+    if (!/^\d+$/.test(procurementId)) return res.status(400).json({ error: 'procurementId must be numeric' })
+
+    const state = readJsonSafe(join(primeProcDir(procurementId), 'state.json'), null)
+    if (!state) return res.status(404).json({ error: 'procurement state not found' })
+
+    const timeline = buildPrimeValidatorTimeline(state)
+    for (const key of ['commit', 'reveal', 'winner']) {
+      timeline[key] = {
+        ...timeline[key],
+        txUrl: timeline[key]?.txHash ? explorerTxUrl(timeline[key].txHash) : '',
+      }
+    }
+
+    res.json({
+      ok: true,
+      procurementId,
+      timeline,
+      status: state.status || 'unknown',
+      updatedAt: state.updatedAt || state.lastChainSync || null,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to build prime validator timeline' })
   }
 })
 
