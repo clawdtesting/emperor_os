@@ -43,6 +43,7 @@ export default function App() {
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('mission')
   const wallet = useWallet()
+  const enableTestMode = String(import.meta.env.VITE_ENABLE_TEST_MODE || '').toLowerCase() === 'true'
 
   const assigned  = jobs.filter(j => j.status === 'Assigned')
   const completed = jobs.filter(j => j.status === 'Completed')
@@ -148,7 +149,7 @@ export default function App() {
         <div className="grid md:grid-cols-[180px,1fr] gap-4">
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-2 h-fit">
         <div className="flex flex-col gap-1">
-          {['mission', 'jobs', 'jobs-v1', 'jobs-v2', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'ops', 'actions', 'workflows', 'pipelines', 'events', 'test', 'ipfs'].filter(Boolean).map(t => (
+          {['mission', 'jobs', 'jobs-v1', 'jobs-v2', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'ops', 'actions', 'workflows', 'pipelines', 'events', enableTestMode ? 'test' : null, 'ipfs'].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -300,7 +301,7 @@ export default function App() {
           </div>
         )}
 
-        {tab === 'test' && <TestTab />}
+        {tab === 'test' && enableTestMode && <TestTab />}
 
         {tab === 'ipfs' && <IpfsTab />}
         </div>

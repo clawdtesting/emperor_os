@@ -38,6 +38,7 @@ const GITHUB_TOKEN  = String(
   || ''
 ).trim()
 const PINATA_JWT = String(process.env.PINATA_JWT || '').trim()
+const ENABLE_TEST_MODE = String(process.env.ENABLE_TEST_MODE || '').toLowerCase() === 'true'
 const AGI_JOB_MANAGER_V2 = '0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29'
 const AGI_JOB_MANAGER_V2_ALT = '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2'
 const KNOWN_V2_CONTRACTS = [AGI_JOB_MANAGER_V2.toLowerCase(), AGI_JOB_MANAGER_V2_ALT.toLowerCase()]
@@ -2838,11 +2839,13 @@ function findTestJobs() {
 }
 
 app.get('/api/test-jobs', (req, res) => {
+  if (!ENABLE_TEST_MODE) return res.status(403).json({ error: 'Test mode disabled. Real on-chain mode is active.' })
   try { res.json(findTestJobs()) }
   catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 app.get('/api/test-jobs/:folder/:file', (req, res) => {
+  if (!ENABLE_TEST_MODE) return res.status(403).json({ error: 'Test mode disabled. Real on-chain mode is active.' })
   try {
     const specPath = resolve(TESTS_DIR, req.params.folder, req.params.file)
     res.json(JSON.parse(readFileSync(specPath, 'utf8')))
@@ -2851,6 +2854,7 @@ app.get('/api/test-jobs/:folder/:file', (req, res) => {
 
 // Keep old flat route for backwards compat
 app.get('/api/test-jobs/:file', (req, res) => {
+  if (!ENABLE_TEST_MODE) return res.status(403).json({ error: 'Test mode disabled. Real on-chain mode is active.' })
   try {
     const specPath = resolve(TESTS_DIR, req.params.file)
     res.json(JSON.parse(readFileSync(specPath, 'utf8')))
@@ -2876,6 +2880,10 @@ app.post('/api/event', (req, res) => {
 })
 
 app.post('/api/test-run', (req, res) => {
+  if (!ENABLE_TEST_MODE) {
+    return res.status(403).json({ error: 'Test mode disabled. Real on-chain mode is active.' })
+  }
+
   const { jobFile, pipeline } = req.body
   const pipelinePath = `${PIPELINES_DIR}/${pipeline || 'test-flow.yaml'}`
   const jobPath      = `${TESTS_DIR}/${jobFile}`
@@ -2950,7 +2958,7 @@ app.post('/api/intake-run', (req, res) => {
   }
 
   if (!pipelinePath) {
-    send('error', { message: 'No pipeline found in pipelines/. Add intake.lobster.yaml to enable autonomous intake.' })
+    send('error', { message: 'No production intake pipeline found in pipelines/. Add intake.lobster.yaml (real mode) to enable autonomous on-chain intake.' })
     res.end()
     return
   }
