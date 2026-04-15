@@ -161,6 +161,17 @@ export async function validateJobDryRun(jobId, options = {}) {
   return data
 }
 
+export async function prepareValidatorV1(payload) {
+  const res = await fetch(BASE + '/api/validator/v1/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to prepare validator package')
+  return data
+}
+
 export async function scoreCompletionUri(payload) {
   const res = await fetch(BASE + '/api/scoring/completion-uri', {
     method: 'POST',

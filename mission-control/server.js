@@ -1382,6 +1382,486 @@ app.get('/api/job-spec/:jobId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+function buildExternalValidationDir(jobId) {
+  const dir = join(ARTIFACTS_DIR, 'validation', `job_${jobId}`)
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function writeJsonFile(file, data) {
+  writeFileSync(file, JSON.stringify(data, null, 2))
+}
+
+async function getV1ContractInterface() {
+  const { ethers } = await import('ethers')
+  const abiPath = join(WORKSPACE_ROOT, 'contracts', 'AGIJobManager-v1', 'AGIJobManager.v1.json')
+  const abiRaw = readJsonSafe(abiPath, [])
+  const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+  if (!Array.isArray(abi) || abi.length === 0) throw new Error(`Missing v1 ABI at ${abiPath}`)
+  return {
+    ethers,
+    iface: new ethers.Interface(abi),
+    abiPath,
+  }
+}
+
+async function fetchV1JobContext(jobId, contractAddr) {
+  let mcpJob = null
+  try {
+    mcpJob = await callMcp('get_job', { jobId: Number(jobId) })
+  } catch {}
+
+  let core = null
+  let validation = null
+  let specURI = ''
+  let completionURI = ''
+  let chainId = ''
+  let iface = null
+  let hasValidateJob = false
+  let hasDisputeJob = false
+  let rpcError = ''
+
+  try {
+    const reachable = await rpcIsReachable()
+    if (!reachable) throw new Error('RPC unreachable')
+
+    const { ethers, iface: i } = await getV1ContractInterface()
+    iface = i
+    hasValidateJob = Boolean(iface.getFunction('validateJob(uint256,string,bytes32[])'))
+    hasDisputeJob = Boolean(iface.getFunction('disputeJob(uint256)'))
+
+    chainId = String(await rpcCall('eth_chainId', [], 5000) || '')
+
+    try {
+      const data = iface.encodeFunctionData('getJobCore', [BigInt(jobId)])
+      const raw = await rpcEthCall(contractAddr, data)
+      const decoded = iface.decodeFunctionResult('getJobCore', raw)
+      core = {
+        employer: String(decoded[0] || ''),
+        assignedAgent: String(decoded[1] || ''),
+        payoutRaw: String(decoded[2] || '0'),
+        durationRaw: String(decoded[3] || '0'),
+        createdAt: String(decoded[4] || '0'),
+        completed: Boolean(decoded[5]),
+        disputed: Boolean(decoded[6]),
+        expired: Boolean(decoded[7]),
+      }
+    } catch {}
+
+    try {
+      const data = iface.encodeFunctionData('getJobValidation', [BigInt(jobId)])
+      const raw = await rpcEthCall(contractAddr, data)
+      const decoded = iface.decodeFunctionResult('getJobValidation', raw)
+      validation = {
+        completionRequested: Boolean(decoded[0]),
+        approvals: Number(decoded[1] || 0),
+        disapprovals: Number(decoded[2] || 0),
+      }
+    } catch {}
+
+    try {
+      const data = iface.encodeFunctionData('getJobSpecURI', [BigInt(jobId)])
+      const raw = await rpcEthCall(contractAddr, data)
+      const decoded = iface.decodeFunctionResult('getJobSpecURI', raw)
+      specURI = String(decoded[0] || '')
+    } catch {}
+
+    try {
+      const data = iface.encodeFunctionData('getJobCompletionURI', [BigInt(jobId)])
+      const raw = await rpcEthCall(contractAddr, data)
+      const decoded = iface.decodeFunctionResult('getJobCompletionURI', raw)
+      completionURI = String(decoded[0] || '')
+    } catch {}
+  } catch (e) {
+    rpcError = e.message || 'v1 on-chain lookup failed'
+  }
+
+  const completionFromMcp = String(
+    mcpJob?.completionURI
+      || mcpJob?.jobCompletionURI
+      || mcpJob?.metadataURI
+      || mcpJob?.uri
+      || ''
+  )
+  const specFromMcp = String(mcpJob?.specURI || mcpJob?.jobSpecURI || '')
+
+  if (!completionURI) completionURI = completionFromMcp
+  if (!specURI) specURI = specFromMcp
+
+  return {
+    jobId: String(jobId),
+    contract: String(contractAddr).toLowerCase(),
+    chainId,
+    core,
+    validation,
+    specURI,
+    completionURI,
+    mcpJob,
+    iface,
+    hasValidateJob,
+    hasDisputeJob,
+    rpcError,
+  }
+}
+
+function normalizeCompletionBriefPayload(payload, completionURI) {
+  const data = payload && typeof payload === 'object' ? payload : {}
+  const p = data.properties && typeof data.properties === 'object' ? data.properties : {}
+  const title = String(data.title || data.name || p.title || 'Completion brief').trim()
+  const summary = String(data.summary || p.summary || data.description || p.description || '').trim()
+  const details = String(data.details || p.details || data.validatorNote || p.validatorNote || '').trim()
+  const status = String(data.status || p.status || data.completionStatus || p.completionStatus || '').trim()
+  return {
+    title,
+    summary,
+    details,
+    status,
+    completionURI,
+    raw: data,
+  }
+}
+
+async function buildV1AdjudicationPayload(context, completionPayload) {
+  const text = extractScoringTextFromPayload(completionPayload || '')
+  if (!text.trim()) {
+    return {
+      schema: 'op-control/validator-adjudication/v1',
+      score: 0,
+      verdict: 'insufficient_payload',
+      reason: 'Completion payload has no scoreable text',
+      checks: [
+        { name: 'completion_text_present', passed: false, detail: 'No scoreable text in payload' },
+      ],
+    }
+  }
+
+  try {
+    const { adjudicateScore } = await import('../validation/scoring-adjudicator.js')
+    const evidence = {
+      procurementId: `v1-job-${context.jobId}`,
+      procurement: {
+        procStruct: { jobId: Number(context.jobId) },
+        deadlines: {},
+        isScorePhase: true,
+      },
+      trial: {
+        trialSubmissions: [{
+          cid: String(context.completionURI || '').replace('ipfs://', '').split('/')[0],
+          trialURI: context.completionURI,
+          content: text,
+          contentLength: text.length,
+        }],
+      },
+    }
+    return adjudicateScore(evidence, text)
+  } catch (e) {
+    return {
+      schema: 'op-control/validator-adjudication/v1-fallback',
+      score: Math.min(100, Math.round(text.length / 20)),
+      verdict: 'fallback',
+      reason: `scoring-adjudicator unavailable: ${e.message}`,
+      checks: [
+        { name: 'completion_text_present', passed: true, detail: `${text.length} chars` },
+      ],
+    }
+  }
+}
+
+function buildV1PrepareSummary(context, completionPayload, completionFetchOk) {
+  const zero = '0x0000000000000000000000000000000000000000'
+  const checks = []
+  const add = (name, passed, detail = '') => checks.push({ name, passed, detail })
+
+  add('job_id_numeric', /^\d+$/.test(String(context.jobId)), String(context.jobId))
+  add('v1_contract_present', /^0x[a-f0-9]{40}$/.test(String(context.contract).toLowerCase()), context.contract)
+  add('rpc_reachable', !context.rpcError, context.rpcError || 'ok')
+  add('v1_validateJob_abi', context.hasValidateJob, 'validateJob(uint256,string,bytes32[])')
+  add('v1_disputeJob_abi', context.hasDisputeJob, 'disputeJob(uint256)')
+  add('job_exists_onchain', String(context.core?.employer || '').toLowerCase() !== zero, context.core?.employer || '(unknown)')
+  add('completion_uri_present', Boolean(context.completionURI), context.completionURI || '(missing)')
+  add('completion_payload_fetched', Boolean(completionFetchOk), completionFetchOk ? 'ok' : 'not fetched')
+  add('completion_payload_json', Boolean(completionPayload && typeof completionPayload === 'object'), typeof completionPayload)
+  add('completion_text_present', extractScoringTextFromPayload(completionPayload || '').trim().length > 0, 'validator-scoring text extraction')
+
+  const passed = checks.filter((c) => c.passed).length
+  const failed = checks.length - passed
+  return {
+    verdict: failed === 0 ? 'READY' : 'NEEDS_REVIEW',
+    passed,
+    failed,
+    total: checks.length,
+    checks,
+    recommendation: failed === 0
+      ? 'Validation package ready for operator review and signing.'
+      : `Resolve ${failed} check(s) before signing validator tx.`,
+  }
+}
+
+function buildUnsignedValidatePackage({ jobId, completionURI, contract, chainId, proof = [] }) {
+  return {
+    schema: 'op-control/unsigned-tx/v1',
+    lane: 'v1',
+    action: 'validate',
+    jobId: String(jobId),
+    to: contract,
+    value: '0x0',
+    chainId,
+    method: 'validateJob(uint256,string,bytes32[])',
+    args: {
+      jobId: String(jobId),
+      jobCompletionURI: completionURI,
+      validatorProof: proof,
+    },
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    preconditions: [
+      'Confirm this is the correct v1 AGIJobManager contract and chain.',
+      'Verify completion URI payload and adjudication summary.',
+      'Confirm validator proof requirement is satisfied for this wallet.',
+    ],
+  }
+}
+
+function buildUnsignedDisputePackage({ jobId, contract, chainId }) {
+  return {
+    schema: 'op-control/unsigned-tx/v1',
+    lane: 'v1',
+    action: 'dispute',
+    jobId: String(jobId),
+    to: contract,
+    value: '0x0',
+    chainId,
+    method: 'disputeJob(uint256)',
+    args: {
+      jobId: String(jobId),
+    },
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    preconditions: [
+      'Document dispute rationale in evidence snapshot and adjudication output.',
+      'Confirm dispute timing window is still open on-chain.',
+      'Confirm contract + chain match intended external v1 job.',
+    ],
+  }
+}
+
+function attachCalldata(pkg, iface) {
+  if (!iface) return pkg
+  try {
+    const fn = iface.getFunction(pkg.method)
+    const args = pkg.action === 'validate'
+      ? [BigInt(pkg.args.jobId), pkg.args.jobCompletionURI, pkg.args.validatorProof || []]
+      : [BigInt(pkg.args.jobId)]
+    const data = iface.encodeFunctionData(fn, args)
+    return { ...pkg, data }
+  } catch {
+    return { ...pkg, data: '' }
+  }
+}
+
+function upsertExternalValidatorState(jobId, context, packages) {
+  const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
+  const existing = readJsonSafe(statePath, null) || {
+    jobId: String(jobId),
+    source: 'agijobmanager',
+    createdAt: new Date().toISOString(),
+    txPackages: [],
+    receipts: [],
+  }
+
+  const keep = (existing.txPackages || []).filter((p) => !p.externalValidator)
+  const mapped = packages.map((pkg) => ({
+    action: pkg.action,
+    file: pkg.unsignedTxPath,
+    unsignedTxPath: pkg.unsignedTxPath,
+    reviewManifestPath: pkg.reviewManifestPath,
+    createdAt: pkg.createdAt,
+    expiresAt: pkg.expiresAt,
+    fresh: Date.parse(pkg.expiresAt) > Date.now(),
+    expired: Date.parse(pkg.expiresAt) <= Date.now(),
+    signed: false,
+    externalValidator: true,
+    checklist: pkg.checklist,
+  }))
+
+  const next = {
+    ...existing,
+    jobId: String(jobId),
+    source: 'agijobmanager',
+    status: existing.status || 'completion_pending_review',
+    completionURI: context.completionURI || existing.completionURI || '',
+    employer: context.core?.employer || existing.employer || '',
+    assignedAgent: context.core?.assignedAgent || existing.assignedAgent || '',
+    txPackages: [...keep, ...mapped],
+    updatedAt: new Date().toISOString(),
+  }
+
+  atomicWriteJson(statePath, next)
+  return statePath
+}
+
+app.post('/api/validator/v1/prepare', async (req, res) => {
+  try {
+    const rawJobId = String(req.body?.jobId || '').trim()
+    const numericJobId = extractNumericJobId(rawJobId)
+    if (!numericJobId) return res.status(400).json({ error: 'jobId must include a numeric id' })
+
+    const contractHint = String(req.body?.contractHint || AGI_JOB_MANAGER_CONTRACT || '').toLowerCase()
+    if (!/^0x[a-f0-9]{40}$/.test(contractHint)) {
+      return res.status(400).json({ error: 'contract hint invalid; expected 0x-prefixed address' })
+    }
+
+    const context = await fetchV1JobContext(numericJobId, contractHint)
+    if (!context.completionURI) {
+      return res.status(422).json({ error: 'No completion URI found for this v1 job' })
+    }
+
+    const completionPayload = await fetchIpfsPayload(context.completionURI)
+    const completionBrief = normalizeCompletionBriefPayload(completionPayload.json || {}, context.completionURI)
+    const dryRunSummary = buildV1PrepareSummary(context, completionPayload.json, completionPayload.ok)
+    const adjudication = await buildV1AdjudicationPayload(context, completionPayload.json || completionPayload.text || '')
+
+    const baseDir = buildExternalValidationDir(numericJobId)
+    const evidencePath = join(baseDir, 'evidence_snapshot.json')
+    const adjudicationPath = join(baseDir, 'adjudication_output.json')
+
+    const validatePkg = attachCalldata(buildUnsignedValidatePackage({
+      jobId: numericJobId,
+      completionURI: context.completionURI,
+      contract: context.contract,
+      chainId: context.chainId,
+      proof: Array.isArray(req.body?.validatorProof) ? req.body.validatorProof : [],
+    }), context.iface)
+
+    const disputePkg = attachCalldata(buildUnsignedDisputePackage({
+      jobId: numericJobId,
+      contract: context.contract,
+      chainId: context.chainId,
+    }), context.iface)
+
+    const validateTxPath = join(baseDir, 'unsigned_validate_tx.json')
+    const disputeTxPath = join(baseDir, 'unsigned_dispute_tx.json')
+    const validateReviewPath = join(baseDir, 'review_manifest_validate.json')
+    const disputeReviewPath = join(baseDir, 'review_manifest_dispute.json')
+
+    const guardrails = {
+      expectedContract: context.contract,
+      expectedChainId: context.chainId || '(unknown)',
+      rpc: ETH_RPC_URL,
+      validateMethod: 'validateJob(uint256,string,bytes32[])',
+      disputeMethod: 'disputeJob(uint256)',
+    }
+
+    const validateChecklist = [
+      'Confirm completion brief is acceptable and checks pass.',
+      'Open review manifest and verify contract + chain guardrails.',
+      'Sign unsigned validate tx with operator wallet only.',
+    ]
+    const disputeChecklist = [
+      'Confirm dispute rationale from evidence + adjudication output.',
+      'Open review manifest and verify contract + chain guardrails.',
+      'Sign unsigned dispute tx with operator wallet only.',
+    ]
+
+    writeJsonFile(evidencePath, {
+      schema: 'op-control/validator-evidence-snapshot/v1',
+      generatedAt: new Date().toISOString(),
+      context,
+      completionPayload: {
+        ok: completionPayload.ok,
+        source: completionPayload.source,
+        completionURI: context.completionURI,
+        payload: completionPayload.json || null,
+        payloadText: completionPayload.json ? null : completionPayload.text,
+      },
+      dryRunSummary,
+    })
+    writeJsonFile(adjudicationPath, adjudication)
+    writeJsonFile(validateTxPath, validatePkg)
+    writeJsonFile(disputeTxPath, disputePkg)
+
+    writeJsonFile(validateReviewPath, {
+      schema: 'op-control/review-manifest/v1',
+      generatedAt: new Date().toISOString(),
+      lane: 'v1',
+      action: 'validate',
+      jobId: String(numericJobId),
+      checklist: validateChecklist,
+      guardrails,
+      attachments: [
+        { role: 'evidence snapshot', file: evidencePath },
+        { role: 'adjudication', file: adjudicationPath },
+        { role: 'unsigned tx', file: validateTxPath },
+      ],
+    })
+
+    writeJsonFile(disputeReviewPath, {
+      schema: 'op-control/review-manifest/v1',
+      generatedAt: new Date().toISOString(),
+      lane: 'v1',
+      action: 'dispute',
+      jobId: String(numericJobId),
+      checklist: disputeChecklist,
+      guardrails,
+      attachments: [
+        { role: 'evidence snapshot', file: evidencePath },
+        { role: 'adjudication', file: adjudicationPath },
+        { role: 'unsigned tx', file: disputeTxPath },
+      ],
+    })
+
+    const validateCandidate = {
+      action: 'validate',
+      unsignedTxPath: validateTxPath,
+      reviewManifestPath: validateReviewPath,
+      checklist: validateChecklist,
+      createdAt: validatePkg.createdAt,
+      expiresAt: validatePkg.expiresAt,
+    }
+    const disputeCandidate = {
+      action: 'dispute',
+      unsignedTxPath: disputeTxPath,
+      reviewManifestPath: disputeReviewPath,
+      checklist: disputeChecklist,
+      createdAt: disputePkg.createdAt,
+      expiresAt: disputePkg.expiresAt,
+    }
+
+    const stateFile = upsertExternalValidatorState(numericJobId, context, [validateCandidate, disputeCandidate])
+
+    const result = {
+      ok: true,
+      schema: 'op-control/validator-v1-prepare/v1',
+      jobId: String(numericJobId),
+      contract: context.contract,
+      chainId: context.chainId,
+      completionURI: context.completionURI,
+      completionBrief,
+      dryRunSummary,
+      guardrails,
+      artifacts: {
+        dir: baseDir,
+        evidenceSnapshotPath: evidencePath,
+        adjudicationPath,
+      },
+      txCandidates: {
+        approve: validateCandidate,
+        dispute: disputeCandidate,
+      },
+      stateTracking: {
+        stateFile,
+        trackedActions: ['validate', 'dispute'],
+      },
+    }
+
+    writeJsonFile(join(baseDir, 'prepare_result.json'), result)
+    res.json(result)
+  } catch (e) {
+    console.error('[validator-v1-prepare] failed:', e.message)
+    res.status(500).json({ error: e.message || 'Failed to prepare external validator package' })
+  }
+})
+
 app.get('/api/jobs/:jobId/operator-view', async (req, res) => {
   try {
     const rawJobId = String(req.params.jobId || '').trim()

@@ -3,6 +3,7 @@ import { isAbsolute, normalize, join } from 'path'
 const ACTION_PRIORITIES = {
   score_reveal: 95,
   reveal: 90,
+  dispute: 88,
   score_commit: 85,
   commit: 80,
   completion: 75,
@@ -26,6 +27,7 @@ export function normalizeActionName({ action = '', status = '', file = '' } = {}
 
   if (blob.includes('score_reveal')) return 'score_reveal'
   if (blob.includes('score_commit')) return 'score_commit'
+  if (blob.includes('disapprove') || blob.includes('dispute')) return 'dispute'
   if (blob.includes('completion') || blob.includes('complete')) return 'completion'
   if (blob.includes('validate') || blob.includes('validation')) return 'validate'
   if (blob.includes('reveal')) return 'reveal'
@@ -89,6 +91,7 @@ export function deriveDeadlineAt(action, state = {}, pkg = {}) {
     completion: deadlines.completionDeadline || deadlines.trialDeadline,
     apply: deadlines.applyDeadline || deadlines.commitDeadline,
     validate: deadlines.validationDeadline || deadlines.revealDeadline,
+    dispute: deadlines.disputeDeadline || deadlines.validationDeadline || deadlines.revealDeadline,
   }
   return map[action] ? String(map[action]) : null
 }

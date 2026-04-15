@@ -22,6 +22,7 @@ test('normalizeActionName maps score commit/reveal and completion', () => {
   assert.equal(normalizeActionName({ file: 'scoring/unsigned_score_reveal_tx.json' }), 'score_reveal')
   assert.equal(normalizeActionName({ status: 'completion_ready' }), 'completion')
   assert.equal(normalizeActionName({ action: 'validate' }), 'validate')
+  assert.equal(normalizeActionName({ action: 'disputeJob' }), 'dispute')
   assert.equal(normalizeActionName({ status: 'n/a', file: 'random.json' }), null)
 })
 

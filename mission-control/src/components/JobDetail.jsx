@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { resolveEns, shortAddr } from '../utils/ens'
-import { fetchProcurementArtifacts, fetchV2OperatorView, scoreCompletionUri, validateJobDryRun } from '../api'
+import { fetchProcurementArtifacts, fetchV2OperatorView, prepareValidatorV1, scoreCompletionUri, validateJobDryRun } from '../api'
 import { summarizeDryRunReport } from '../features/validation/summarizeDryRun'
 
 const IPFS_GW = 'https://ipfs.io/ipfs/'
@@ -462,6 +462,10 @@ export function JobDetail({ job, onRunIntake }) {
   const [validationRunning, setValidationRunning] = useState(false)
   const [validationError, setValidationError] = useState('')
   const [validationSummary, setValidationSummary] = useState(null)
+  const [validatorPrepareLoading, setValidatorPrepareLoading] = useState(false)
+  const [validatorPrepareError, setValidatorPrepareError] = useState('')
+  const [validatorPrepareResult, setValidatorPrepareResult] = useState(null)
+  const [validatorDecision, setValidatorDecision] = useState('')
   const [operatorLoading, setOperatorLoading] = useState(false)
   const [operatorError, setOperatorError] = useState('')
   const [operatorView, setOperatorView] = useState(null)
@@ -475,6 +479,7 @@ export function JobDetail({ job, onRunIntake }) {
   const canRunValidation = /\d+/.test(String(job?.jobId || ''))
   const isV2 = job?.source === 'agijobmanager-v2'
   const isPrime = job?.source === 'agiprimediscovery'
+  const isV1 = !isV2 && !isPrime
   const procurementId = String(
     job?.procurementId
       ?? (String(job?.jobId || '').match(/(\d+)/)?.[1] || '')
@@ -484,6 +489,10 @@ export function JobDetail({ job, onRunIntake }) {
     setValidationRunning(false)
     setValidationError('')
     setValidationSummary(null)
+    setValidatorPrepareLoading(false)
+    setValidatorPrepareError('')
+    setValidatorPrepareResult(null)
+    setValidatorDecision('')
   }, [job?.jobId, job?.source])
 
   useEffect(() => {
@@ -724,6 +733,61 @@ export function JobDetail({ job, onRunIntake }) {
     }
   }
 
+  function openArtifactPath(path) {
+    const p = String(path || '').trim()
+    if (!p) return
+    const url = `/api/operator-actions/file?path=${encodeURIComponent(p)}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  async function handlePrepareValidatorPackage() {
+    setValidatorPrepareLoading(true)
+    setValidatorPrepareError('')
+    try {
+      const contractHint = String(job?.links?.contract || '').split('/').pop()
+      const result = await prepareValidatorV1({
+        jobId: job.jobId,
+        contractHint: /^0x[a-fA-F0-9]{40}$/.test(contractHint) ? contractHint : undefined,
+      })
+      setValidatorPrepareResult(result)
+      setValidatorDecision('')
+    } catch (e) {
+      setValidatorPrepareResult(null)
+      setValidatorPrepareError(e.message || 'Failed to prepare validator package')
+    } finally {
+      setValidatorPrepareLoading(false)
+    }
+  }
+
+  async function handleValidatorDecision(decision) {
+    setValidatorDecision(decision)
+    let prepared = validatorPrepareResult
+    if (!prepared) {
+      setValidatorPrepareLoading(true)
+      setValidatorPrepareError('')
+      try {
+        const contractHint = String(job?.links?.contract || '').split('/').pop()
+        prepared = await prepareValidatorV1({
+          jobId: job.jobId,
+          contractHint: /^0x[a-fA-F0-9]{40}$/.test(contractHint) ? contractHint : undefined,
+        })
+        setValidatorPrepareResult(prepared)
+      } catch (e) {
+        setValidatorPrepareError(e.message || 'Failed to prepare validator package')
+        setValidatorPrepareLoading(false)
+        return
+      } finally {
+        setValidatorPrepareLoading(false)
+      }
+    }
+    const candidate = decision === 'approve'
+      ? prepared?.txCandidates?.approve
+      : prepared?.txCandidates?.dispute
+    if (!candidate) return
+    if (candidate.reviewManifestPath) openArtifactPath(candidate.reviewManifestPath)
+    if (candidate.unsignedTxPath) openArtifactPath(candidate.unsignedTxPath)
+  }
+
   return (
     <div className="h-full overflow-y-auto space-y-4">
       {briefSpec && <JobBrief spec={briefSpec} onClose={() => setBriefSpec(null)} />}
@@ -958,6 +1022,91 @@ export function JobDetail({ job, onRunIntake }) {
                 {validationSummary.failedChecks.length > 5 && (
                   <div className="text-amber-400">+{validationSummary.failedChecks.length - 5} more failed checks</div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {isV1 && (
+          <div className="rounded border border-blue-900 bg-blue-950/20 p-2 space-y-2">
+            <div className="text-xs text-blue-200 font-medium">External validator mode (v1)</div>
+            <div className="text-xs text-slate-400">
+              Prepare validation artifacts for jobs your agent did not apply to. This writes evidence, adjudication, unsigned tx packages, and review manifests under
+              <span className="font-mono"> artifacts/validation/job_&lt;id&gt;/</span>.
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-2">
+              <button
+                onClick={handlePrepareValidatorPackage}
+                disabled={validatorPrepareLoading || !canRunValidation}
+                className="py-2 rounded-lg bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-medium"
+              >
+                {validatorPrepareLoading ? 'Preparing…' : 'Prepare validation package'}
+              </button>
+              <button
+                onClick={() => handleValidatorDecision('approve')}
+                disabled={validatorPrepareLoading || !canRunValidation}
+                className="py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-medium"
+              >
+                Approve (build unsigned validate tx)
+              </button>
+              <button
+                onClick={() => handleValidatorDecision('dispute')}
+                disabled={validatorPrepareLoading || !canRunValidation}
+                className="py-2 rounded-lg bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-medium"
+              >
+                Dispute (build unsigned dispute tx)
+              </button>
+            </div>
+
+            {validatorPrepareError && (
+              <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{validatorPrepareError}</div>
+            )}
+
+            {validatorPrepareResult && (
+              <div className="space-y-2 text-xs">
+                <div className="grid md:grid-cols-2 gap-2">
+                  <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                    <div className="text-slate-500">Completion URI</div>
+                    <div className="text-slate-200 break-all"><IpfsLink uri={validatorPrepareResult.completionURI} /></div>
+                  </div>
+                  <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                    <div className="text-slate-500">Guardrails</div>
+                    <div className="text-slate-300">Contract: <span className="font-mono break-all">{validatorPrepareResult.guardrails?.expectedContract || '—'}</span></div>
+                    <div className="text-slate-300">Chain: <span className="font-mono">{validatorPrepareResult.guardrails?.expectedChainId || '—'}</span></div>
+                  </div>
+                </div>
+
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500">Completion brief preview</div>
+                  <div className="text-slate-200 font-medium">{validatorPrepareResult.completionBrief?.title || 'Completion brief'}</div>
+                  <div className="text-slate-300 whitespace-pre-wrap">{validatorPrepareResult.completionBrief?.summary || validatorPrepareResult.completionBrief?.details || 'No summary'}</div>
+                </div>
+
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500 mb-1">Dry-run checks</div>
+                  <div className="text-slate-300">{validatorPrepareResult.dryRunSummary?.passed || 0}/{validatorPrepareResult.dryRunSummary?.total || 0} passed · {validatorPrepareResult.dryRunSummary?.verdict || 'UNKNOWN'}</div>
+                  {(validatorPrepareResult.dryRunSummary?.checks || []).filter(c => !c.passed).slice(0, 5).map((check) => (
+                    <div key={check.name} className="text-amber-300">• {check.name}{check.detail ? ` — ${check.detail}` : ''}</div>
+                  ))}
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-2">
+                  <div className={`rounded border p-2 ${validatorDecision === 'approve' ? 'border-emerald-700 bg-emerald-950/20' : 'border-slate-800 bg-slate-950/40'}`}>
+                    <div className="text-slate-500 mb-1">Approve candidate</div>
+                    <div className="flex gap-2">
+                      <button onClick={() => openArtifactPath(validatorPrepareResult.txCandidates?.approve?.reviewManifestPath)} className="px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30">Open review</button>
+                      <button onClick={() => openArtifactPath(validatorPrepareResult.txCandidates?.approve?.unsignedTxPath)} className="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Open unsigned tx</button>
+                    </div>
+                  </div>
+                  <div className={`rounded border p-2 ${validatorDecision === 'dispute' ? 'border-amber-700 bg-amber-950/20' : 'border-slate-800 bg-slate-950/40'}`}>
+                    <div className="text-slate-500 mb-1">Dispute candidate</div>
+                    <div className="flex gap-2">
+                      <button onClick={() => openArtifactPath(validatorPrepareResult.txCandidates?.dispute?.reviewManifestPath)} className="px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30">Open review</button>
+                      <button onClick={() => openArtifactPath(validatorPrepareResult.txCandidates?.dispute?.unsignedTxPath)} className="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Open unsigned tx</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
