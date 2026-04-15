@@ -152,7 +152,7 @@ async function buildV2ValidationReport(jobId) {
   const addCheck = (name, passed, detail = null) => checks.push({ name, passed, detail, checkedAt: new Date().toISOString() })
 
   const report = {
-    schema: 'mission-control/v2-onchain-validation/v1',
+    schema: 'mission-control/v2-onchain-validation/v2-onchain-only',
     manager: 'AGIJobManager-v2',
     contract: AGI_JOB_MANAGER_V2,
     chainRpc: ETH_RPC_URL,
@@ -164,6 +164,10 @@ async function buildV2ValidationReport(jobId) {
   }
 
   try {
+    const reachable = await rpcIsReachable()
+    addCheck('v2_rpc_reachable', reachable, ETH_RPC_URL)
+    if (!reachable) throw new Error('RPC unreachable')
+
     const { ethers } = await import('ethers')
     const abiPath = join(WORKSPACE_ROOT, 'contracts', 'AGIJobManager-v2', 'AGIJobManager.v2.json')
     const abiRaw = readJsonSafe(abiPath, [])
@@ -176,52 +180,56 @@ async function buildV2ValidationReport(jobId) {
     addCheck('v2_has_request_job_completion', Boolean(iface.getFunction('requestJobCompletion(uint256,string)')))
     addCheck('v2_has_validate_job', Boolean(iface.getFunction('validateJob(uint256,string,bytes32[])')))
 
-    let mcpJob = null
-    try {
-      mcpJob = await callMcp('get_job', { jobId: Number(jobId) })
-      addCheck('v2_mcp_job_query_success', Boolean(mcpJob), mcpJob ? `jobId=${mcpJob.jobId}` : 'no data')
-    } catch (mcpErr) {
-      addCheck('v2_mcp_job_query_success', false, mcpErr.message)
+    let detectedContract = ''
+    const topicJobId = ethers.zeroPadValue(ethers.toBeHex(BigInt(jobId)), 32)
+    for (const contractAddr of KNOWN_V2_CONTRACTS) {
+      try {
+        const topic = iface.getEvent('JobCreated').topicHash
+        const logs = await rpcGetLogs({ address: contractAddr, topics: [topic, topicJobId] })
+        if (logs.length > 0) {
+          detectedContract = contractAddr
+          break
+        }
+      } catch {}
     }
+    if (!detectedContract) detectedContract = AGI_JOB_MANAGER_V2_ALT.toLowerCase()
+    report.contract = detectedContract
+    addCheck('v2_contract_detected', Boolean(detectedContract), detectedContract)
 
-    if (mcpJob && typeof mcpJob === 'object') {
-      const employer = String(mcpJob?.employer || '0x0000000000000000000000000000000000000000')
-      const assignedAgent = String(mcpJob?.assignedAgent || '0x0000000000000000000000000000000000000000')
-      const payoutRaw = String(mcpJob?.payoutRaw || '0')
-      const specURI = String(mcpJob?.specURI || '')
-      const completionURI = String(mcpJob?.completionURI || '')
-      const approvals = Number(mcpJob?.validation?.approvals || 0)
-      const disapprovals = Number(mcpJob?.validation?.disapprovals || 0)
-      const completionRequested = Boolean(mcpJob?.validation?.completionRequested)
+    const state = await readV2JobOnchain(detectedContract, Number(jobId), iface)
+    const employer = String(state?.core?.employer || '0x0000000000000000000000000000000000000000')
+    const assignedAgent = String(state?.core?.assignedAgent || '0x0000000000000000000000000000000000000000')
+    const payoutRaw = String(state?.core?.payoutRaw || '0')
+    const specURI = String(state?.specURI || '')
+    const completionURI = String(state?.completionURI || '')
+    const approvals = Number(state?.validation?.approvals || 0)
+    const disapprovals = Number(state?.validation?.disapprovals || 0)
+    const completionRequested = Boolean(state?.validation?.completionRequested)
 
-      const contractLink = String(mcpJob?.links?.contract || '')
-      const linkedAddress = (contractLink.split('/').pop() || '').toLowerCase()
-      addCheck('v2_contract_link_present', contractLink.length > 0, contractLink || '(missing)')
-      addCheck('v2_contract_is_known_v2', KNOWN_V2_CONTRACTS.includes(linkedAddress), contractLink || '(missing)')
-      addCheck('v2_job_exists_employer_nonzero', employer !== '0x0000000000000000000000000000000000000000', employer)
-      addCheck('v2_job_has_payout', payoutRaw !== '0', payoutRaw)
-      addCheck('v2_job_has_assigned_agent', assignedAgent !== '0x0000000000000000000000000000000000000000', assignedAgent)
-      addCheck('v2_job_has_spec_uri', Boolean(specURI), specURI || '(empty)')
-      addCheck('v2_completion_requested_or_uri_present', completionRequested || Boolean(completionURI), `requested=${completionRequested}, completionURI=${completionURI || '(empty)'}`)
-      addCheck('v2_validation_signal_present', (approvals + disapprovals) >= 0, `${approvals} approve / ${disapprovals} disapprove`)
+    addCheck('v2_job_exists_employer_nonzero', employer !== '0x0000000000000000000000000000000000000000', employer)
+    addCheck('v2_job_has_payout', payoutRaw !== '0', payoutRaw)
+    addCheck('v2_job_has_assigned_agent', assignedAgent !== '0x0000000000000000000000000000000000000000', assignedAgent)
+    addCheck('v2_job_has_spec_uri', Boolean(specURI), specURI || '(empty)')
+    addCheck('v2_completion_requested_or_uri_present', completionRequested || Boolean(completionURI), `requested=${completionRequested}, completionURI=${completionURI || '(empty)'}`)
+    addCheck('v2_validation_signal_present', (approvals + disapprovals) >= 0, `${approvals} approve / ${disapprovals} disapprove`)
 
-      report.onchain = {
-        employer,
-        assignedAgent,
-        payoutRaw,
-        payout: String(mcpJob?.payout || ''),
-        status: String(mcpJob?.status || ''),
-        duration: String(mcpJob?.duration || ''),
-        completed: Boolean(mcpJob?.completed),
-        disputed: Boolean(mcpJob?.disputed),
-        expired: Boolean(mcpJob?.expired),
-        specURI,
-        completionURI,
-        completionRequested,
-        validatorApprovals: approvals,
-        validatorDisapprovals: disapprovals,
-        contractLink,
-      }
+    report.onchain = {
+      employer,
+      assignedAgent,
+      payoutRaw,
+      payout: formatAgialpha(payoutRaw),
+      status: deriveJobStatus(state?.core, state?.validation),
+      durationRaw: String(state?.core?.durationRaw || '0'),
+      duration: formatDurationDays(state?.core?.durationRaw || '0'),
+      completed: Boolean(state?.core?.completed),
+      disputed: Boolean(state?.core?.disputed),
+      expired: Boolean(state?.core?.expired),
+      specURI,
+      completionURI,
+      completionRequested,
+      validatorApprovals: approvals,
+      validatorDisapprovals: disapprovals,
+      contract: detectedContract,
     }
   } catch (err) {
     addCheck('v2_validation_runtime_success', false, err.message)
@@ -236,7 +244,7 @@ async function buildV2ValidationReport(jobId) {
     totalChecks: checks.length,
     overallPass: failed === 0,
     recommendation: failed === 0
-      ? 'V2 validation checks passed.'
+      ? 'V2 on-chain validation checks passed.'
       : `${failed} v2 validation check(s) failed. Review failed checks before progressing.`,
   }
 
@@ -258,12 +266,104 @@ async function fetchIpfsJson(ipfsUri) {
   return { ok: false, error: 'All IPFS gateways failed', source: null, data: null }
 }
 
+function formatAgialpha(amountRaw) {
+  try {
+    const n = BigInt(String(amountRaw || 0))
+    const whole = n / 10n**18n
+    const frac = n % 10n**18n
+    if (frac === 0n) return `${whole.toString()} AGIALPHA`
+    const fracStr = frac.toString().padStart(18, '0').replace(/0+$/, '').slice(0, 4)
+    return `${whole.toString()}.${fracStr} AGIALPHA`
+  } catch {
+    return '—'
+  }
+}
+
+function formatDurationDays(secondsRaw) {
+  try {
+    const s = Number(secondsRaw)
+    if (!Number.isFinite(s) || s <= 0) return '—'
+    const days = Math.round((s / 86400) * 100) / 100
+    return `${days} days`
+  } catch {
+    return '—'
+  }
+}
+
+function deriveJobStatus(core, validation) {
+  const zero = '0x0000000000000000000000000000000000000000'
+  const assigned = String(core?.assignedAgent || zero).toLowerCase() !== zero
+  if (core?.completed) return 'Completed'
+  if (core?.disputed) return 'Disputed'
+  if (core?.expired) return 'Expired'
+  if (validation?.completionRequested) return 'CompletionRequested'
+  if (assigned) return 'Assigned'
+  if (core?.delisted) return 'Delisted'
+  return 'Open'
+}
+
+async function readV2JobOnchain(contractAddr, jobId, iface) {
+  const out = {
+    core: null,
+    validation: null,
+    specURI: '',
+    completionURI: '',
+  }
+
+  try {
+    const data = iface.encodeFunctionData('getJobCore', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobCore', raw)
+    out.core = {
+      employer: decoded[0],
+      assignedAgent: decoded[1],
+      payoutRaw: decoded[2].toString(),
+      durationRaw: decoded[3].toString(),
+      createdAt: decoded[4].toString(),
+      completed: Boolean(decoded[5]),
+      disputed: Boolean(decoded[6]),
+      expired: Boolean(decoded[7]),
+      delisted: Number(decoded[8]) !== 0,
+      statusCode: Number(decoded[8]),
+    }
+  } catch {}
+
+  try {
+    const data = iface.encodeFunctionData('getJobValidation', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobValidation', raw)
+    out.validation = {
+      completionRequested: Boolean(decoded[0]),
+      approvals: Number(decoded[1] || 0),
+      disapprovals: Number(decoded[2] || 0),
+      approvedAt: decoded[3]?.toString?.() || '0',
+      disapprovedAt: decoded[4]?.toString?.() || '0',
+    }
+  } catch {}
+
+  try {
+    const data = iface.encodeFunctionData('getJobSpecURI', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobSpecURI', raw)
+    out.specURI = String(decoded[0] || '')
+  } catch {}
+
+  try {
+    const data = iface.encodeFunctionData('getJobCompletionURI', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobCompletionURI', raw)
+    out.completionURI = String(decoded[0] || '')
+  } catch {}
+
+  return out
+}
+
 async function buildV2OperatorView(jobId, options = {}) {
   const numericJobId = Number(jobId)
   const contractHint = String(options?.contractHint || '').toLowerCase()
   const hintIsKnownV2 = KNOWN_V2_CONTRACTS.includes(contractHint)
   const report = {
-    schema: 'mission-control/v2-operator-view/v1',
+    schema: 'mission-control/v2-operator-view/v2-onchain-only',
     manager: 'AGIJobManager-v2',
     jobId: String(jobId),
     rpc: ETH_RPC_URL,
@@ -273,6 +373,7 @@ async function buildV2OperatorView(jobId, options = {}) {
     jobRequest: {
       memo: '',
       specURI: '',
+      completionURI: '',
       specFetch: { ok: false, error: 'not attempted', source: null },
       spec: null,
     },
@@ -283,44 +384,6 @@ async function buildV2OperatorView(jobId, options = {}) {
     completionEvents: [],
     disputeEvents: [],
     errors: [],
-  }
-
-  let mcpJob = null
-  try {
-    mcpJob = await callMcp('get_job', { jobId: numericJobId })
-    if (mcpJob && typeof mcpJob === 'object') {
-      report.mcpJob = mcpJob
-      const mcpContract = String(mcpJob?.links?.contract || '').split('/').pop().toLowerCase()
-      if (KNOWN_V2_CONTRACTS.includes(mcpContract)) {
-        report.contract = mcpContract
-      } else if (mcpContract) {
-        report.errors.push(`mcp contract mismatch: ${mcpContract}`)
-      }
-      report.procurement = mcpJob?.procurement || mcpJob?.procurementId || null
-      report.jobRequest.memo = String(mcpJob?.details || mcpJob?.description || '')
-      report.jobRequest.specURI = String(mcpJob?.specURI || '')
-    }
-  } catch (err) {
-    report.errors.push(`mcp:get_job failed: ${err.message}`)
-  }
-
-  try {
-    const specMeta = await callMcp('fetch_job_metadata', { jobId: numericJobId, type: 'spec' })
-    if (specMeta && typeof specMeta === 'object') {
-      report.jobRequest.spec = specMeta
-      if (!report.jobRequest.memo) {
-        report.jobRequest.memo = String(specMeta?.details || specMeta?.description || specMeta?.summary || '')
-      }
-    }
-  } catch {}
-
-  const specFetch = await fetchIpfsJson(report.jobRequest.specURI)
-  report.jobRequest.specFetch = { ok: specFetch.ok, error: specFetch.error, source: specFetch.source }
-  if (!report.jobRequest.spec && specFetch.data) {
-    report.jobRequest.spec = specFetch.data
-    if (!report.jobRequest.memo) {
-      report.jobRequest.memo = String(specFetch.data?.details || specFetch.data?.description || specFetch.data?.summary || '')
-    }
   }
 
   try {
@@ -368,15 +431,41 @@ async function buildV2OperatorView(jobId, options = {}) {
     all.sort((a, b) => a.blockNumber - b.blockNumber)
 
     const created = all.find(e => e.name === 'JobCreated')
-    if (!report.contract && created?.contract) report.contract = created.contract
+    if (created?.contract) report.contract = created.contract
+    report.jobRequest.memo = String(created?.args?.details || '')
+    report.jobRequest.specURI = String(created?.args?.jobSpecURI || '')
 
-    report.applications = all
+    const jobState = await readV2JobOnchain(report.contract, numericJobId, iface)
+    report.jobRequest.specURI = jobState.specURI || report.jobRequest.specURI
+    report.jobRequest.completionURI = jobState.completionURI || ''
+
+    const specFetch = await fetchIpfsJson(report.jobRequest.specURI)
+    report.jobRequest.specFetch = { ok: specFetch.ok, error: specFetch.error, source: specFetch.source }
+    if (specFetch.data) {
+      report.jobRequest.spec = specFetch.data
+      if (!report.jobRequest.memo) {
+        report.jobRequest.memo = String(specFetch.data?.details || specFetch.data?.description || specFetch.data?.summary || '')
+      }
+    }
+
+    report.applications = await Promise.all(all
       .filter(e => e.name === 'JobApplied')
-      .map(e => ({
-        agent: String(e.args?.agent || ''),
-        blockNumber: e.blockNumber,
-        txHash: e.txHash,
-        contract: e.contract,
+      .map(async (e) => {
+        let ensSubdomain = ''
+        try {
+          const tx = await rpcGetTransactionByHash(e.txHash)
+          const parsedTx = tx?.input ? iface.parseTransaction({ data: tx.input, value: tx.value || '0x0' }) : null
+          ensSubdomain = String(parsedTx?.args?.[1] || '')
+        } catch {}
+        return {
+          agent: String(e.args?.agent || ''),
+          ensSubdomain,
+          applicationIpfsURI: null,
+          note: 'AGIJobManager-v2 applyForJob stores ENS/proof; no per-agent application IPFS URI in this contract event/state.',
+          blockNumber: e.blockNumber,
+          txHash: e.txHash,
+          contract: e.contract,
+        }
       }))
 
     report.validations = all
@@ -413,6 +502,19 @@ async function buildV2OperatorView(jobId, options = {}) {
         blockNumber: e.blockNumber,
         txHash: e.txHash,
       }))
+
+    report.onchainSummary = {
+      status: deriveJobStatus(jobState.core, jobState.validation),
+      employer: String(jobState.core?.employer || ''),
+      assignedAgent: String(jobState.core?.assignedAgent || ''),
+      payoutRaw: String(jobState.core?.payoutRaw || '0'),
+      payout: formatAgialpha(jobState.core?.payoutRaw || '0'),
+      durationRaw: String(jobState.core?.durationRaw || '0'),
+      duration: formatDurationDays(jobState.core?.durationRaw || '0'),
+      approvals: Number(jobState.validation?.approvals || 0),
+      disapprovals: Number(jobState.validation?.disapprovals || 0),
+      completionRequested: Boolean(jobState.validation?.completionRequested),
+    }
   } catch (err) {
     report.errors.push(`onchain scan failed: ${err.message}`)
   }
@@ -443,16 +545,11 @@ async function listV2JobsFromChain() {
         for (const log of logs) {
           const parsed = iface.parseLog(log)
           if (!parsed) continue
-          const id = String(parsed.args?.jobId ?? '').trim()
-          if (!id) continue
+          const id = Number(parsed.args?.jobId ?? -1)
+          if (!Number.isFinite(id) || id < 0) continue
           discovered.push({
             contract: contractAddr,
             jobId: id,
-            payoutRaw: String(parsed.args?.payout || ''),
-            durationRaw: String(parsed.args?.duration || ''),
-            specURI: String(parsed.args?.jobSpecURI || ''),
-            blockNumber: Number(BigInt(log.blockNumber || '0x0')),
-            txHash: log.transactionHash,
           })
         }
       } catch {}
@@ -461,31 +558,32 @@ async function listV2JobsFromChain() {
     const dedup = new Map()
     for (const row of discovered) {
       const key = `${row.contract}:${row.jobId}`
-      if (!dedup.has(key) || row.blockNumber > dedup.get(key).blockNumber) dedup.set(key, row)
+      if (!dedup.has(key)) dedup.set(key, row)
     }
 
     const out = []
     for (const row of dedup.values()) {
-      let mcpJob = null
-      try { mcpJob = await callMcp('get_job', { jobId: Number(row.jobId) }) } catch {}
+      const state = await readV2JobOnchain(row.contract, row.jobId, iface)
+      const core = state.core
+      if (!core) continue
+      if (String(core.employer || '').toLowerCase() === '0x0000000000000000000000000000000000000000') continue
 
       out.push({
         source: 'agijobmanager-v2',
         jobId: `V2-${row.jobId}`,
         sortId: Number(row.jobId),
-        status: String(mcpJob?.status || 'Created'),
-        payout: String(mcpJob?.payout || row.payoutRaw || '—'),
-        payoutRaw: String(mcpJob?.payoutRaw || row.payoutRaw || '0'),
-        duration: String(mcpJob?.duration || row.durationRaw || '—'),
-        employer: String(mcpJob?.employer || '0x0000000000000000000000000000000000000000'),
-        assignedAgent: String(mcpJob?.assignedAgent || '0x0000000000000000000000000000000000000000'),
-        specURI: String(mcpJob?.specURI || row.specURI || ''),
-        approvals: Number(mcpJob?.validation?.approvals || 0),
-        disapprovals: Number(mcpJob?.validation?.disapprovals || 0),
-        createdAt: `block ${row.blockNumber}`,
+        status: deriveJobStatus(core, state.validation),
+        payout: formatAgialpha(core.payoutRaw),
+        payoutRaw: String(core.payoutRaw || '0'),
+        duration: formatDurationDays(core.durationRaw),
+        employer: String(core.employer || '0x0000000000000000000000000000000000000000'),
+        assignedAgent: String(core.assignedAgent || '0x0000000000000000000000000000000000000000'),
+        specURI: String(state.specURI || ''),
+        approvals: Number(state.validation?.approvals || 0),
+        disapprovals: Number(state.validation?.disapprovals || 0),
+        createdAt: core.createdAt ? `ts ${core.createdAt}` : '—',
         links: {
           contract: `https://etherscan.io/address/${row.contract}`,
-          createTx: `https://etherscan.io/tx/${row.txHash}`,
         },
       })
     }
@@ -743,6 +841,15 @@ async function rpcCall(method, params = [], timeoutMs = 12000) {
 async function rpcGetLogs({ address, topics, fromBlock = '0x0', toBlock = 'latest' }) {
   const result = await rpcCall('eth_getLogs', [{ address, topics, fromBlock, toBlock }], 8000)
   return Array.isArray(result) ? result : []
+}
+
+async function rpcGetTransactionByHash(txHash) {
+  if (!txHash) return null
+  return await rpcCall('eth_getTransactionByHash', [txHash], 8000)
+}
+
+async function rpcEthCall(to, data) {
+  return await rpcCall('eth_call', [{ to, data }, 'latest'], 8000)
 }
 
 async function rpcIsReachable() {

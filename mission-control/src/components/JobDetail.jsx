@@ -449,9 +449,26 @@ export function JobDetail({ job, onRunIntake }) {
                 </div>
                 <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
                   <div className="text-slate-500">Procurement</div>
-                  <div className="font-mono text-slate-200">{operatorView.procurement || 'not exposed on this manager'}</div>
+                  <div className="font-mono text-slate-200">{operatorView.procurement || 'not exposed on AGIJobManager-v2'}</div>
                 </div>
               </div>
+
+              {operatorView.onchainSummary && (
+                <div className="grid md:grid-cols-3 gap-2 text-xs">
+                  <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                    <div className="text-slate-500">Status</div>
+                    <div className="text-slate-200">{operatorView.onchainSummary.status || '—'}</div>
+                  </div>
+                  <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                    <div className="text-slate-500">Payout (on-chain)</div>
+                    <div className="text-slate-200">{operatorView.onchainSummary.payout || '—'}</div>
+                  </div>
+                  <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                    <div className="text-slate-500">Duration (on-chain)</div>
+                    <div className="text-slate-200">{operatorView.onchainSummary.duration || '—'}</div>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded border border-slate-800 bg-slate-950/40 p-2 text-xs space-y-1">
                 <div className="text-slate-500">Job request memo</div>
@@ -466,10 +483,13 @@ export function JobDetail({ job, onRunIntake }) {
                 <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
                   <div className="text-slate-500 mb-1">Applications ({operatorView.applications?.length || 0})</div>
                   {(operatorView.applications || []).length > 0 ? (
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {operatorView.applications.map((a, i) => (
-                        <div key={`${a.txHash}-${i}`} className="text-slate-200 font-mono break-all">
-                          {a.agent || 'unknown agent'} · block {a.blockNumber}
+                        <div key={`${a.txHash}-${i}`} className="rounded border border-slate-800 p-2">
+                          <div className="text-slate-200 font-mono break-all">{a.agent || 'unknown agent'}</div>
+                          <div className="text-slate-400">ENS: <span className="font-mono">{a.ensSubdomain || '—'}</span></div>
+                          <div className="text-slate-400">Application IPFS: <span className="font-mono">{a.applicationIpfsURI || 'not available on AGIJobManager-v2'}</span></div>
+                          <div className="text-slate-500">block {a.blockNumber}</div>
                         </div>
                       ))}
                     </div>
