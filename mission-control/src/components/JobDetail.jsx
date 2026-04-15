@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { resolveEns, shortAddr } from '../utils/ens'
-import { fetchProcurementArtifacts, fetchV2OperatorView, validateJobDryRun } from '../api'
+import { fetchProcurementArtifacts, fetchV2OperatorView, scoreCompletionUri, validateJobDryRun } from '../api'
 import { summarizeDryRunReport } from '../features/validation/summarizeDryRun'
 
 const IPFS_GW = 'https://ipfs.io/ipfs/'
@@ -201,6 +201,65 @@ function CompletionBrief({ data, onClose }) {
   )
 }
 
+function ScoreBrief({ data, onClose }) {
+  const adjudication = data?.adjudication || {}
+  const dims = adjudication?.dimensions || {}
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-xl w-full sm:max-w-2xl max-h-screen overflow-y-auto">
+        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-5 py-4 flex items-center justify-between">
+          <div className="text-sm font-semibold text-white">Scoring Brief</div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded border border-slate-800 bg-slate-950/50 p-2">
+              <div className="text-slate-500">Final Score</div>
+              <div className="text-emerald-300 font-semibold">{adjudication?.score ?? '—'} / 100</div>
+            </div>
+            <div className="rounded border border-slate-800 bg-slate-950/50 p-2">
+              <div className="text-slate-500">Source URI</div>
+              <div className="text-slate-300 break-all"><IpfsLink uri={data?.completionURI} /></div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {Object.entries(dims).map(([name, dim]) => (
+              <div key={name} className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-slate-200 font-medium">{name}</div>
+                  <div className="text-cyan-300">{dim?.score ?? '—'}</div>
+                </div>
+                {(dim?.checks || []).length > 0 && (
+                  <div className="mt-1 space-y-1 text-xs">
+                    {dim.checks.map((check, i) => (
+                      <div key={`${name}-${i}`} className={check?.passed ? 'text-emerald-300' : 'text-amber-300'}>
+                        {check?.passed ? '✓' : '•'} {check?.name || 'check'}
+                        {check?.value != null ? ` (${check.value})` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <details className="rounded border border-slate-700 bg-slate-900/60 p-2">
+            <summary className="cursor-pointer text-slate-400">raw scoring payload</summary>
+            <pre className="mt-2 text-[11px] text-slate-300 overflow-auto max-h-64">{JSON.stringify(data, null, 2)}</pre>
+          </details>
+        </div>
+
+        <div className="sticky bottom-0 bg-slate-900 border-t border-slate-800 px-5 py-4">
+          <button onClick={onClose} className="w-full py-2.5 rounded-lg border border-slate-700 text-slate-300 text-sm hover:bg-slate-800 transition-colors">Close</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function EnsRows({ job }) {
   const [empEns, setEmpEns]     = useState(null)
   const [agentEns, setAgentEns] = useState(null)
@@ -239,6 +298,8 @@ export function JobDetail({ job, onRunIntake }) {
   const [completionMeta, setCompletionMeta] = useState(null)
   const [loadingMeta, setLoadingMeta]   = useState(false)
   const [showCompletionBrief, setShowCompletionBrief] = useState(false)
+  const [scoringBrief, setScoringBrief] = useState(null)
+  const [scoringBriefLoading, setScoringBriefLoading] = useState(false)
   const [intakeRunning, setIntakeRunning] = useState(false)
   const [intakeLog, setIntakeLog]         = useState([])
   const [intakeDone, setIntakeDone]       = useState(false)
@@ -467,6 +528,27 @@ export function JobDetail({ job, onRunIntake }) {
     }
   }
 
+  async function handleScoreCompletionRequest(uri) {
+    try {
+      setBriefError(null)
+      setScoringBriefLoading(true)
+      const data = await scoreCompletionUri({
+        completionURI: uri,
+        procurementId: procurementId || undefined,
+        jobId: job?.jobId,
+        trialDeadline: job?.trialDeadline || job?.deadlines?.trialDeadline,
+        scoreCommitDeadline: job?.scoreCommitDeadline || job?.deadlines?.scoreCommitDeadline,
+        scoreRevealDeadline: job?.scoreRevealDeadline || job?.deadlines?.scoreRevealDeadline,
+      })
+      setScoringBrief(data)
+    } catch (e) {
+      setScoringBrief(null)
+      setBriefError(e.message || 'Failed to score completion request payload')
+    } finally {
+      setScoringBriefLoading(false)
+    }
+  }
+
   async function handleRunValidation() {
     setValidationRunning(true)
     setValidationError('')
@@ -489,6 +571,7 @@ export function JobDetail({ job, onRunIntake }) {
     <div className="h-full overflow-y-auto space-y-4">
       {briefSpec && <JobBrief spec={briefSpec} onClose={() => setBriefSpec(null)} />}
       {showCompletionBrief && completionMeta && <CompletionBrief data={completionMeta} onClose={() => setShowCompletionBrief(false)} />}
+      {scoringBrief && <ScoreBrief data={scoringBrief} onClose={() => setScoringBrief(null)} />}
 
       <div className="flex items-center gap-3">
         <span className="text-xs font-mono text-slate-500">Job #{job.jobId}</span>
@@ -591,12 +674,21 @@ export function JobDetail({ job, onRunIntake }) {
                               {c.jobCompletionURI ? <IpfsLink uri={c.jobCompletionURI} /> : 'no URI'}
                             </div>
                             {c.jobCompletionURI && (
-                              <button
-                                onClick={() => handleOpenCompletionRequest(c.jobCompletionURI)}
-                                className="shrink-0 px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
-                              >
-                                open brief
-                              </button>
+                              <div className="shrink-0 flex items-center gap-1">
+                                <button
+                                  onClick={() => handleOpenCompletionRequest(c.jobCompletionURI)}
+                                  className="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800"
+                                >
+                                  open brief
+                                </button>
+                                <button
+                                  onClick={() => handleScoreCompletionRequest(c.jobCompletionURI)}
+                                  disabled={scoringBriefLoading}
+                                  className="px-2 py-1 rounded border border-emerald-800 text-emerald-300 hover:bg-emerald-950/20 disabled:opacity-50"
+                                >
+                                  {scoringBriefLoading ? 'scoring…' : 'score brief'}
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>

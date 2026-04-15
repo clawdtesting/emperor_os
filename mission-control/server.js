@@ -362,6 +362,55 @@ async function fetchIpfsJson(ipfsUri) {
   return { ok: false, error: 'All IPFS gateways failed', source: null, data: null }
 }
 
+async function fetchIpfsPayload(ipfsUri) {
+  const raw = String(ipfsUri || '').trim()
+  if (!raw.startsWith('ipfs://')) return { ok: false, error: 'URI must start with ipfs://', source: null, text: '', json: null }
+  const cid = raw.replace('ipfs://', '').split('/')[0]
+  for (const gw of IPFS_GATEWAYS) {
+    try {
+      const res = await fetch(gw + cid, { signal: AbortSignal.timeout(10000) })
+      if (!res.ok) continue
+      const text = await res.text()
+      if (!text || !text.trim()) continue
+      let json = null
+      try { json = JSON.parse(text) } catch {}
+      return { ok: true, error: null, source: gw, text, json }
+    } catch {}
+  }
+  return { ok: false, error: 'All IPFS gateways failed', source: null, text: '', json: null }
+}
+
+function extractScoringTextFromPayload(payload) {
+  if (typeof payload === 'string') return payload
+  if (!payload || typeof payload !== 'object') return ''
+
+  const candidates = [
+    payload.validatorNote,
+    payload.details,
+    payload.description,
+    payload.summary,
+    payload.content,
+    payload.deliverable,
+    payload.output,
+    payload.report,
+    payload.text,
+    payload?.properties?.validatorNote,
+    payload?.properties?.details,
+    payload?.properties?.description,
+    payload?.properties?.summary,
+  ]
+
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim().length > 0) return c
+  }
+
+  try {
+    return JSON.stringify(payload, null, 2)
+  } catch {
+    return ''
+  }
+}
+
 function formatAgialpha(amountRaw) {
   try {
     const n = BigInt(String(amountRaw || 0))
@@ -1394,6 +1443,65 @@ app.get('/api/procurements/:procurementId/artifacts/:key', (req, res) => {
     return res.send(text)
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to read artifact file' })
+  }
+})
+
+app.post('/api/scoring/completion-uri', async (req, res) => {
+  try {
+    const completionURI = String(req.body?.completionURI || '').trim()
+    if (!completionURI) return res.status(400).json({ error: 'completionURI is required' })
+    if (!completionURI.startsWith('ipfs://')) return res.status(400).json({ error: 'completionURI must start with ipfs://' })
+
+    const payload = await fetchIpfsPayload(completionURI)
+    if (!payload.ok) return res.status(502).json({ error: payload.error || 'Failed to fetch completion URI payload' })
+
+    const textForScoring = extractScoringTextFromPayload(payload.json || payload.text || '')
+    if (!textForScoring || textForScoring.trim().length === 0) {
+      return res.status(422).json({ error: 'Completion payload does not contain scoreable text' })
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000)
+    const deadlines = {
+      trial: normalizeTsSeconds(req.body?.trialDeadline),
+      scoreCommit: normalizeTsSeconds(req.body?.scoreCommitDeadline),
+      scoreReveal: normalizeTsSeconds(req.body?.scoreRevealDeadline),
+    }
+
+    const evidence = {
+      procurementId: String(req.body?.procurementId || ''),
+      procurement: {
+        procStruct: {
+          jobId: extractNumericJobId(req.body?.jobId || ''),
+        },
+        deadlines,
+        isScorePhase: Boolean((deadlines.scoreCommit && nowSec >= deadlines.scoreCommit) || (deadlines.trial && nowSec >= deadlines.trial)),
+      },
+      trial: {
+        trialSubmissions: [
+          {
+            cid: completionURI.replace('ipfs://', '').split('/')[0],
+            trialURI: completionURI,
+            content: textForScoring,
+            contentLength: textForScoring.length,
+          },
+        ],
+      },
+    }
+
+    const { adjudicateScore } = await import('../validation/scoring-adjudicator.js')
+    const adjudication = adjudicateScore(evidence, textForScoring)
+
+    res.json({
+      ok: true,
+      schema: 'mission-control/completion-uri-score/v1',
+      completionURI,
+      fetchedFrom: payload.source,
+      payloadType: payload.json ? 'json' : 'text',
+      textLength: textForScoring.length,
+      adjudication,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to score completion URI' })
   }
 })
 
