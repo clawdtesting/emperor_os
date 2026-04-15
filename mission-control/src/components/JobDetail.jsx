@@ -935,7 +935,7 @@ export function JobDetail({ job, wallet, onRunIntake }) {
 
               <div className="rounded border border-slate-800 bg-slate-950/40 p-2 text-xs space-y-1">
                 <div className="text-slate-500">Job request memo</div>
-                <div className="text-slate-200 whitespace-pre-wrap">{operatorView?.jobRequest?.memo || 'No memo found in MCP/spec payload.'}</div>
+                <div className="text-slate-200 whitespace-pre-wrap">{operatorView?.jobRequest?.memo || 'No memo found in spec payload.'}</div>
                 <div className="text-slate-500 font-mono break-all">Spec URI: {operatorView?.jobRequest?.specURI || '—'}</div>
                 {!operatorView?.jobRequest?.specFetch?.ok && (
                   <div className="text-amber-300">Spec fetch warning: {operatorView?.jobRequest?.specFetch?.error || 'unknown'}</div>

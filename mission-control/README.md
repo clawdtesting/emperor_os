@@ -1,30 +1,36 @@
-# AGI Alpha Mission Control
+# Op-control
 
-Mission Control is the AGI Alpha operator dashboard.
+Op-control is the AGI Alpha operator dashboard in contract-first mode.
 
 ## Scope
 
-This app is intentionally focused on AGI Alpha workflows:
-- monitor live AGI Alpha jobs from MCP
-- inspect job briefs and completion metadata
+This app is focused on sign-only operator workflows:
+- monitor v1 + Prime + v2 lanes from on-chain reads
+- inspect job specs/completions from on-chain URI -> IPFS
+- generate unsigned tx + review manifests for operator signing
 - monitor autonomous/keepalive GitHub workflows
-- browse local AGI Alpha test jobs
-- connect MetaMask (foundation for request/apply/validate contract actions)
+
+No AGI Alpha MCP dependency is required at runtime.
 
 ## Runtime layout
 
-- `src/` — React + Vite frontend (dashboard UI)
-- `server.js` — Express API proxy + SSE endpoints + local test runner
+- `src/` — React + Vite frontend
+- `server.js` — Express API for on-chain reads, IPFS fetch/pin, unsigned package generation
+- `lib/` — normalization and contract-first helpers
 
 ## Key API routes
 
-- `GET /api/jobs` — live jobs via MCP (`list_jobs`)
-- `GET /api/job-spec/:jobId` — job detail via MCP (`get_job`)
-- `GET /api/job-metadata/:jobId` — completion metadata (`fetch_job_metadata`)
-- `GET /api/pipelines` — available local pipeline files
-- `GET /api/test-jobs` — local test job specs from `../tests`
-- `POST /api/test-run` — stream local lobster execution
-- `GET /api/agent` — identity metadata for the Mission Control UI
+- `GET /api/jobs` — v1/v2/Prime list from contracts + RPC
+- `GET /api/job-spec/:jobId` — resolve spec URI on-chain, fetch payload from IPFS
+- `GET /api/job-metadata/:jobId` — resolve completion/spec URI on-chain, fetch payload from IPFS
+- `POST /api/job-requests` — generate unsigned `createJob(...)` tx package + review manifest
+- `POST /api/ipfs/pin-json` — Pinata-direct JSON pinning (requires `PINATA_JWT`)
+- `POST /api/validator/v1/prepare` — external validator package generation (contract/IPFS based)
+
+## Required environment
+
+- `ETH_RPC_URL` (or `RPC_URL`)
+- `PINATA_JWT` (required for `/api/ipfs/pin-json`)
 
 ## Development
 
@@ -33,15 +39,8 @@ npm install
 npm run dev
 ```
 
-To run the backend API server:
+Backend only:
 
 ```bash
 node server.js
 ```
-
-## Next integration target
-
-Add contract calls behind the wallet panel for:
-- `requestJob(...)`
-- `applyToJob(...)`
-- `validateCompletion(...)`

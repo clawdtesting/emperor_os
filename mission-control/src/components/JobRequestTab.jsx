@@ -602,7 +602,7 @@ export function JobRequestTab({ wallet }) {
 
       {step >= 8 && draft && ipfsResult && (
         <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 8 · Final review / publish</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 8 · Final review / generate sign-ready request package</div>
           <div className="text-xs text-slate-300 space-y-1">
             <div>Wallet: <span className="font-mono">{wallet?.account || '—'}</span></div>
             <div>Protocol: {protocol?.label}</div>
@@ -615,8 +615,15 @@ export function JobRequestTab({ wallet }) {
             disabled={posting || approvalRequired || !publishPayload}
             className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
           >
-            {posting ? 'Creating request...' : 'Create job request'}
+            {posting ? 'Generating package...' : 'Generate sign-ready request package'}
           </button>
+          {result?.unsignedTxPath && (
+            <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2 text-xs space-y-1">
+              <div className="text-emerald-300">Sign-ready request package generated.</div>
+              <div className="text-slate-300 break-all">unsigned tx: <a className="text-blue-300 underline" href={`/api/operator-actions/file?path=${encodeURIComponent(result.unsignedTxPath)}`} target="_blank" rel="noreferrer">open</a></div>
+              <div className="text-slate-300 break-all">review manifest: <a className="text-blue-300 underline" href={`/api/operator-actions/file?path=${encodeURIComponent(result.reviewManifestPath || '')}`} target="_blank" rel="noreferrer">open</a></div>
+            </div>
+          )}
           {result?.publishPayload && (
             <details>
               <summary className="text-xs text-slate-300 cursor-pointer">View publish payload</summary>
