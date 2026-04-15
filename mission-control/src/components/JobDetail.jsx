@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { resolveEns, shortAddr } from '../utils/ens'
-import { validateJobDryRun } from '../api'
+import { fetchV2OperatorView, validateJobDryRun } from '../api'
 import { summarizeDryRunReport } from '../features/validation/summarizeDryRun'
 
 const IPFS_GW = 'https://ipfs.io/ipfs/'
@@ -246,17 +246,49 @@ export function JobDetail({ job, onRunIntake }) {
   const [validationRunning, setValidationRunning] = useState(false)
   const [validationError, setValidationError] = useState('')
   const [validationSummary, setValidationSummary] = useState(null)
+  const [operatorLoading, setOperatorLoading] = useState(false)
+  const [operatorError, setOperatorError] = useState('')
+  const [operatorView, setOperatorView] = useState(null)
 
   const total       = (job?.approvals || 0) + (job?.disapprovals || 0)
   const approvalPct = total > 0 ? Math.round(((job?.approvals || 0) / total) * 100) : 0
   const ipfsCid     = job?.specURI?.replace('ipfs://', '')
   const canRunValidation = /\d+/.test(String(job?.jobId || ''))
+  const isV2 = job?.source === 'agijobmanager-v2'
 
   useEffect(() => {
     setValidationRunning(false)
     setValidationError('')
     setValidationSummary(null)
   }, [job?.jobId, job?.source])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isV2 || !job?.jobId) {
+      setOperatorLoading(false)
+      setOperatorError('')
+      setOperatorView(null)
+      return
+    }
+
+    ;(async () => {
+      setOperatorLoading(true)
+      setOperatorError('')
+      try {
+        const data = await fetchV2OperatorView(job.jobId, { source: job.source, managerVersion: 'v2' })
+        if (!cancelled) setOperatorView(data)
+      } catch (e) {
+        if (!cancelled) {
+          setOperatorView(null)
+          setOperatorError(e.message || 'Failed to load operator view')
+        }
+      } finally {
+        if (!cancelled) setOperatorLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [isV2, job?.jobId, job?.source])
 
   if (!job) {
     return (
@@ -386,6 +418,92 @@ export function JobDetail({ job, onRunIntake }) {
       </div>
 
       <EnsRows job={job} />
+
+      {isV2 && (
+        <div className="rounded-lg border border-fuchsia-800/60 bg-fuchsia-950/15 p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium text-fuchsia-300">Operator view (v2)</div>
+            {operatorLoading && <div className="text-[11px] text-slate-400">loading…</div>}
+          </div>
+
+          {operatorError && (
+            <div className="text-xs text-red-300 border border-red-900 bg-red-950/30 rounded p-2">{operatorError}</div>
+          )}
+
+          {operatorView && (
+            <>
+              <div className="grid md:grid-cols-2 gap-2 text-xs">
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500">Contract</div>
+                  <div className="font-mono text-slate-200 break-all">{operatorView.contract || '—'}</div>
+                </div>
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500">Procurement</div>
+                  <div className="font-mono text-slate-200">{operatorView.procurement || 'not exposed on this manager'}</div>
+                </div>
+              </div>
+
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2 text-xs space-y-1">
+                <div className="text-slate-500">Job request memo</div>
+                <div className="text-slate-200 whitespace-pre-wrap">{operatorView?.jobRequest?.memo || 'No memo found in MCP/spec payload.'}</div>
+                <div className="text-slate-500 font-mono break-all">Spec URI: {operatorView?.jobRequest?.specURI || '—'}</div>
+                {!operatorView?.jobRequest?.specFetch?.ok && (
+                  <div className="text-amber-300">Spec fetch warning: {operatorView?.jobRequest?.specFetch?.error || 'unknown'}</div>
+                )}
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-2 text-xs">
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500 mb-1">Applications ({operatorView.applications?.length || 0})</div>
+                  {(operatorView.applications || []).length > 0 ? (
+                    <div className="space-y-1">
+                      {operatorView.applications.map((a, i) => (
+                        <div key={`${a.txHash}-${i}`} className="text-slate-200 font-mono break-all">
+                          {a.agent || 'unknown agent'} · block {a.blockNumber}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="text-slate-600">No applications found for this job id.</div>}
+                </div>
+
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500 mb-1">Validator actions ({operatorView.validations?.length || 0})</div>
+                  {(operatorView.validations || []).length > 0 ? (
+                    <div className="space-y-1">
+                      {operatorView.validations.map((v, i) => (
+                        <div key={`${v.txHash}-${i}`} className="text-slate-200 font-mono break-all">
+                          {v.verdict} · {v.validator || 'unknown validator'} · block {v.blockNumber}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="text-slate-600">No validator events yet.</div>}
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-2 text-xs">
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500 mb-1">Completion requests ({operatorView.completionRequests?.length || 0})</div>
+                  {(operatorView.completionRequests || []).length > 0 ? (
+                    <div className="space-y-1">
+                      {operatorView.completionRequests.map((c, i) => (
+                        <div key={`${c.txHash}-${i}`} className="text-slate-200 font-mono break-all">
+                          {c.agent || 'unknown agent'} · {c.jobCompletionURI || 'no URI'}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div className="text-slate-600">No completion requests yet.</div>}
+                </div>
+
+                <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-500 mb-1">Completions / disputes</div>
+                  <div className="text-slate-300">completed: {operatorView.completionEvents?.length || 0}</div>
+                  <div className="text-slate-300">disputed: {operatorView.disputeEvents?.length || 0}</div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div>
         <div className="flex justify-between text-xs text-slate-500 mb-1">

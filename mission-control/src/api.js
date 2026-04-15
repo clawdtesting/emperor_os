@@ -84,6 +84,17 @@ export async function fetchRunnerLogs(since) {
   return res.json()
 }
 
+export async function fetchV2OperatorView(jobId, options = {}) {
+  const params = new URLSearchParams()
+  if (options?.source) params.set('source', options.source)
+  if (options?.managerVersion) params.set('managerVersion', options.managerVersion)
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  const res = await fetch(BASE + '/api/jobs/' + encodeURIComponent(jobId) + '/operator-view' + qs)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch operator view')
+  return data
+}
+
 export async function validateJobDryRun(jobId, options = {}) {
   const res = await fetch(BASE + '/api/jobs/' + encodeURIComponent(jobId) + '/validate-dryrun', {
     method: 'POST',

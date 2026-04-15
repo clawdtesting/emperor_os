@@ -38,6 +38,11 @@ const AGI_JOB_MANAGER_V2 = '0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29'
 const AGI_JOB_MANAGER_V2_ALT = '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2'
 const KNOWN_V2_CONTRACTS = [AGI_JOB_MANAGER_V2.toLowerCase(), AGI_JOB_MANAGER_V2_ALT.toLowerCase()]
 const ETH_RPC_URL = process.env.ETH_RPC_URL || process.env.RPC_URL || 'https://eth.llamarpc.com'
+const IPFS_GATEWAYS = [
+  'https://ipfs.io/ipfs/',
+  'https://cloudflare-ipfs.com/ipfs/',
+  'https://gateway.pinata.cloud/ipfs/',
+]
 
 mkdirSync(NOTIF_STATE_DIR, { recursive: true })
 
@@ -236,6 +241,253 @@ async function buildV2ValidationReport(jobId) {
   }
 
   return report
+}
+
+async function fetchIpfsJson(ipfsUri) {
+  const raw = String(ipfsUri || '').trim()
+  if (!raw.startsWith('ipfs://')) return { ok: false, error: 'spec URI missing or not ipfs://', source: null, data: null }
+  const cid = raw.replace('ipfs://', '').split('/')[0]
+  for (const gw of IPFS_GATEWAYS) {
+    try {
+      const res = await fetch(gw + cid, { signal: AbortSignal.timeout(8000) })
+      if (!res.ok) continue
+      const data = await res.json().catch(() => null)
+      if (data && typeof data === 'object') return { ok: true, error: null, source: gw, data }
+    } catch {}
+  }
+  return { ok: false, error: 'All IPFS gateways failed', source: null, data: null }
+}
+
+async function buildV2OperatorView(jobId) {
+  const numericJobId = Number(jobId)
+  const report = {
+    schema: 'mission-control/v2-operator-view/v1',
+    manager: 'AGIJobManager-v2',
+    jobId: String(jobId),
+    rpc: ETH_RPC_URL,
+    generatedAt: new Date().toISOString(),
+    contract: null,
+    mcpJob: null,
+    jobRequest: {
+      memo: '',
+      specURI: '',
+      specFetch: { ok: false, error: 'not attempted', source: null },
+      spec: null,
+    },
+    procurement: null,
+    applications: [],
+    validations: [],
+    completionRequests: [],
+    completionEvents: [],
+    disputeEvents: [],
+    errors: [],
+  }
+
+  let mcpJob = null
+  try {
+    mcpJob = await callMcp('get_job', { jobId: numericJobId })
+    if (mcpJob && typeof mcpJob === 'object') {
+      report.mcpJob = mcpJob
+      report.contract = String(mcpJob?.links?.contract || '').split('/').pop() || null
+      report.procurement = mcpJob?.procurement || mcpJob?.procurementId || null
+      report.jobRequest.memo = String(mcpJob?.details || mcpJob?.description || '')
+      report.jobRequest.specURI = String(mcpJob?.specURI || '')
+    }
+  } catch (err) {
+    report.errors.push(`mcp:get_job failed: ${err.message}`)
+  }
+
+  try {
+    const specMeta = await callMcp('fetch_job_metadata', { jobId: numericJobId, type: 'spec' })
+    if (specMeta && typeof specMeta === 'object') {
+      report.jobRequest.spec = specMeta
+      if (!report.jobRequest.memo) {
+        report.jobRequest.memo = String(specMeta?.details || specMeta?.description || specMeta?.summary || '')
+      }
+    }
+  } catch {}
+
+  const specFetch = await fetchIpfsJson(report.jobRequest.specURI)
+  report.jobRequest.specFetch = { ok: specFetch.ok, error: specFetch.error, source: specFetch.source }
+  if (!report.jobRequest.spec && specFetch.data) {
+    report.jobRequest.spec = specFetch.data
+    if (!report.jobRequest.memo) {
+      report.jobRequest.memo = String(specFetch.data?.details || specFetch.data?.description || specFetch.data?.summary || '')
+    }
+  }
+
+  try {
+    const reachable = await rpcIsReachable()
+    if (!reachable) {
+      report.errors.push('onchain scan skipped: RPC unreachable')
+      return report
+    }
+
+    const { ethers } = await import('ethers')
+    const abiPath = join(WORKSPACE_ROOT, 'contracts', 'AGIJobManager-v2', 'AGIJobManager.v2.json')
+    const abiRaw = readJsonSafe(abiPath, [])
+    const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+    const iface = new ethers.Interface(abi)
+    const topicJobId = ethers.zeroPadValue(ethers.toBeHex(BigInt(numericJobId)), 32)
+
+    const toSimple = (evt, address, rawLog) => ({
+      blockNumber: Number(BigInt(rawLog.blockNumber || '0x0')),
+      txHash: rawLog.transactionHash,
+      contract: String(address || '').toLowerCase(),
+      name: evt.name,
+      args: Object.fromEntries(Object.entries(evt.args || {}).filter(([k]) => Number.isNaN(Number(k)))),
+    })
+
+    const eventsToScan = ['JobCreated', 'JobApplied', 'JobCompletionRequested', 'JobValidated', 'JobDisapproved', 'JobCompleted', 'JobDisputed']
+    const all = []
+
+    for (const contractAddr of KNOWN_V2_CONTRACTS) {
+      for (const eventName of eventsToScan) {
+        try {
+          const fragment = iface.getEvent(eventName)
+          const logs = await rpcGetLogs({
+            address: contractAddr,
+            topics: [fragment.topicHash, topicJobId],
+          })
+          for (const log of logs) {
+            const parsed = iface.parseLog(log)
+            if (!parsed) continue
+            all.push(toSimple(parsed, contractAddr, log))
+          }
+        } catch {}
+      }
+    }
+
+    all.sort((a, b) => a.blockNumber - b.blockNumber)
+
+    const created = all.find(e => e.name === 'JobCreated')
+    if (!report.contract && created?.contract) report.contract = created.contract
+
+    report.applications = all
+      .filter(e => e.name === 'JobApplied')
+      .map(e => ({
+        agent: String(e.args?.agent || ''),
+        blockNumber: e.blockNumber,
+        txHash: e.txHash,
+        contract: e.contract,
+      }))
+
+    report.validations = all
+      .filter(e => e.name === 'JobValidated' || e.name === 'JobDisapproved')
+      .map(e => ({
+        verdict: e.name === 'JobValidated' ? 'approve' : 'disapprove',
+        validator: String(e.args?.validator || ''),
+        blockNumber: e.blockNumber,
+        txHash: e.txHash,
+      }))
+
+    report.completionRequests = all
+      .filter(e => e.name === 'JobCompletionRequested')
+      .map(e => ({
+        agent: String(e.args?.agent || ''),
+        jobCompletionURI: String(e.args?.jobCompletionURI || ''),
+        blockNumber: e.blockNumber,
+        txHash: e.txHash,
+      }))
+
+    report.completionEvents = all
+      .filter(e => e.name === 'JobCompleted')
+      .map(e => ({
+        agent: String(e.args?.agent || ''),
+        reputationPoints: String(e.args?.reputationPoints || ''),
+        blockNumber: e.blockNumber,
+        txHash: e.txHash,
+      }))
+
+    report.disputeEvents = all
+      .filter(e => e.name === 'JobDisputed')
+      .map(e => ({
+        disputant: String(e.args?.disputant || ''),
+        blockNumber: e.blockNumber,
+        txHash: e.txHash,
+      }))
+  } catch (err) {
+    report.errors.push(`onchain scan failed: ${err.message}`)
+  }
+
+  return report
+}
+
+async function listV2JobsFromChain() {
+  try {
+    const reachable = await rpcIsReachable()
+    if (!reachable) return []
+
+    const { ethers } = await import('ethers')
+    const abiPath = join(WORKSPACE_ROOT, 'contracts', 'AGIJobManager-v2', 'AGIJobManager.v2.json')
+    const abiRaw = readJsonSafe(abiPath, [])
+    const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+    const iface = new ethers.Interface(abi)
+    const createdTopic = iface.getEvent('JobCreated').topicHash
+
+    const discovered = []
+
+    for (const contractAddr of KNOWN_V2_CONTRACTS) {
+      try {
+        const logs = await rpcGetLogs({
+          address: contractAddr,
+          topics: [createdTopic],
+        })
+        for (const log of logs) {
+          const parsed = iface.parseLog(log)
+          if (!parsed) continue
+          const id = String(parsed.args?.jobId ?? '').trim()
+          if (!id) continue
+          discovered.push({
+            contract: contractAddr,
+            jobId: id,
+            payoutRaw: String(parsed.args?.payout || ''),
+            durationRaw: String(parsed.args?.duration || ''),
+            specURI: String(parsed.args?.jobSpecURI || ''),
+            blockNumber: Number(BigInt(log.blockNumber || '0x0')),
+            txHash: log.transactionHash,
+          })
+        }
+      } catch {}
+    }
+
+    const dedup = new Map()
+    for (const row of discovered) {
+      const key = `${row.contract}:${row.jobId}`
+      if (!dedup.has(key) || row.blockNumber > dedup.get(key).blockNumber) dedup.set(key, row)
+    }
+
+    const out = []
+    for (const row of dedup.values()) {
+      let mcpJob = null
+      try { mcpJob = await callMcp('get_job', { jobId: Number(row.jobId) }) } catch {}
+
+      out.push({
+        source: 'agijobmanager-v2',
+        jobId: `V2-${row.jobId}`,
+        sortId: Number(row.jobId),
+        status: String(mcpJob?.status || 'Created'),
+        payout: String(mcpJob?.payout || row.payoutRaw || '—'),
+        payoutRaw: String(mcpJob?.payoutRaw || row.payoutRaw || '0'),
+        duration: String(mcpJob?.duration || row.durationRaw || '—'),
+        employer: String(mcpJob?.employer || '0x0000000000000000000000000000000000000000'),
+        assignedAgent: String(mcpJob?.assignedAgent || '0x0000000000000000000000000000000000000000'),
+        specURI: String(mcpJob?.specURI || row.specURI || ''),
+        approvals: Number(mcpJob?.validation?.approvals || 0),
+        disapprovals: Number(mcpJob?.validation?.disapprovals || 0),
+        createdAt: `block ${row.blockNumber}`,
+        links: {
+          contract: `https://etherscan.io/address/${row.contract}`,
+          createTx: `https://etherscan.io/tx/${row.txHash}`,
+        },
+      })
+    }
+
+    out.sort((a, b) => Number(b.sortId || 0) - Number(a.sortId || 0))
+    return out
+  } catch {
+    return []
+  }
 }
 
 function urgencyLabel(secsUntilDeadline) {
@@ -468,6 +720,33 @@ async function callMcp(tool, args = {}) {
   return unpackMcp(data.result)
 }
 
+async function rpcCall(method, params = [], timeoutMs = 12000) {
+  const res = await fetch(ETH_RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!res.ok) throw new Error(`RPC HTTP ${res.status}`)
+  const data = await res.json().catch(() => ({}))
+  if (data?.error) throw new Error(data.error?.message || JSON.stringify(data.error))
+  return data?.result
+}
+
+async function rpcGetLogs({ address, topics, fromBlock = '0x0', toBlock = 'latest' }) {
+  const result = await rpcCall('eth_getLogs', [{ address, topics, fromBlock, toBlock }], 8000)
+  return Array.isArray(result) ? result : []
+}
+
+async function rpcIsReachable() {
+  try {
+    await rpcCall('eth_blockNumber', [], 3000)
+    return true
+  } catch {
+    return false
+  }
+}
+
 
 function normalizeAssetUri(value) {
   const trimmed = String(value || '').trim()
@@ -686,6 +965,8 @@ app.get('/api/jobs', async (req, res) => {
       source: 'agijobmanager',
     }))
 
+    const v2Jobs = await listV2JobsFromChain()
+
     const primeToolCandidates = [
       'list_prime_jobs',
       'list_prime_procurements',
@@ -718,7 +999,7 @@ app.get('/api/jobs', async (req, res) => {
       } catch {}
     }
 
-    res.json([...managerJobs, ...primeJobs])
+    res.json([...managerJobs, ...v2Jobs, ...primeJobs])
   } catch (e) {
     console.error('MCP list_jobs failed:', e.message)
     res.json([])
@@ -753,6 +1034,25 @@ app.get('/api/job-spec/:jobId', async (req, res) => {
     const data = await callMcp('get_job', { jobId: Number(req.params.jobId) })
     res.json(data)
   } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
+app.get('/api/jobs/:jobId/operator-view', async (req, res) => {
+  try {
+    const rawJobId = String(req.params.jobId || '').trim()
+    const numericJobId = extractNumericJobId(rawJobId)
+    if (!numericJobId) return res.status(400).json({ error: 'jobId must include a numeric id' })
+
+    const source = String(req.query?.source || '').toLowerCase()
+    const managerVersion = String(req.query?.managerVersion || '').toLowerCase()
+    if (source !== 'agijobmanager-v2' && managerVersion !== 'v2') {
+      return res.status(400).json({ error: 'operator-view currently supports AGIJobManager v2 only' })
+    }
+
+    const view = await buildV2OperatorView(numericJobId)
+    res.json({ ok: true, ...view })
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Failed to build operator view' })
+  }
 })
 
 app.post('/api/jobs/:jobId/validate-dryrun', async (req, res) => {
