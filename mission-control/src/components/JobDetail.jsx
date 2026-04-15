@@ -407,6 +407,7 @@ export function JobDetail({ job, onRunIntake }) {
       const data = await validateJobDryRun(job.jobId, {
         source: job?.source || '',
         managerVersion: job?.source === 'agijobmanager-v2' ? 'v2' : undefined,
+        job,
       })
       setValidationSummary(summarizeDryRunReport(data.report))
     } catch (e) {
@@ -588,7 +589,9 @@ export function JobDetail({ job, onRunIntake }) {
         </div>
 
         <div className="text-xs text-slate-500">
-          Run deterministic dry-run validation for this job and get immediate pass/fail checks before advancing.
+          {job?.source === 'agiprimediscovery'
+            ? 'Run Prime scoring validation (trial/score windows, action code, and commit↔reveal continuity) before validator actions.'
+            : 'Run deterministic dry-run validation for this job and get immediate pass/fail checks before advancing.'}
         </div>
 
         <button

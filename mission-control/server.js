@@ -251,6 +251,102 @@ async function buildV2ValidationReport(jobId) {
   return report
 }
 
+function buildPrimeScoringValidationReport(jobId, inputJob = null) {
+  const checks = []
+  const addCheck = (name, passed, detail = null) => checks.push({ name, passed, detail, checkedAt: new Date().toISOString() })
+
+  const nowSec = Math.floor(Date.now() / 1000)
+  const raw = inputJob && typeof inputJob === 'object' ? inputJob : {}
+  const procurementId = String(raw?.procurementId ?? extractNumericJobId(raw?.jobId ?? jobId) ?? jobId)
+
+  const deadlines = {
+    commitDeadline: normalizeTsSeconds(raw?.commitDeadline ?? raw?.deadlines?.commitDeadline),
+    revealDeadline: normalizeTsSeconds(raw?.revealDeadline ?? raw?.deadlines?.revealDeadline),
+    finalistAcceptDeadline: normalizeTsSeconds(raw?.finalistAcceptDeadline ?? raw?.deadlines?.finalistAcceptDeadline),
+    trialDeadline: normalizeTsSeconds(raw?.trialDeadline ?? raw?.deadlines?.trialDeadline),
+    scoreCommitDeadline: normalizeTsSeconds(raw?.scoreCommitDeadline ?? raw?.deadlines?.scoreCommitDeadline),
+    scoreRevealDeadline: normalizeTsSeconds(raw?.scoreRevealDeadline ?? raw?.deadlines?.scoreRevealDeadline),
+  }
+
+  const rawActionCode = String(raw?.nextActionCode ?? raw?.nextAction ?? '').toUpperCase()
+  const phase = decodePrimeActionPhase(rawActionCode)
+  const windowStatus = inferPrimeWindowStatus(phase, deadlines, nowSec)
+
+  addCheck('prime_procurement_id_present', Boolean(procurementId), `procurementId=${procurementId}`)
+  addCheck('prime_score_commit_deadline_present', Boolean(deadlines.scoreCommitDeadline), String(deadlines.scoreCommitDeadline || 'missing'))
+  addCheck('prime_score_reveal_deadline_present', Boolean(deadlines.scoreRevealDeadline), String(deadlines.scoreRevealDeadline || 'missing'))
+  addCheck('prime_trial_deadline_present', Boolean(deadlines.trialDeadline), String(deadlines.trialDeadline || 'missing'))
+
+  if (deadlines.trialDeadline && deadlines.scoreCommitDeadline && deadlines.scoreRevealDeadline) {
+    const ordered = deadlines.trialDeadline <= deadlines.scoreCommitDeadline && deadlines.scoreCommitDeadline <= deadlines.scoreRevealDeadline
+    addCheck('prime_score_windows_ordered', ordered, `trial=${deadlines.trialDeadline}, scoreCommit=${deadlines.scoreCommitDeadline}, scoreReveal=${deadlines.scoreRevealDeadline}`)
+  } else {
+    addCheck('prime_score_windows_ordered', false, 'missing one or more score/trial deadlines')
+  }
+
+  const scorePhaseKnown = ['validator_commit', 'validator_reveal'].includes(phase)
+  addCheck('prime_scoring_phase_detectable', scorePhaseKnown, rawActionCode || 'missing action code')
+
+  if (phase === 'validator_commit') {
+    addCheck('prime_validator_commit_window_open', windowStatus === 'open', `window=${windowStatus}`)
+    addCheck('prime_validator_not_scoring_before_trial_deadline', nowSec >= Number(deadlines.trialDeadline || 0), `now=${nowSec}, trialDeadline=${deadlines.trialDeadline || 'missing'}`)
+  }
+
+  if (phase === 'validator_reveal') {
+    addCheck('prime_validator_reveal_window_open', windowStatus === 'open', `window=${windowStatus}`)
+  }
+
+  const procDir = join(PROC_ARTIFACTS_DIR, `proc_${procurementId}`)
+  const scoringDir = join(procDir, 'scoring')
+  const state = readJsonSafe(join(procDir, 'state.json'), null)
+  const commitPayload = readJsonSafe(join(scoringDir, 'score_commit_payload.json'), null)
+  const revealPayload = readJsonSafe(join(scoringDir, 'score_reveal_payload.json'), null)
+
+  addCheck('prime_local_proc_state_exists', Boolean(state), state ? `status=${state.status || 'unknown'}` : `missing ${join(procDir, 'state.json')}`)
+  addCheck('prime_local_score_commit_payload_exists', Boolean(commitPayload), commitPayload ? 'present' : `missing ${join(scoringDir, 'score_commit_payload.json')}`)
+  addCheck('prime_local_score_reveal_payload_exists', Boolean(revealPayload), revealPayload ? 'present' : `missing ${join(scoringDir, 'score_reveal_payload.json')}`)
+
+  if (commitPayload && revealPayload) {
+    const sameScore = Number(commitPayload.score) === Number(revealPayload.score)
+    const sameSalt = String(commitPayload.salt || '') === String(revealPayload.salt || '')
+    addCheck('prime_commit_reveal_score_consistency', sameScore, `commit=${commitPayload.score}, reveal=${revealPayload.score}`)
+    addCheck('prime_commit_reveal_salt_consistency', sameSalt, sameSalt ? 'match' : 'mismatch')
+  }
+
+  const passed = checks.filter(c => c.passed).length
+  const failed = checks.length - passed
+
+  return {
+    schema: 'mission-control/prime-scoring-validation/v1',
+    manager: 'AGIJobDiscoveryPrime',
+    jobId: String(jobId),
+    procurementId,
+    generatedAt: new Date().toISOString(),
+    checks,
+    summary: {
+      verdict: failed === 0 ? 'DRY_RUN_PASSED' : 'DRY_RUN_FAILED',
+      passed,
+      failed,
+      totalChecks: checks.length,
+      overallPass: failed === 0,
+      recommendation: failed === 0
+        ? 'Prime scoring validation checks passed.'
+        : `${failed} prime scoring validation check(s) failed. Review deadlines, action code, and commit/reveal continuity before validator actions.`,
+    },
+    scoringContext: {
+      actionCode: rawActionCode || null,
+      phase,
+      windowStatus,
+      nowSec,
+      deadlines,
+      localArtifacts: {
+        procDir,
+        scoringDir,
+      },
+    },
+  }
+}
+
 async function fetchIpfsJson(ipfsUri) {
   const raw = String(ipfsUri || '').trim()
   if (!raw.startsWith('ipfs://')) return { ok: false, error: 'spec URI missing or not ipfs://', source: null, data: null }
@@ -300,6 +396,57 @@ function deriveJobStatus(core, validation) {
   if (assigned) return 'Assigned'
   if (core?.delisted) return 'Delisted'
   return 'Open'
+}
+
+function normalizeTsSeconds(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n)
+}
+
+function inferPrimeWindowStatus(phase, deadlines, nowSec = Math.floor(Date.now() / 1000)) {
+  const c = normalizeTsSeconds(deadlines?.commitDeadline)
+  const r = normalizeTsSeconds(deadlines?.revealDeadline)
+  const fa = normalizeTsSeconds(deadlines?.finalistAcceptDeadline)
+  const t = normalizeTsSeconds(deadlines?.trialDeadline)
+  const sc = normalizeTsSeconds(deadlines?.scoreCommitDeadline)
+  const sr = normalizeTsSeconds(deadlines?.scoreRevealDeadline)
+
+  if (phase === 'validator_commit') {
+    if (!t || !sc) return 'unknown'
+    if (nowSec < t) return 'upcoming'
+    return nowSec < sc ? 'open' : 'closed'
+  }
+  if (phase === 'validator_reveal') {
+    if (!sc || !sr) return 'unknown'
+    if (nowSec < sc) return 'upcoming'
+    return nowSec < sr ? 'open' : 'closed'
+  }
+  if (phase === 'trial') {
+    if (!fa || !t) return 'unknown'
+    if (nowSec < fa) return 'upcoming'
+    return nowSec < t ? 'open' : 'closed'
+  }
+  if (phase === 'commit') {
+    if (!c) return 'unknown'
+    return nowSec < c ? 'open' : 'closed'
+  }
+  if (phase === 'reveal') {
+    if (!c || !r) return 'unknown'
+    if (nowSec < c) return 'upcoming'
+    return nowSec < r ? 'open' : 'closed'
+  }
+  return 'unknown'
+}
+
+function decodePrimeActionPhase(codeRaw) {
+  const code = String(codeRaw || '').trim().toUpperCase()
+  if (code === 'WSC') return 'validator_commit'
+  if (code === 'WSR') return 'validator_reveal'
+  if (code === 'WT') return 'trial'
+  if (code === 'WC') return 'commit'
+  if (code === 'WR' || code === 'RA') return 'reveal'
+  return 'unknown'
 }
 
 async function readV2JobOnchain(contractAddr, jobId, iface) {
@@ -1189,6 +1336,9 @@ app.post('/api/jobs/:jobId/validate-dryrun', async (req, res) => {
     if (managerVersion === 'v2' || source === 'agijobmanager-v2') {
       mode = 'v2-onchain'
       report = await buildV2ValidationReport(numericJobId)
+    } else if (source === 'agiprimediscovery') {
+      mode = 'prime-scoring'
+      report = buildPrimeScoringValidationReport(numericJobId, req.body?.job || null)
     } else {
       try {
         const { dryRunContract1Validation } = await import('../validation/contract1-dryrun.js')
