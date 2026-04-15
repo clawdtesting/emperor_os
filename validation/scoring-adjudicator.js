@@ -14,11 +14,12 @@
 // SAFETY CONTRACT: Pure evaluation. No signing. No broadcasting.
 // One deterministic output per evidence bundle.
 
-import { VALIDATOR_CONFIG } from "./config.js";
 import {
   computeScoreCommitment,
   verifyScoreRevealAgainstCommit,
 } from "../agent/prime-validator-engine.js";
+
+const SCORE_PRECISION = Number(process.env.VALIDATOR_SCORE_PRECISION ?? "2");
 
 const SCORING_WEIGHTS = {
   specCompliance: 0.30,
@@ -30,7 +31,7 @@ const SCORING_WEIGHTS = {
 
 function normalizeScore(raw, min = 0, max = 100) {
   const clamped = Math.max(min, Math.min(max, raw));
-  const precision = VALIDATOR_CONFIG.SCORE_PRECISION;
+  const precision = SCORE_PRECISION;
   return Math.round(clamped * Math.pow(10, precision)) / Math.pow(10, precision);
 }
 
