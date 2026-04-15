@@ -9,13 +9,13 @@ import { tmpdir } from 'os'
 import { createHash } from 'crypto'
 import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
+import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage } from './lib/contract-first.js'
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 
 const __dirname     = dirname(fileURLToPath(import.meta.url))
-const MCP_ENDPOINT  = process.env.AGI_ALPHA_MCP || 'https://agialpha.com/api/mcp'
 const WORKSPACE_ROOT = resolve(__dirname, '..')
 const PIPELINES_DIR = join(WORKSPACE_ROOT, 'pipelines')
 const TESTS_DIR     = resolve(__dirname, '..', 'tests')
@@ -1018,31 +1018,6 @@ async function githubFetch(path, { allowAnonymousFallback = true } = {}) {
   return { data: await res.json(), usedAuth }
 }
 
-async function callMcp(tool, args = {}) {
-  const res = await fetch(MCP_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name: tool, arguments: args } }),
-    signal: AbortSignal.timeout(20000),
-  })
-  if (!res.ok) throw new Error(`MCP HTTP ${res.status}`)
-  const ct = res.headers.get('content-type') || ''
-  if (ct.includes('text/event-stream')) {
-    const text = await res.text()
-    for (const line of text.split('\n')) {
-      if (!line.startsWith('data:')) continue
-      try {
-        const d = JSON.parse(line.slice(5).trim())
-        if (d.result !== undefined) return unpackMcp(d.result)
-      } catch {}
-    }
-    throw new Error('No result in SSE stream')
-  }
-  const data = await res.json()
-  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error))
-  return unpackMcp(data.result)
-}
-
 async function rpcCall(method, params = [], timeoutMs = 12000) {
   const res = await fetch(ETH_RPC_URL, {
     method: 'POST',
@@ -1116,16 +1091,6 @@ async function pinJsonViaPinata(payload, name) {
   }
 }
 
-function unpackMcp(result) {
-  if (!result) return result
-  if (result.content && Array.isArray(result.content)) {
-    for (const item of result.content) {
-      if (item.type === 'text') { try { return JSON.parse(item.text) } catch { return item.text } }
-    }
-  }
-  return result
-}
-
 const PIPELINE_META = {
   'intake.lobster.yaml':      { desc: 'fetch -> extract -> analyze -> approve', status: 'active' },
   'creative.lobster.yaml':    { desc: 'research -> draft -> review -> approve',  status: 'ready'  },
@@ -1134,7 +1099,24 @@ const PIPELINE_META = {
   'analysis.lobster.yaml':    { desc: 'audit -> report -> approve',              status: 'ready'  },
 }
 
-app.get('/health', (_, res) => res.json({ ok: true, endpoint: MCP_ENDPOINT }))
+app.get('/health', async (_, res) => {
+  const [rpcReady] = await Promise.all([
+    rpcIsReachable(),
+  ])
+  const pinataReady = Boolean(PINATA_JWT)
+  res.json({
+    ok: rpcReady,
+    readiness: {
+      rpc: rpcReady,
+      ipfsPinata: pinataReady,
+    },
+    dependencies: {
+      rpcUrl: ETH_RPC_URL,
+      ipfsGateways: IPFS_GATEWAYS,
+      pinataConfigured: pinataReady,
+    },
+  })
+})
 
 // ── ENS reverse lookup proxy (avoids browser CORS / rate-limits) ──────────────
 app.get('/api/ens/:address', async (req, res) => {
@@ -1218,38 +1200,17 @@ function getProcArtifactEntries(procurementId) {
   return { procDir, entries }
 }
 
-function readNumericCandidate(value) {
-  if (value == null) return null
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) return Number(value)
-  if (typeof value === 'object') {
-    for (const key of ['reputation', 'score', 'value', 'agentReputation', 'agent_score']) {
-      const parsed = readNumericCandidate(value[key])
-      if (parsed != null) return parsed
-    }
+async function lookupReputationOnchain(address) {
+  const jobs = await listV1JobsFromChain()
+  const mine = jobs.filter((j) => String(j?.assignedAgent || '').toLowerCase() === address)
+  const completed = mine.filter((j) => j?.status === 'Completed').length
+  const disputed = mine.filter((j) => j?.status === 'Disputed').length
+  const assigned = mine.filter((j) => j?.status === 'Assigned').length
+  return {
+    reputation: completed - disputed,
+    source: 'derived:onchain-v1',
+    breakdown: { completed, disputed, assigned },
   }
-  return null
-}
-
-async function lookupReputationViaMcp(address) {
-  const candidates = [
-    ['get_agent_reputation', { agent: address }],
-    ['get_agent_reputation', { address }],
-    ['get_reputation', { agent: address }],
-    ['get_reputation', { address }],
-    ['agent_reputation', { address }],
-    ['get_agent_profile', { address }],
-  ]
-
-  for (const [tool, args] of candidates) {
-    try {
-      const data = await callMcp(tool, args)
-      const parsed = readNumericCandidate(data)
-      if (parsed != null) return { reputation: parsed, source: `mcp:${tool}` }
-    } catch {}
-  }
-
-  return null
 }
 
 
@@ -1261,96 +1222,200 @@ app.get('/api/agent-reputation/:address', async (req, res) => {
   }
 
   try {
-    const mcpValue = await lookupReputationViaMcp(address)
-    if (mcpValue) {
-      return res.json({
-        reputation: mcpValue.reputation,
-        source: mcpValue.source,
-        contract: AGI_JOB_MANAGER_CONTRACT,
-      })
-    }
-
-    const jobs = await callMcp('list_jobs')
-    const list = Array.isArray(jobs) ? jobs : jobs?.jobs || jobs?.result || []
-    const mine = list.filter(j => String(j?.assignedAgent || '').toLowerCase() === address)
-    const completed = mine.filter(j => j?.status === 'Completed').length
-    const disputed = mine.filter(j => j?.status === 'Disputed').length
-    const assigned = mine.filter(j => j?.status === 'Assigned').length
-
+    const computed = await lookupReputationOnchain(address)
     return res.json({
-      reputation: completed - disputed,
-      source: 'derived:list_jobs',
+      reputation: computed.reputation,
+      source: computed.source,
       contract: AGI_JOB_MANAGER_CONTRACT,
-      breakdown: { completed, disputed, assigned },
+      breakdown: computed.breakdown,
     })
   } catch (e) {
     return res.status(500).json({ error: e.message || 'Failed to read agent reputation' })
   }
 })
 
-// ── Debug: raw MCP response ───────────────────────────────────────────────────
-app.get('/api/debug-mcp', async (req, res) => {
-  try {
-    const response = await fetch(MCP_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'list_jobs', arguments: {} } }),
-      signal: AbortSignal.timeout(20000),
-    })
-    const ct = response.headers.get('content-type') || ''
-    const text = await response.text()
-    res.json({ status: response.status, contentType: ct, body: text.slice(0, 2000) })
-  } catch (e) {
-    res.json({ error: e.message })
+async function readV1JobOnchain(contractAddr, jobId, iface) {
+  const out = {
+    core: null,
+    validation: null,
+    specURI: '',
+    completionURI: '',
   }
-})
 
-// ── Real jobs from AGI Alpha ──────────────────────────────────────────────────
-app.get('/api/jobs', async (req, res) => {
   try {
-    const managerData = await callMcp('list_jobs')
-    const managerJobs = (Array.isArray(managerData) ? managerData : managerData?.jobs || managerData?.result || []).map(job => ({
-      ...job,
-      source: 'agijobmanager',
-    }))
+    const data = iface.encodeFunctionData('getJobCore', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobCore', raw)
+    out.core = {
+      employer: String(decoded[0] || ''),
+      assignedAgent: String(decoded[1] || ''),
+      payoutRaw: String(decoded[2] || '0'),
+      durationRaw: String(decoded[3] || '0'),
+      createdAt: String(decoded[4] || '0'),
+      completed: Boolean(decoded[5]),
+      disputed: Boolean(decoded[6]),
+      expired: Boolean(decoded[7]),
+    }
+  } catch {}
 
-    const v2Jobs = await listV2JobsFromChain()
+  try {
+    const data = iface.encodeFunctionData('getJobValidation', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobValidation', raw)
+    out.validation = {
+      completionRequested: Boolean(decoded[0]),
+      approvals: Number(decoded[1] || 0),
+      disapprovals: Number(decoded[2] || 0),
+    }
+  } catch {}
 
-    const primeToolCandidates = [
-      'list_prime_jobs',
-      'list_prime_procurements',
-      'list_procurements',
-      'list_discovery_jobs',
-      'list_prime_discovery_jobs',
-    ]
+  try {
+    const data = iface.encodeFunctionData('getJobSpecURI', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobSpecURI', raw)
+    out.specURI = String(decoded?.[0] || '')
+  } catch {}
 
-    let primeJobs = []
-    for (const tool of primeToolCandidates) {
+  try {
+    const data = iface.encodeFunctionData('getJobCompletionURI', [BigInt(jobId)])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult('getJobCompletionURI', raw)
+    out.completionURI = String(decoded?.[0] || '')
+  } catch {}
+
+  return out
+}
+
+async function listV1JobsFromChain() {
+  try {
+    const reachable = await rpcIsReachable()
+    if (!reachable) return []
+
+    const { ethers, iface } = await getV1ContractInterface()
+    const topic = iface.getEvent('JobCreated').topicHash
+    const logs = await rpcGetLogs({
+      address: AGI_JOB_MANAGER_CONTRACT,
+      topics: [topic],
+    })
+
+    const jobIds = new Set()
+    for (const log of logs) {
       try {
-        const primeData = await callMcp(tool)
-        const primeList = Array.isArray(primeData) ? primeData : primeData?.jobs || primeData?.procurements || primeData?.result || []
-        if (!Array.isArray(primeList) || !primeList.length) continue
-
-        primeJobs = primeList.map((entry, i) => {
-          const procurementId = entry?.procurementId ?? entry?.id ?? entry?.procurement_id ?? i
-          const jobId = entry?.jobId ?? entry?.job_id ?? `P-${procurementId}`
-          return {
-            ...entry,
-            source: 'agiprimediscovery',
-            procurementId: String(procurementId),
-            jobId: String(jobId),
-            status: entry?.status || entry?.phase || entry?.stage || 'Prime',
-            payout: entry?.payout ?? entry?.payoutAGIALPHA ?? '—',
-            specURI: entry?.specURI || entry?.applicationURI || entry?.uri || '',
-          }
-        })
-        break
+        const parsed = iface.parseLog(log)
+        const id = Number(parsed?.args?.jobId ?? -1)
+        if (Number.isFinite(id) && id >= 0) jobIds.add(id)
       } catch {}
     }
 
-    res.json([...managerJobs, ...v2Jobs, ...primeJobs])
+    const out = []
+    for (const jobId of Array.from(jobIds.values())) {
+      const state = await readV1JobOnchain(AGI_JOB_MANAGER_CONTRACT, jobId, iface)
+      if (!state?.core) continue
+      if (String(state.core.employer || '').toLowerCase() === ethers.ZeroAddress.toLowerCase()) continue
+      out.push(normalizeV1JobForList({
+        jobId,
+        contract: AGI_JOB_MANAGER_CONTRACT,
+        core: state.core,
+        validation: state.validation,
+        specURI: state.specURI,
+      }))
+    }
+
+    out.sort((a, b) => Number(b.sortId || 0) - Number(a.sortId || 0))
+    return out
+  } catch {
+    return []
+  }
+}
+
+async function listPrimeJobsFromChain() {
+  try {
+    const reachable = await rpcIsReachable()
+    if (!reachable) return []
+
+    const { ethers } = await import('ethers')
+    const abiPath = join(WORKSPACE_ROOT, 'agent', 'abi', 'AGIJobDiscoveryPrime.json')
+    const abiRaw = readJsonSafe(abiPath, [])
+    const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+    const iface = new ethers.Interface(abi)
+    const createdTopic = iface.getEvent('ProcurementCreated').topicHash
+
+    const logs = await rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [createdTopic] })
+    const rows = []
+
+    for (const log of logs) {
+      try {
+        const parsed = iface.parseLog(log)
+        const procurementId = String(parsed?.args?.procurementId ?? '')
+        const jobIdRaw = String(parsed?.args?.jobId ?? '')
+        const employer = String(parsed?.args?.employer || '').toLowerCase()
+        if (!/^\d+$/.test(procurementId)) continue
+
+        let deadlines = {
+          commitDeadline: null,
+          revealDeadline: null,
+          finalistAcceptDeadline: null,
+          trialDeadline: null,
+          scoreCommitDeadline: null,
+          scoreRevealDeadline: null,
+        }
+        try {
+          const data = iface.encodeFunctionData('procurements', [BigInt(procurementId)])
+          const raw = await rpcEthCall(AGI_PRIME_CONTRACT, data)
+          const decoded = iface.decodeFunctionResult('procurements', raw)
+          deadlines = {
+            commitDeadline: Number(decoded?.[2] || 0) || null,
+            revealDeadline: Number(decoded?.[3] || 0) || null,
+            finalistAcceptDeadline: Number(decoded?.[4] || 0) || null,
+            trialDeadline: Number(decoded?.[5] || 0) || null,
+            scoreCommitDeadline: Number(decoded?.[6] || 0) || null,
+            scoreRevealDeadline: Number(decoded?.[7] || 0) || null,
+          }
+        } catch {}
+
+        const localState = readJsonSafe(join(PROC_ARTIFACTS_DIR, `proc_${procurementId}`, 'state.json'), null) || {}
+        const phase = decodePrimeActionPhase(localState?.nextActionCode || '')
+        const windowStatus = inferPrimeWindowStatus(phase, deadlines)
+
+        rows.push({
+          source: 'agiprimediscovery',
+          procurementId,
+          jobId: /^\d+$/.test(jobIdRaw) ? jobIdRaw : `P-${procurementId}`,
+          status: String(localState?.status || (windowStatus === 'open' ? 'PrimeWindowOpen' : 'Prime')),
+          payout: '—',
+          duration: '—',
+          employer: employer || '0x0000000000000000000000000000000000000000',
+          assignedAgent: String(localState?.selectedFinalist || ''),
+          approvals: 0,
+          disapprovals: 0,
+          specURI: '',
+          deadlines,
+          nextActionCode: String(localState?.nextActionCode || ''),
+          links: {
+            contract: `https://etherscan.io/address/${AGI_PRIME_CONTRACT}`,
+          },
+        })
+      } catch {}
+    }
+
+    rows.sort((a, b) => Number(b.procurementId || 0) - Number(a.procurementId || 0))
+    return rows
+  } catch {
+    return []
+  }
+}
+
+// ── Real jobs (contract-first) ─────────────────────────────────────────────────
+app.get('/api/jobs', async (req, res) => {
+  try {
+    const [v1Jobs, v2Jobs, primeJobs] = await Promise.all([
+      listV1JobsFromChain(),
+      listV2JobsFromChain(),
+      listPrimeJobsFromChain(),
+    ])
+    res.json([...v1Jobs, ...v2Jobs, ...primeJobs])
   } catch (e) {
-    console.error('MCP list_jobs failed:', e.message)
+    console.error('onchain /api/jobs failed:', e.message)
     res.json([])
   }
 })
@@ -1368,21 +1433,79 @@ app.get('/api/pipelines', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Job completion metadata via MCP ──────────────────────────────────────────
+// ── Job metadata (contract-first: on-chain URI + IPFS payload) ───────────────
 app.get('/api/job-metadata/:jobId', async (req, res) => {
   try {
+    const rawJobId = String(req.params.jobId || '').trim()
+    const numericJobId = extractNumericJobId(rawJobId)
+    if (!numericJobId) return res.status(400).json({ error: 'jobId must include numeric id' })
+
+    const source = String(req.query.source || '').toLowerCase()
     const type = req.query.type === 'spec' ? 'spec' : 'completion'
-    const data = await callMcp('fetch_job_metadata', { jobId: Number(req.params.jobId), type })
-    res.json(data)
-  } catch (e) { res.status(500).json({ error: e.message }) }
+
+    if (source === 'agijobmanager-v2' || /^v2-/i.test(rawJobId)) {
+      const report = await buildV2OperatorView(numericJobId, {
+        source: 'agijobmanager-v2',
+      })
+      const uri = type === 'spec' ? String(report?.jobRequest?.specURI || '') : String(report?.jobRequest?.completionURI || '')
+      if (!uri) return res.status(404).json({ error: `${type} URI not found on-chain` })
+      const payload = await fetchIpfsPayload(uri)
+      if (!payload.ok) return res.status(502).json({ error: payload.error || `Failed to fetch ${type} payload` })
+      return res.json({
+        ...(payload.json && typeof payload.json === 'object' ? payload.json : {}),
+        [type === 'spec' ? 'specURI' : 'completionURI']: uri,
+      })
+    }
+
+    const context = await fetchV1JobContext(numericJobId, AGI_JOB_MANAGER_CONTRACT)
+    const uri = resolveV1MetadataUri(context, type)
+    if (!uri) return res.status(404).json({ error: `${type} URI not found on-chain` })
+
+    const payload = await fetchIpfsPayload(uri)
+    if (!payload.ok) return res.status(502).json({ error: payload.error || `Failed to fetch ${type} payload` })
+
+    res.json({
+      ...(payload.json && typeof payload.json === 'object' ? payload.json : {}),
+      [type === 'spec' ? 'specURI' : 'completionURI']: uri,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
-// ── Job spec via MCP ──────────────────────────────────────────────────────────
+// ── Job spec (contract-first: on-chain URI + IPFS payload) ────────────────────
 app.get('/api/job-spec/:jobId', async (req, res) => {
   try {
-    const data = await callMcp('get_job', { jobId: Number(req.params.jobId) })
-    res.json(data)
-  } catch (e) { res.status(500).json({ error: e.message }) }
+    const rawJobId = String(req.params.jobId || '').trim()
+    const numericJobId = extractNumericJobId(rawJobId)
+    if (!numericJobId) return res.status(400).json({ error: 'jobId must include numeric id' })
+
+    const source = String(req.query.source || '').toLowerCase()
+    if (source === 'agijobmanager-v2' || /^v2-/i.test(rawJobId)) {
+      const report = await buildV2OperatorView(numericJobId, { source: 'agijobmanager-v2' })
+      const specURI = String(report?.jobRequest?.specURI || '')
+      if (!specURI) return res.status(404).json({ error: 'Spec URI not found on-chain' })
+      const payload = await fetchIpfsPayload(specURI)
+      if (!payload.ok) return res.status(502).json({ error: payload.error || 'Failed to fetch spec payload' })
+      return res.json({
+        ...(payload.json && typeof payload.json === 'object' ? payload.json : {}),
+        specURI,
+      })
+    }
+
+    const context = await fetchV1JobContext(numericJobId, AGI_JOB_MANAGER_CONTRACT)
+    if (!context.specURI) return res.status(404).json({ error: 'Spec URI not found on-chain' })
+
+    const payload = await fetchIpfsPayload(context.specURI)
+    if (!payload.ok) return res.status(502).json({ error: payload.error || 'Failed to fetch spec payload' })
+
+    res.json({
+      ...(payload.json && typeof payload.json === 'object' ? payload.json : {}),
+      specURI: context.specURI,
+    })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
 function buildExternalValidationDir(jobId) {
@@ -1409,11 +1532,6 @@ async function getV1ContractInterface() {
 }
 
 async function fetchV1JobContext(jobId, contractAddr) {
-  let mcpJob = null
-  try {
-    mcpJob = await callMcp('get_job', { jobId: Number(jobId) })
-  } catch {}
-
   let core = null
   let validation = null
   let specURI = ''
@@ -1428,68 +1546,21 @@ async function fetchV1JobContext(jobId, contractAddr) {
     const reachable = await rpcIsReachable()
     if (!reachable) throw new Error('RPC unreachable')
 
-    const { ethers, iface: i } = await getV1ContractInterface()
+    const { iface: i } = await getV1ContractInterface()
     iface = i
     hasValidateJob = Boolean(iface.getFunction('validateJob(uint256,string,bytes32[])'))
     hasDisputeJob = Boolean(iface.getFunction('disputeJob(uint256)'))
 
     chainId = String(await rpcCall('eth_chainId', [], 5000) || '')
 
-    try {
-      const data = iface.encodeFunctionData('getJobCore', [BigInt(jobId)])
-      const raw = await rpcEthCall(contractAddr, data)
-      const decoded = iface.decodeFunctionResult('getJobCore', raw)
-      core = {
-        employer: String(decoded[0] || ''),
-        assignedAgent: String(decoded[1] || ''),
-        payoutRaw: String(decoded[2] || '0'),
-        durationRaw: String(decoded[3] || '0'),
-        createdAt: String(decoded[4] || '0'),
-        completed: Boolean(decoded[5]),
-        disputed: Boolean(decoded[6]),
-        expired: Boolean(decoded[7]),
-      }
-    } catch {}
-
-    try {
-      const data = iface.encodeFunctionData('getJobValidation', [BigInt(jobId)])
-      const raw = await rpcEthCall(contractAddr, data)
-      const decoded = iface.decodeFunctionResult('getJobValidation', raw)
-      validation = {
-        completionRequested: Boolean(decoded[0]),
-        approvals: Number(decoded[1] || 0),
-        disapprovals: Number(decoded[2] || 0),
-      }
-    } catch {}
-
-    try {
-      const data = iface.encodeFunctionData('getJobSpecURI', [BigInt(jobId)])
-      const raw = await rpcEthCall(contractAddr, data)
-      const decoded = iface.decodeFunctionResult('getJobSpecURI', raw)
-      specURI = String(decoded[0] || '')
-    } catch {}
-
-    try {
-      const data = iface.encodeFunctionData('getJobCompletionURI', [BigInt(jobId)])
-      const raw = await rpcEthCall(contractAddr, data)
-      const decoded = iface.decodeFunctionResult('getJobCompletionURI', raw)
-      completionURI = String(decoded[0] || '')
-    } catch {}
+    const state = await readV1JobOnchain(contractAddr, jobId, iface)
+    core = state.core
+    validation = state.validation
+    specURI = state.specURI
+    completionURI = state.completionURI
   } catch (e) {
     rpcError = e.message || 'v1 on-chain lookup failed'
   }
-
-  const completionFromMcp = String(
-    mcpJob?.completionURI
-      || mcpJob?.jobCompletionURI
-      || mcpJob?.metadataURI
-      || mcpJob?.uri
-      || ''
-  )
-  const specFromMcp = String(mcpJob?.specURI || mcpJob?.jobSpecURI || '')
-
-  if (!completionURI) completionURI = completionFromMcp
-  if (!specURI) specURI = specFromMcp
 
   return {
     jobId: String(jobId),
@@ -1499,7 +1570,6 @@ async function fetchV1JobContext(jobId, contractAddr) {
     validation,
     specURI,
     completionURI,
-    mcpJob,
     iface,
     hasValidateJob,
     hasDisputeJob,
@@ -2611,88 +2681,135 @@ app.post('/api/ipfs/pin-json', async (req, res) => {
     if (!payload || typeof payload !== 'object') {
       return res.status(400).json({ error: 'payload object is required' })
     }
-
-    let result = null
-    let mcpErr = null
-    try {
-      if (PINATA_JWT) {
-        const mcp = await callMcp('upload_to_ipfs', { pinataJwt: PINATA_JWT, metadata: payload, name })
-        if (mcp?.ipfsUri || mcp?.uri) {
-          const uri = String(mcp.ipfsUri || mcp.uri)
-          const cid = uri.replace('ipfs://', '').split('/')[0]
-          result = {
-            cid,
-            uri,
-            gatewayUrl: `https://ipfs.io/ipfs/${cid}`,
-            provider: 'mcp',
-          }
-        }
-      }
-    } catch (e) {
-      mcpErr = e
+    if (!PINATA_JWT) {
+      return res.status(500).json({ error: 'PINATA_JWT is not configured on server' })
     }
 
-    if (!result) {
-      result = await pinJsonViaPinata(payload, name)
-    }
-
-    return res.json({ ok: true, ...result, mcpFallbackReason: mcpErr ? mcpErr.message : null })
+    const result = await pinJsonViaPinata(payload, name)
+    return res.json({ ok: true, ...result })
   } catch (e) {
     return res.status(500).json({ error: e.message || 'IPFS upload failed' })
   }
 })
 
+function parseDurationToSeconds(input, fallback = 86400) {
+  const raw = String(input || '').trim().toLowerCase()
+  if (!raw) return fallback
+  if (/^\d+$/.test(raw)) return Number(raw)
+  const m = raw.match(/^(\d+)(s|m|h|d)$/)
+  if (!m) return fallback
+  const n = Number(m[1])
+  const unit = m[2]
+  if (unit === 's') return n
+  if (unit === 'm') return n * 60
+  if (unit === 'h') return n * 3600
+  if (unit === 'd') return n * 86400
+  return fallback
+}
+
+function toWei18(amount) {
+  const str = String(amount ?? '').trim()
+  if (!str) return '0'
+  if (/^\d+$/.test(str)) return str
+  const [wholeRaw, fracRaw = ''] = str.split('.')
+  const whole = /^\d+$/.test(wholeRaw) ? wholeRaw : '0'
+  const frac = (fracRaw.replace(/\D/g, '') + '0'.repeat(18)).slice(0, 18)
+  const wei = BigInt(whole) * 10n ** 18n + BigInt(frac || '0')
+  return wei.toString()
+}
+
 app.post('/api/job-requests', async (req, res) => {
   try {
-    const payload = {
-      title: req.body?.title || 'Untitled job request',
-      duration: req.body?.duration || '1d',
-      payoutAGIALPHA: Number(req.body?.payoutAGIALPHA || 0),
-      brief: req.body?.brief || '',
-      ipfsUri: normalizeAssetUri(req.body?.ipfsUri),
-      image: normalizeAssetUri(req.body?.image) || normalizeAssetUri(req.body?.ipfsUri),
-    }
-    const richPayload = {
-      ...payload,
-      summary: req.body?.summary || '',
-      category: req.body?.category || 'other',
-      locale: req.body?.locale || 'en-US',
-      tags: Array.isArray(req.body?.tags) ? req.body.tags : [],
-      deliverables: Array.isArray(req.body?.deliverables) ? req.body.deliverables : [],
-      acceptanceCriteria: Array.isArray(req.body?.acceptanceCriteria) ? req.body.acceptanceCriteria : [],
-      requirements: Array.isArray(req.body?.requirements) ? req.body.requirements : [],
-      chainId: Number(req.body?.chainId || 1),
-      contract: String(req.body?.contract || '').trim(),
-      ...(req.body?.createdBy ? { createdBy: String(req.body.createdBy).trim() } : {}),
-      ...(req.body?.spec && typeof req.body.spec === 'object' ? { spec: req.body.spec } : {}),
+    const specURI = normalizeAssetUri(req.body?.ipfsUri)
+    if (!specURI.startsWith('ipfs://')) {
+      return res.status(422).json({ error: 'ipfsUri must be an ipfs:// URI before generating request package' })
     }
 
-    const candidates = [
-      ['request_job', richPayload],
-      ['create_job', richPayload],
-      ['post_job_request', richPayload],
-      ['request_job', payload],
-      ['create_job', payload],
-      ['post_job_request', payload],
+    const contract = String(req.body?.contract || AGI_JOB_MANAGER_CONTRACT || '').toLowerCase()
+    if (!/^0x[a-f0-9]{40}$/.test(contract)) {
+      return res.status(422).json({ error: 'valid contract address is required' })
+    }
+
+    const chainIdNum = Number(req.body?.chainId || 1)
+    const chainId = Number.isFinite(chainIdNum) && chainIdNum > 0 ? `0x${Math.floor(chainIdNum).toString(16)}` : '0x1'
+
+    const payoutRaw = toWei18(req.body?.payoutAGIALPHA || 0)
+    if (!/^\d+$/.test(payoutRaw) || BigInt(payoutRaw) <= 0n) {
+      return res.status(422).json({ error: 'payoutAGIALPHA must be > 0' })
+    }
+
+    const durationSec = Number(req.body?.durationSeconds || parseDurationToSeconds(req.body?.duration, 86400))
+    if (!Number.isFinite(durationSec) || durationSec <= 0) {
+      return res.status(422).json({ error: 'duration must resolve to positive seconds' })
+    }
+
+    const details = String(req.body?.brief || req.body?.summary || req.body?.title || 'Op-control job request').trim()
+
+    const { iface } = await getV1ContractInterface()
+    const fn = iface.getFunction('createJob(string,uint256,uint256,string)')
+    if (!fn) return res.status(500).json({ error: 'createJob function missing in v1 ABI' })
+
+    const calldata = iface.encodeFunctionData(fn, [specURI, BigInt(payoutRaw), BigInt(Math.round(durationSec)), details])
+    const txPkg = buildUnsignedCreateJobTxPackage({
+      contract,
+      chainId,
+      specURI,
+      payoutRaw,
+      durationSec: Math.round(durationSec),
+      details,
+      calldata,
+    })
+
+    const requestId = `request_${Date.now()}`
+    const dir = join(ARTIFACTS_DIR, 'job_requests', requestId)
+    mkdirSync(dir, { recursive: true })
+    const unsignedTxPath = join(dir, 'unsigned_create_job_tx.json')
+    const reviewManifestPath = join(dir, 'review_manifest_create_job.json')
+    const payloadSnapshotPath = join(dir, 'request_payload_snapshot.json')
+
+    writeJsonFile(unsignedTxPath, txPkg)
+    writeJsonFile(payloadSnapshotPath, req.body || {})
+
+    const checklist = [
+      'Confirm contract and chain are correct for AGIJobManager v1.',
+      'Confirm IPFS spec URI resolves and matches intended job request.',
+      'Confirm payout and duration are correct before signing.',
+      'Sign unsigned createJob transaction with operator wallet only.',
     ]
 
-    let lastErr = null
-    for (const [tool, args] of candidates) {
-      try {
-        const data = await callMcp(tool, args)
-        return res.json({ ok: true, tool, ...(typeof data === 'object' ? data : { result: data }) })
-      } catch (e) {
-        lastErr = e
-      }
-    }
+    writeJsonFile(reviewManifestPath, {
+      schema: 'op-control/review-manifest/v1',
+      lane: 'v1',
+      action: 'request',
+      generatedAt: new Date().toISOString(),
+      guardrails: {
+        contract,
+        chainId,
+      },
+      checklist,
+      files: {
+        unsignedTxPath,
+        payloadSnapshotPath,
+      },
+      request: {
+        specURI,
+        payoutRaw,
+        durationSec: Math.round(durationSec),
+        details,
+      },
+    })
 
-    res.status(501).json({
-      error: 'No MCP job request tool available. Generated payload is still ready for manual posting.',
-      generated: payload,
-      reason: lastErr?.message || 'unsupported',
+    return res.json({
+      ok: true,
+      mode: 'unsigned_request_package',
+      action: 'request',
+      unsignedTxPath,
+      reviewManifestPath,
+      checklist,
+      requestId,
     })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    res.status(500).json({ error: e.message || 'Failed to generate unsigned request package' })
   }
 })
 
