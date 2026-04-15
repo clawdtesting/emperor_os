@@ -471,6 +471,7 @@ export function JobDetail({ job, wallet, onRunIntake }) {
   const [validationRunning, setValidationRunning] = useState(false)
   const [validationError, setValidationError] = useState('')
   const [validationSummary, setValidationSummary] = useState(null)
+  const [showAllValidationFailedChecks, setShowAllValidationFailedChecks] = useState(false)
   const [validatorPrepareLoading, setValidatorPrepareLoading] = useState(false)
   const [validatorPrepareError, setValidatorPrepareError] = useState('')
   const [validatorPrepareResult, setValidatorPrepareResult] = useState(null)
@@ -504,6 +505,7 @@ export function JobDetail({ job, wallet, onRunIntake }) {
     setValidationRunning(false)
     setValidationError('')
     setValidationSummary(null)
+    setShowAllValidationFailedChecks(false)
     setValidatorPrepareLoading(false)
     setValidatorPrepareError('')
     setValidatorPrepareResult(null)
@@ -1105,13 +1107,24 @@ export function JobDetail({ job, wallet, onRunIntake }) {
             )}
             {validationSummary.failedChecks.length > 0 && (
               <div className="rounded border border-amber-900 bg-amber-950/20 p-2 space-y-1">
-                {validationSummary.failedChecks.slice(0, 5).map((check) => (
-                  <div key={check.name} className="text-amber-200">
+                {(showAllValidationFailedChecks
+                  ? validationSummary.failedChecks
+                  : validationSummary.failedChecks.slice(0, 5)
+                ).map((check, idx) => (
+                  <div key={`${check.name}-${idx}`} className="text-amber-200">
                     • <span className="font-mono">{check.name}</span>{check.detail ? ` — ${check.detail}` : ''}
                   </div>
                 ))}
                 {validationSummary.failedChecks.length > 5 && (
-                  <div className="text-amber-400">+{validationSummary.failedChecks.length - 5} more failed checks</div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllValidationFailedChecks(v => !v)}
+                    className="text-amber-300 hover:text-amber-200 underline underline-offset-2"
+                  >
+                    {showAllValidationFailedChecks
+                      ? 'show less'
+                      : `+${validationSummary.failedChecks.length - 5} more failed checks (click to expand)`}
+                  </button>
                 )}
               </div>
             )}
