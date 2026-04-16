@@ -624,64 +624,6 @@ export function JobRequestTab({ wallet }) {
       )}
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-        <button
-          onClick={() => setMdImportOpen(!mdImportOpen)}
-          className="w-full text-left flex items-center justify-between"
-        >
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Import job spec</div>
-          <span className="text-xs text-slate-500">{mdImportOpen ? '▲ collapse' : '▼ expand'}</span>
-        </button>
-        {mdImportOpen && (
-          <div className="space-y-3">
-            <div className="text-xs text-slate-400">
-              Paste a complete job spec in Markdown or JSON. Markdown is normalized into canonical job-spec JSON before import.
-            </div>
-            <textarea
-              rows={12}
-              value={importRaw}
-              onChange={e => setImportRaw(e.target.value)}
-              placeholder={importFormat === 'json' ? `{
-  "properties": {
-    "schema": "agijobmanager/job-spec/v2",
-    "title": "Your job title"
-  }
-}` : `development\nanalysis\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
-            />
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleMdImport}
-                disabled={!importRaw.trim()}
-                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
-              >
-                Parse & import
-              </button>
-              {mdImported && <span className="text-xs text-emerald-400">Imported — review draft below</span>}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setImportFormat('md')}
-                className={`px-2 py-1 rounded border text-xs ${importFormat === 'md' ? 'border-indigo-500 text-indigo-300' : 'border-slate-700 text-slate-400'}`}
-              >
-                Markdown
-              </button>
-              <button
-                onClick={() => setImportFormat('json')}
-                className={`px-2 py-1 rounded border text-xs ${importFormat === 'json' ? 'border-indigo-500 text-indigo-300' : 'border-slate-700 text-slate-400'}`}
-              >
-                JSON
-              </button>
-            </div>
-            {importWarnings.length > 0 && (
-              <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
-                {importWarnings.map((w, i) => <div key={i}>{w}</div>)}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
         <div className="text-xs text-slate-500 uppercase tracking-wider">Step 1 · Protocol selection</div>
         <div className="grid md:grid-cols-3 gap-2">
           {PROTOCOL_OPTIONS.map(option => {
@@ -799,23 +741,74 @@ export function JobRequestTab({ wallet }) {
         )}
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 4 · Request input</div>
-        <textarea
-          rows={4}
-          disabled={!walletReady || !protocol || approvalRequired}
-          value={rawRequest}
-          onChange={e => setRawRequest(e.target.value)}
-          placeholder="Describe what you need in simple words"
-          className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
-        />
-        <button
-          onClick={handleBuildRequest}
-          disabled={!walletReady || !protocol || approvalRequired || !rawRequest.trim()}
-          className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
-        >
-          Build my request
-        </button>
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 4 · Request input</div>
+          <div className="flex rounded border border-slate-700 overflow-hidden text-xs">
+            <button
+              onClick={() => { setMdImportOpen(false); setError('') }}
+              className={`px-3 py-1.5 transition-colors ${!mdImportOpen ? 'bg-slate-700 text-slate-100' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+            >
+              Chat input
+            </button>
+            <button
+              onClick={() => { setMdImportOpen(true); setError('') }}
+              className={`px-3 py-1.5 transition-colors ${mdImportOpen ? 'bg-indigo-700 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+            >
+              Paste .md file
+            </button>
+          </div>
+        </div>
+
+        {!mdImportOpen && (
+          <>
+            <textarea
+              rows={4}
+              disabled={!walletReady || !protocol || approvalRequired}
+              value={rawRequest}
+              onChange={e => setRawRequest(e.target.value)}
+              placeholder="Describe what you need in simple words"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+            />
+            <button
+              onClick={handleBuildRequest}
+              disabled={!walletReady || !protocol || approvalRequired || !rawRequest.trim()}
+              className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
+            >
+              Build my request
+            </button>
+          </>
+        )}
+
+        {mdImportOpen && (
+          <>
+            <div className="text-xs text-slate-400">
+              Paste a complete job spec (.md format). Protocol, payout, duration, deliverables, and acceptance criteria are auto-detected. Steps 5 is skipped — you land directly on the draft review.
+            </div>
+            <textarea
+              rows={14}
+              value={mdRaw}
+              onChange={e => setMdRaw(e.target.value)}
+              placeholder={`development\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleMdImport}
+                disabled={!mdRaw.trim()}
+                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
+              >
+                Parse & import
+              </button>
+              {mdImported && <span className="text-xs text-emerald-400">Imported — review draft below</span>}
+            </div>
+            {mdWarnings.length > 0 && (
+              <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
+                {mdWarnings.map((w, i) => <div key={i}>{w}</div>)}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {step >= 5 && currentQuestion && (
