@@ -1,6 +1,26 @@
 {
-  "lastNotified": {},
-  "actions": [],
+  "lastNotified": {
+    "procurement:42": {
+      "status": "validator_score_reveal_ready",
+      "action": "UNKNOWN",
+      "at": "2026-04-15T23:22:55.676Z"
+    }
+  },
+  "actions": [
+    {
+      "id": "procurement:42:validator_score_reveal_ready:1776295375679",
+      "key": "procurement:42",
+      "sourceType": "procurement",
+      "sourceId": "42",
+      "previousStatus": null,
+      "newStatus": "validator_score_reveal_ready",
+      "action": "UNKNOWN",
+      "summary": "validator_score_reveal_ready",
+      "urgency": "info",
+      "createdAt": "2026-04-15T23:22:55.676Z",
+      "dismissed": false
+    }
+  ],
   "dismissed": {},
-  "lastScanAt": "2026-04-06T23:46:38.102Z"
+  "lastScanAt": "2026-04-15T23:48:48.405Z"
 }
