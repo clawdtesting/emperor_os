@@ -4,6 +4,8 @@ import {
   markOperatorActionSigned,
   markOperatorActionBroadcast,
   markOperatorActionFinalized,
+  fetchLlmProviders,
+  selectLlmProvider,
 } from '../api'
 
 const STAGES = [
@@ -224,6 +226,8 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
   const [busyActionKey, setBusyActionKey] = useState('')
   const [filePreview, setFilePreview] = useState(null)
   const [queueMessage, setQueueMessage] = useState('')
+  const [llmProviders, setLlmProviders] = useState([])
+  const [selectedProvider, setSelectedProvider] = useState('')
 
   const fetchLane = async () => {
     try {
@@ -233,8 +237,11 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
       ])
       const laneJson = await laneRes.json()
       const actionJson = await actionRes.json().catch(() => ({ actions: [] }))
+      const llmJson = await fetchLlmProviders().catch(() => ({ providers: [], selectedProvider: null }))
       setData(laneJson)
       setOperatorActions(Array.isArray(actionJson?.actions) ? actionJson.actions : [])
+      setLlmProviders(Array.isArray(llmJson?.providers) ? llmJson.providers : [])
+      setSelectedProvider(llmJson?.selectedProvider || '')
     } catch (err) {
       console.error('Failed to fetch operations lane:', err)
       setQueueMessage(`Queue refresh failed: ${err.message}`)
@@ -306,6 +313,7 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
     return acc
   }, {})
   const queueRows = operatorActions.filter((a) => (a.queueStage || 'needs_signature') === queueTab)
+  const enabledProviders = llmProviders.filter((p) => p.enabled)
 
   return (
     <div className="p-4">
@@ -314,6 +322,36 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
         <div className="flex gap-2">
           <button onClick={() => setTab('prime')} className={`px-3 py-1 rounded text-xs ${tab === 'prime' ? 'bg-cyan-900 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>Prime</button>
           <button onClick={() => setTab('jobs')} className={`px-3 py-1 rounded text-xs ${tab === 'jobs' ? 'bg-cyan-900 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>Jobs (v1/v2)</button>
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">LLM Provider</h3>
+            <p className="text-xs text-slate-500">Pinned provider for this session (agent loops + drafts).</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded px-2 py-1"
+              value={selectedProvider || ''}
+              onChange={async (e) => {
+                const next = e.target.value
+                try {
+                  const result = await selectLlmProvider(next)
+                  setSelectedProvider(result?.selectedProvider || '')
+                  setQueueMessage(`LLM provider set to ${result?.selectedProvider || 'auto-failover'}`)
+                } catch (err) {
+                  setQueueMessage(`Provider select failed: ${err.message}`)
+                }
+              }}
+            >
+              <option value="">Auto failover</option>
+              {enabledProviders.map((p) => (
+                <option key={p.name} value={p.name}>{p.label} ({p.name})</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
