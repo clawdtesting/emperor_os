@@ -62,6 +62,10 @@ function toDraftFromCanonicalSpec(spec) {
     chainId: Number(props.chainId || 1),
     contract: props.contract || '',
     image: spec?.image || DEFAULT_REQUEST_IMAGE,
+    protocol: '',
+    scope: Array.isArray(props.deliverables) ? props.deliverables : [],
+    constraints: Array.isArray(props.requirements) ? props.requirements : [],
+    payment: { tokenAddress: '', symbol: 'AGIALPHA', amount: String(Number(props.payoutAGIALPHA || 0)) },
   }
 }
 
@@ -326,11 +330,22 @@ export function JobRequestTab({ wallet }) {
           : (parsedJson?.spec?.properties?.schema === 'agijobmanager/job-spec/v2' ? parsedJson.spec : toCanonicalSpecFromDraft(parsedJson, wallet?.account || ''))
         const importedDraft = toDraftFromCanonicalSpec(canonical)
         const detectedProtocol = detectProtocolFromContract(importedDraft.contract)
+        const resolvedProtocol = detectedProtocol || protocolId
 
         if (detectedProtocol) setProtocolId(detectedProtocol)
         if (importedDraft.payoutAGIALPHA > 0) setPayoutAmount(String(importedDraft.payoutAGIALPHA))
 
-        setDraft(importedDraft)
+        setDraft({
+          ...importedDraft,
+          protocol: resolvedProtocol,
+          scope: Array.isArray(importedDraft.deliverables) ? importedDraft.deliverables : [],
+          constraints: Array.isArray(importedDraft.requirements) ? importedDraft.requirements : [],
+          payment: {
+            tokenAddress: normalizeAddress(tokenAddress),
+            symbol: tokenSymbol || 'AGIALPHA',
+            amount: String(importedDraft.payoutAGIALPHA || payoutAmount || ''),
+          },
+        })
         setImportedCanonicalSpec(canonical)
         setCategory(importedDraft.category)
         setRawRequest(JSON.stringify(canonical, null, 2))
@@ -364,6 +379,8 @@ export function JobRequestTab({ wallet }) {
       setPayoutAmount(String(parsed.payoutAGIALPHA))
     }
 
+    const resolvedProtocol = detectedProtocol || protocolId
+
     const importedDraft = {
       ...createDefaultJobRequestDraft(),
       title: parsed.title,
@@ -379,6 +396,14 @@ export function JobRequestTab({ wallet }) {
       durationSeconds: parsed.durationSeconds,
       chainId: parsed.chainId,
       contract: parsed.contract,
+      protocol: resolvedProtocol,
+      scope: parsed.deliverables,
+      constraints: parsed.requirements,
+      payment: {
+        tokenAddress: normalizeAddress(tokenAddress),
+        symbol: tokenSymbol || 'AGIALPHA',
+        amount: String(parsed.payoutAGIALPHA || payoutAmount || ''),
+      },
     }
 
     const canonical = toCanonicalSpecFromDraft(importedDraft, wallet?.account || '')
@@ -461,6 +486,8 @@ export function JobRequestTab({ wallet }) {
       ...draft,
       title: editingTitle.trim(),
       summary: editingSummary.trim(),
+      protocol: draft.protocol || protocolId,
+      payment: draft.payment || { tokenAddress: normalizeAddress(tokenAddress), symbol: tokenSymbol || 'AGIALPHA', amount: payoutAmount },
       scope: parseLines(editingScope),
       deliverables: parseLines(editingDeliverables),
       acceptanceCriteria: parseLines(editingAcceptance),
