@@ -1,0 +1,22 @@
+name: v1_test_job_full
+version: 1
+mode: dry_run_unsigned_handoff
+description: >
+  Full AGIJobManager v1 test pipeline from local markdown spec.
+  Executes assigned -> deliverable_ready -> completion_pending_review (unsigned tx package)
+  with no on-chain broadcast.
+
+inputs:
+  job_id:
+    type: string
+    default: v1_990001
+  job_markdown:
+    type: string
+    default: AGIJobManager-v1-test-job.md
+
+steps:
+  - id: run
+    run: >-
+      node agent/Job-v1/run_test_job_pipeline.js
+      --job-id "${job_id}"
+      --job-md "${job_markdown}"
