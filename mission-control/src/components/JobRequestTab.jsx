@@ -15,6 +15,7 @@ import {
 } from '../features/request/requestBuilder'
 import { PROTOCOL_OPTIONS, getProtocolOption } from '../features/request/protocolConfig'
 import { approveToken, formatUnits, parseUnits, readAllowance } from '../features/request/erc20'
+import { parseMdJobSpec } from '../utils/parseMdJob'
 
 const STATIC_TOKEN_OPTIONS = [
   { id: 'agialpha', symbol: 'AGIALPHA', address: '', decimals: 18 },
@@ -92,6 +93,11 @@ export function JobRequestTab({ wallet }) {
 
   const [posting, setPosting] = useState(false)
   const [result, setResult] = useState(null)
+
+  const [mdImportOpen, setMdImportOpen] = useState(false)
+  const [mdRaw, setMdRaw] = useState('')
+  const [mdWarnings, setMdWarnings] = useState([])
+  const [mdImported, setMdImported] = useState(false)
 
   const tokenOptions = useMemo(() => [{ ...STATIC_TOKEN_OPTIONS[0], address: normalizeAddress(wallet?.agiToken) || '' }], [wallet?.agiToken])
   const protocol = useMemo(() => getProtocolOption(protocolId), [protocolId])
@@ -251,6 +257,66 @@ export function JobRequestTab({ wallet }) {
     setStep(5)
   }
 
+  function handleMdImport() {
+    setError('')
+    setMdWarnings([])
+    if (!mdRaw.trim()) {
+      setError('Paste a markdown job spec to import.')
+      return
+    }
+
+    const { draft: parsed, protocol: detectedProtocol, warnings } = parseMdJobSpec(mdRaw)
+    setMdWarnings(warnings)
+
+    if (!parsed.title) {
+      setError('Could not parse a job title from the pasted markdown.')
+      return
+    }
+
+    // Auto-select protocol if detected and different from current
+    if (detectedProtocol) {
+      const match = PROTOCOL_OPTIONS.find(o => o.id === detectedProtocol)
+      if (match) setProtocolId(detectedProtocol)
+    }
+
+    // Auto-fill payout
+    if (parsed.payoutAGIALPHA > 0) {
+      setPayoutAmount(String(parsed.payoutAGIALPHA))
+    }
+
+    // Build a draft-compatible object
+    const importedDraft = {
+      title: parsed.title,
+      summary: parsed.summary,
+      protocol: detectedProtocol || protocolId,
+      category: parsed.category,
+      scope: parsed.deliverables,
+      constraints: parsed.requirements,
+      deliverables: parsed.deliverables,
+      acceptanceCriteria: parsed.acceptanceCriteria,
+      requirements: parsed.requirements,
+      tags: parsed.tags,
+      durationSeconds: parsed.durationSeconds,
+      contract: parsed.contract,
+      employer: parsed.employer,
+      lane: parsed.lane,
+      createdVia: parsed.createdVia,
+      rawUserInput: mdRaw.trim(),
+      payment: { tokenAddress, symbol: tokenSymbol, amount: String(parsed.payoutAGIALPHA || payoutAmount) },
+    }
+
+    setDraft(importedDraft)
+    setCategory(parsed.category)
+    setRawRequest(mdRaw.trim())
+    setEditingTitle(parsed.title)
+    setEditingSummary(parsed.summary)
+    setEditingScope(toLineBlock(parsed.deliverables))
+    setEditingDeliverables(toLineBlock(parsed.deliverables))
+    setEditingAcceptance(toLineBlock(parsed.acceptanceCriteria))
+    setMdImported(true)
+    setStep(6)
+  }
+
   async function handleApproveToken() {
     setError('')
     if (!walletReady || !protocol?.spenderAddress || !wallet?.account) {
@@ -379,25 +445,31 @@ export function JobRequestTab({ wallet }) {
     setPosting(true)
     try {
       const durationKey = DEADLINE_TO_DURATION[String(answers.deadline || 'normal_1w')] || '7d'
+      const resolvedDuration = (mdImported && draft.durationSeconds)
+        ? draft.durationSeconds
+        : (DURATION_SECONDS_BY_UI_VALUE[durationKey] || DURATION_SECONDS_BY_UI_VALUE['7d'])
+      const resolvedTags = (mdImported && Array.isArray(draft.tags) && draft.tags.length > 0)
+        ? draft.tags
+        : [draft.category, draft.protocol, paymentState.symbol]
       const draftModel = {
         ...createDefaultJobRequestDraft(),
         title: draft.title,
         summary: draft.summary,
         details: JSON.stringify(publishPayload, null, 2),
         category: draft.category,
-        tags: [draft.category, draft.protocol, paymentState.symbol],
+        tags: resolvedTags,
         deliverables: draft.deliverables,
         acceptanceCriteria: draft.acceptanceCriteria,
-        requirements: draft.constraints,
+        requirements: draft.constraints || draft.requirements,
         payoutAGIALPHA: Number.parseFloat(payoutAmount || '0') || 0,
-        durationSeconds: DURATION_SECONDS_BY_UI_VALUE[durationKey] || DURATION_SECONDS_BY_UI_VALUE['7d'],
+        durationSeconds: resolvedDuration,
         chainId: wallet.chainIdDecimal || 1,
-        contract: protocol?.contractAddress || '',
+        contract: protocol?.contractAddress || draft.contract || '',
         createdBy: wallet.account,
       }
 
       const response = await createJobRequest(toLegacyJobRequestPayload(draftModel, {
-        durationUiValue: durationKey,
+        durationUiValue: (mdImported && draft.durationSeconds) ? `${Math.round(draft.durationSeconds)}s` : durationKey,
         ipfsUri: ipfsResult.uri,
         imageUri: DEFAULT_REQUEST_IMAGE,
       }))
@@ -440,6 +512,45 @@ export function JobRequestTab({ wallet }) {
           Add PINATA_JWT in Render env vars, redeploy, then retry Step 7.
         </div>
       )}
+
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+        <button
+          onClick={() => setMdImportOpen(!mdImportOpen)}
+          className="w-full text-left flex items-center justify-between"
+        >
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Import from Markdown</div>
+          <span className="text-xs text-slate-500">{mdImportOpen ? '▲ collapse' : '▼ expand'}</span>
+        </button>
+        {mdImportOpen && (
+          <div className="space-y-3">
+            <div className="text-xs text-slate-400">
+              Paste a complete job spec in .md format. The system will parse it into the canonical JSON, auto-detect protocol and payout, and skip to the review step.
+            </div>
+            <textarea
+              rows={12}
+              value={mdRaw}
+              onChange={e => setMdRaw(e.target.value)}
+              placeholder={`development\nanalysis\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleMdImport}
+                disabled={!mdRaw.trim()}
+                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
+              >
+                Parse & import
+              </button>
+              {mdImported && <span className="text-xs text-emerald-400">Imported — review draft below</span>}
+            </div>
+            {mdWarnings.length > 0 && (
+              <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
+                {mdWarnings.map((w, i) => <div key={i}>{w}</div>)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
         <div className="text-xs text-slate-500 uppercase tracking-wider">Step 1 · Protocol selection</div>
@@ -602,15 +713,38 @@ export function JobRequestTab({ wallet }) {
 
       {step >= 6 && draft && (
         <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 6 · Draft spec</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 6 · Draft spec {mdImported && <span className="text-indigo-400 normal-case ml-1">(imported from Markdown)</span>}</div>
           <label className="space-y-1 block"><span className="text-xs text-slate-400">Title</span><input value={editingTitle} onChange={e => setEditingTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
           <label className="space-y-1 block"><span className="text-xs text-slate-400">Summary</span><textarea rows={3} value={editingSummary} onChange={e => setEditingSummary(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
           <div className="grid md:grid-cols-2 gap-3">
-            <label className="space-y-1 block"><span className="text-xs text-slate-400">Scope</span><textarea rows={4} value={editingScope} onChange={e => setEditingScope(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
+            <label className="space-y-1 block"><span className="text-xs text-slate-400">{mdImported ? 'Deliverables' : 'Scope'}</span><textarea rows={4} value={editingScope} onChange={e => setEditingScope(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
             <label className="space-y-1 block"><span className="text-xs text-slate-400">Deliverables</span><textarea rows={4} value={editingDeliverables} onChange={e => setEditingDeliverables(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
           </div>
           <label className="space-y-1 block"><span className="text-xs text-slate-400">Acceptance criteria</span><textarea rows={4} value={editingAcceptance} onChange={e => setEditingAcceptance(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
-          <div className="text-xs text-slate-400">Protocol: {protocol?.label} · Category: {draft.category} · Complexity: {draft.complexity}</div>
+          {mdImported && (
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <span className="text-xs text-slate-400">Requirements (read-only)</span>
+                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 space-y-1 max-h-40 overflow-y-auto">
+                  {(draft.requirements || []).map((r, i) => <div key={i}>{r}</div>)}
+                  {(!draft.requirements || draft.requirements.length === 0) && <div className="text-slate-500 italic">none</div>}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs text-slate-400">Tags</span>
+                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 flex flex-wrap gap-1">
+                  {(draft.tags || []).map((t, i) => <span key={i} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">{t}</span>)}
+                  {(!draft.tags || draft.tags.length === 0) && <span className="text-slate-500 italic">none</span>}
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="text-xs text-slate-400">
+            Protocol: {protocol?.label || draft.protocol} · Category: {draft.category}
+            {mdImported && draft.durationSeconds && <> · Duration: {Math.round(draft.durationSeconds / 86400 * 100) / 100} days ({draft.durationSeconds.toLocaleString()}s)</>}
+            {!mdImported && draft.complexity && <> · Complexity: {draft.complexity}</>}
+            {mdImported && draft.contract && <> · Contract: <span className="font-mono">{draft.contract.slice(0, 6)}...{draft.contract.slice(-4)}</span></>}
+          </div>
           <div className="flex gap-2">
             <button onClick={handleApplyDraftEdits} className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200">Continue to IPFS</button>
           </div>
