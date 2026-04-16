@@ -94,7 +94,6 @@ export function JobRequestTab({ wallet }) {
   const [posting, setPosting] = useState(false)
   const [result, setResult] = useState(null)
 
-  const [mdImportOpen, setMdImportOpen] = useState(false)
   const [mdRaw, setMdRaw] = useState('')
   const [mdWarnings, setMdWarnings] = useState([])
   const [mdImported, setMdImported] = useState(false)
@@ -631,29 +630,16 @@ export function JobRequestTab({ wallet }) {
         )}
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 4 · Request input</div>
-          <div className="flex rounded border border-slate-700 overflow-hidden text-xs">
-            <button
-              onClick={() => { setMdImportOpen(false); setError('') }}
-              className={`px-3 py-1.5 transition-colors ${!mdImportOpen ? 'bg-slate-700 text-slate-100' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
-            >
-              Chat input
-            </button>
-            <button
-              onClick={() => { setMdImportOpen(true); setError('') }}
-              className={`px-3 py-1.5 transition-colors ${mdImportOpen ? 'bg-indigo-700 text-white' : 'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
-            >
-              Paste .md file
-            </button>
-          </div>
-        </div>
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4">
+        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 4 · Request input</div>
+        <div className="text-xs text-slate-400">Two ways to create a request — use either box. Chat input runs the guided wizard (Step 5). Markdown paste skips the wizard and lands you on the draft review (Step 6).</div>
 
-        {!mdImportOpen && (
-          <>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2">
+            <div className="text-xs text-slate-300 font-semibold">Chat input</div>
+            <div className="text-[11px] text-slate-500">Describe your job in plain words — the wizard will ask clarifying questions.</div>
             <textarea
-              rows={4}
+              rows={10}
               disabled={!walletReady || !protocol || approvalRequired}
               value={rawRequest}
               onChange={e => setRawRequest(e.target.value)}
@@ -663,42 +649,37 @@ export function JobRequestTab({ wallet }) {
             <button
               onClick={handleBuildRequest}
               disabled={!walletReady || !protocol || approvalRequired || !rawRequest.trim()}
-              className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
+              className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50 w-full"
             >
               Build my request
             </button>
-          </>
-        )}
+          </div>
 
-        {mdImportOpen && (
-          <>
-            <div className="text-xs text-slate-400">
-              Paste a complete job spec (.md format). Protocol, payout, duration, deliverables, and acceptance criteria are auto-detected. Steps 5 is skipped — you land directly on the draft review.
-            </div>
+          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2">
+            <div className="text-xs text-slate-300 font-semibold">Paste .md file</div>
+            <div className="text-[11px] text-slate-500">Paste a complete job spec in Markdown. Protocol, payout, duration, deliverables, and acceptance criteria are auto-detected.</div>
             <textarea
-              rows={14}
+              rows={10}
               value={mdRaw}
               onChange={e => setMdRaw(e.target.value)}
-              placeholder={`development\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
+              placeholder={`development\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n1 day\n86,400 sec window\nDeliverables\ndeliverable item 1\nAcceptance criteria\ncriterion 1\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
             />
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleMdImport}
-                disabled={!mdRaw.trim()}
-                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
-              >
-                Parse & import
-              </button>
-              {mdImported && <span className="text-xs text-emerald-400">Imported — review draft below</span>}
-            </div>
+            <button
+              onClick={handleMdImport}
+              disabled={!mdRaw.trim()}
+              className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50 w-full"
+            >
+              Parse & import
+            </button>
+            {mdImported && <div className="text-xs text-emerald-400">Imported — review draft below</div>}
             {mdWarnings.length > 0 && (
               <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
                 {mdWarnings.map((w, i) => <div key={i}>{w}</div>)}
               </div>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
 
       {step >= 5 && currentQuestion && (

@@ -15,8 +15,8 @@ Payout
 10,000
 AGIALPHA tokens
 Duration
-7 days
-604,800 sec window
+1 day
+86,400 sec window
 Category
 development
 + analysis
