@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Component, useState } from 'react'
 import { useJobs } from './hooks/useJobs'
 import { useActions } from './hooks/useActions'
 import { MetricCard } from './components/MetricCard'
@@ -36,6 +36,34 @@ const V2_BOOTSTRAP_TXS = [
   '0x56e959fe23d294542ea7b5651c8e303adf13b029a08af50665f2feb986a3f12e',
   '0xbcc099124923dc1ecf796d594fa4d16d271dd001edfef3a38b5675eb9cbfdc91',
 ]
+
+class TabErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, message: '' }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, message: error?.message || 'Unknown UI error' }
+  }
+
+  componentDidCatch(error) {
+    console.error('[ui] tab render error:', error)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded border border-red-900 bg-red-950/20 p-4 text-sm text-red-200">
+          <div className="font-semibold mb-1">Create Job tab failed to render.</div>
+          <div className="text-xs text-red-300 break-all">{this.state.message}</div>
+          <div className="text-xs text-slate-400 mt-2">Reload once. If this persists, share this error message.</div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
@@ -318,7 +346,11 @@ export default function App() {
         )}
 
 
-        {tab === 'request' && <JobRequestTab wallet={wallet} />}
+        {tab === 'request' && (
+          <TabErrorBoundary>
+            <JobRequestTab wallet={wallet} />
+          </TabErrorBoundary>
+        )}
 
         {tab === 'wallet' && <WalletPanel wallet={wallet} />}
         {tab === 'prime' && <PrimeContractTab wallet={wallet} jobs={jobs} />}

@@ -6,7 +6,7 @@
 // Env vars required:
 //   AGENT_PRIVATE_KEY      wallet private key
 //   ETH_RPC_URL            Ethereum HTTP RPC endpoint
-//   ANTHROPIC_API_KEY      Claude API key
+//   LLM provider credentials (e.g. ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY)
 //   PINATA_JWT             Pinata JWT for IPFS pinning
 //   AGENT_SUBDOMAIN        e.g. emperor-os.alpha.agent.agi.eth
 //   AGENT_MERKLE_PROOF     JSON array string of bytes32 proof elements
@@ -16,6 +16,7 @@ import { ethers } from 'ethers'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { llmCall } from '../../config/llm_router.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -127,26 +128,12 @@ async function pinWithRetry(content, filename) {
 // ── Claude ────────────────────────────────────────────────────────────────────
 
 async function claudeChat(system, user, maxTokens = 4096, timeoutMs = CLAUDE_TIMEOUT_MS) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:  'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model:      MODEL,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }],
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
+  return await llmCall(system, user, null, {
+    model: MODEL,
+    max_tokens: maxTokens,
+    timeout_ms: timeoutMs,
+    temperature: 0.2,
   })
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`)
-  const data = await res.json()
-  const text = data.content?.[0]?.text
-  if (!text) throw new Error('empty Anthropic response')
-  return text.trim()
 }
 
 async function evaluateAndDraft(specContent, agentAddress) {
@@ -529,7 +516,6 @@ export { poll, loadState, saveState }
 export function start() {
   if (!process.env.AGENT_PRIVATE_KEY) { console.error('[procurement] AGENT_PRIVATE_KEY not set'); return }
   if (!process.env.ETH_RPC_URL)       { console.error('[procurement] ETH_RPC_URL not set'); return }
-  if (!process.env.ANTHROPIC_API_KEY) { console.error('[procurement] ANTHROPIC_API_KEY not set'); return }
   if (!process.env.PINATA_JWT)        { console.error('[procurement] PINATA_JWT not set'); return }
   if (!process.env.AGENT_SUBDOMAIN)   { console.error('[procurement] AGENT_SUBDOMAIN not set'); return }
 
