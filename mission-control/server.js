@@ -1093,11 +1093,12 @@ async function pinJsonViaPinata(payload, name) {
 }
 
 const PIPELINE_META = {
-  'intake.lobster.yaml':      { desc: 'fetch -> extract -> analyze -> approve', status: 'active' },
-  'creative.lobster.yaml':    { desc: 'research -> draft -> review -> approve',  status: 'ready'  },
-  'development.lobster.yaml': { desc: 'plan -> implement -> review -> approve',  status: 'ready'  },
-  'research.lobster.yaml':    { desc: 'gather -> analyze -> approve',            status: 'ready'  },
-  'analysis.lobster.yaml':    { desc: 'audit -> report -> approve',              status: 'ready'  },
+  'intake.lobster.yaml':      { desc: 'v1 test intake -> execute -> validate -> unsigned completion', status: 'active' },
+  'v1-test-job.lobster.yaml': { desc: 'local markdown job -> assigned -> execution pipeline dry-run', status: 'ready'  },
+  'creative.lobster.yaml':    { desc: 'research -> draft -> review -> approve',                       status: 'ready'  },
+  'development.lobster.yaml': { desc: 'plan -> implement -> review -> approve',                       status: 'ready'  },
+  'research.lobster.yaml':    { desc: 'gather -> analyze -> approve',                                 status: 'ready'  },
+  'analysis.lobster.yaml':    { desc: 'audit -> report -> approve',                                   status: 'ready'  },
 }
 
 app.get('/health', async (_, res) => {
