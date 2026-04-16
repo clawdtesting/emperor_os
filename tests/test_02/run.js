@@ -5,14 +5,13 @@
 import { readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { llmCall } from '../../config/llm_router.js'
 
 const DIR   = join(dirname(fileURLToPath(import.meta.url)))
 const JWT   = process.env.PINATA_JWT
-const AKEY  = process.env.ANTHROPIC_API_KEY
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
 if (!JWT)  { console.error('PINATA_JWT required');        process.exit(1) }
-if (!AKEY) { console.error('ANTHROPIC_API_KEY required'); process.exit(1) }
 
 // ── Pinata helpers ──────────────────────────────────────────────────────────
 
@@ -44,26 +43,12 @@ async function pinFile(content, filename, mimeType) {
 // ── Claude call ─────────────────────────────────────────────────────────────
 
 async function claudeCall(system, user, maxTokens = 8192) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         AKEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model:       MODEL,
-      max_tokens:  maxTokens,
-      temperature: 0,
-      system,
-      messages: [{ role: 'user', content: user }]
-    }),
-    signal: AbortSignal.timeout(300_000)
+  const text = await llmCall(system, user, null, {
+    model: MODEL,
+    max_tokens: maxTokens,
+    temperature: 0,
+    timeout_ms: 300_000,
   })
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`)
-  const data = await res.json()
-  if (data.stop_reason === 'max_tokens') throw new Error(`Claude hit max_tokens (${maxTokens}) — response truncated`)
-  const text = data.content?.[0]?.text?.trim()
   if (!text) throw new Error('Empty Claude response')
   return text
 }
