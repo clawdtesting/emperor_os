@@ -71,6 +71,24 @@ export async function fetchOperatorActions() {
   return data
 }
 
+export async function fetchLlmProviders() {
+  const res = await fetch(BASE + '/api/llm/providers')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch LLM providers')
+  return data
+}
+
+export async function selectLlmProvider(provider) {
+  const res = await fetch(BASE + '/api/llm/select', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: provider || '' }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to select LLM provider')
+  return data
+}
+
 export async function fetchOperatorActionFile(path) {
   const res = await fetch(BASE + '/api/operator-actions/file?path=' + encodeURIComponent(path || ''))
   const data = await res.json().catch(() => ({}))

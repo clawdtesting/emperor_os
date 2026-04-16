@@ -10,7 +10,13 @@
  */
 "use strict";
 
-const { chat } = require("./llm");
+let _llmCall = null;
+async function loadLlmCall() {
+  if (_llmCall) return _llmCall;
+  const mod = await import("../../config/llm_router.js");
+  _llmCall = mod.llmCall;
+  return _llmCall;
+}
 
 const SYSTEM = `You are an expert technical writer and autonomous AI agent working for EmpireOS.
 You produce high-quality deliverables for on-chain job specifications.
@@ -81,7 +87,12 @@ async function main() {
 
   let content;
   try {
-    content = await chat(SYSTEM, prompt, { maxTokens: 4096 });
+    const llmCall = await loadLlmCall();
+    content = await llmCall(SYSTEM, prompt, job.spec || null, {
+      max_tokens: 4096,
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+      temperature: 0.2,
+    });
     process.stderr.write(`[writer] Generated ${content.length} chars\n`);
   } catch (e) {
     process.stderr.write(`[writer] LLM error: ${e.message}\n`);

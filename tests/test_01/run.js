@@ -5,14 +5,13 @@
 import { readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { llmCall } from '../../config/llm_router.js'
 
 const DIR   = join(dirname(fileURLToPath(import.meta.url)))
 const JWT   = process.env.PINATA_JWT
-const AKEY  = process.env.ANTHROPIC_API_KEY
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
 
 if (!JWT)  { console.error('PINATA_JWT required');         process.exit(1) }
-if (!AKEY) { console.error('ANTHROPIC_API_KEY required');  process.exit(1) }
 
 // ── Pinata helpers ──────────────────────────────────────────────────────────
 
@@ -71,28 +70,15 @@ Output only the JSON object. No preamble.`
     tags:               props.tags
   })
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type':    'application/json',
-      'x-api-key':       AKEY,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model:      MODEL,
-      max_tokens: 8192,
-      temperature: 0,
-      system,
-      messages: [{ role: 'user', content: user }]
-    }),
-    signal: AbortSignal.timeout(120_000)
+  const text = await llmCall(system, user, spec, {
+    model: MODEL,
+    max_tokens: 8192,
+    temperature: 0,
+    timeout_ms: 120_000,
   })
-
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`)
-  const data = await res.json()
-  const text = data.content?.[0]?.text?.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-  if (!text) throw new Error('Empty Claude response')
-  return JSON.parse(text)
+  const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+  if (!cleaned) throw new Error('Empty LLM response')
+  return JSON.parse(cleaned)
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────

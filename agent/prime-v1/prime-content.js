@@ -18,6 +18,7 @@
 // SAFETY CONTRACT: No signing. No broadcasting. No private keys.
 
 import { createHash } from "crypto";
+import { llmCall } from "../../config/llm_router.js";
 
 // ── IPFS publish ──────────────────────────────────────────────────────────────
 
@@ -264,9 +265,6 @@ export async function publishAndVerify(content, filename) {
  * @returns {Promise<string>} substantive markdown draft
  */
 export async function draftWithLLM({ phase, procurementId, jobSpec, fitEvaluation, retrievalPacket }) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("OPENAI_API_KEY not set");
-
   const specText = typeof jobSpec === "string"
     ? jobSpec
     : [jobSpec?.title, jobSpec?.description, jobSpec?.details, jobSpec?.requirements, jobSpec?.deliverables]
@@ -295,37 +293,18 @@ export async function draftWithLLM({ phase, procurementId, jobSpec, fitEvaluatio
     `\nProduce the ${phase} document now. Use markdown. Start with a # heading.`,
   ].filter(Boolean).join("\n");
 
-  const res = await fetch("https://api.openai.com/v1/responses", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body:    JSON.stringify({
-      model: process.env.OPENAI_MODEL ?? "gpt-4.1",
-      input: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userPrompt   },
-      ],
-    }),
+  const result = await llmCall([
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ], {
+    spec: typeof jobSpec === "object" ? jobSpec : null,
+    provider: process.env.PRIME_LLM_PROVIDER || "",
+    model: process.env.OPENAI_MODEL ?? "gpt-4.1",
+    max_tokens: 4096,
+    temperature: 0.2,
+    timeout_ms: 300_000,
   });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`OpenAI ${res.status}: ${body.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-
-  let text = "";
-  if (typeof data.output_text === "string" && data.output_text.trim()) {
-    text = data.output_text.trim();
-  } else if (Array.isArray(data.output)) {
-    for (const item of data.output) {
-      if (!item || !Array.isArray(item.content)) continue;
-      for (const c of item.content) {
-        if (c?.type === "output_text" && typeof c.text === "string") text += c.text;
-      }
-    }
-    text = text.trim();
-  }
+  const text = String(result?.content || "").trim();
 
   if (!text) throw new Error("OpenAI returned empty output");
   if (/\*\[[^\]]{3,}\]\*/.test(text)) {
