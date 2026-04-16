@@ -4,6 +4,7 @@ import {
   DEFAULT_REQUEST_IMAGE,
   DURATION_SECONDS_BY_UI_VALUE,
   createDefaultJobRequestDraft,
+  toJobSpecV2,
   toLegacyJobRequestPayload,
 } from '../models/jobSpecV2'
 import {
@@ -34,6 +35,58 @@ function parseLines(raw) {
 
 function toLineBlock(list) {
   return Array.isArray(list) ? list.join('\n') : ''
+}
+
+function detectProtocolFromContract(contract) {
+  const normalized = normalizeAddress(contract)
+  if (!normalized) return ''
+  const match = PROTOCOL_OPTIONS.find(option => normalizeAddress(option.contractAddress) === normalized)
+  return match?.id || ''
+}
+
+function toDraftFromCanonicalSpec(spec) {
+  const props = spec?.properties || {}
+  return {
+    ...createDefaultJobRequestDraft(),
+    title: props.title || '',
+    summary: props.summary || '',
+    details: props.details || props.summary || '',
+    category: props.category || 'other',
+    locale: props.locale || 'en-US',
+    tags: Array.isArray(props.tags) ? props.tags : [],
+    deliverables: Array.isArray(props.deliverables) ? props.deliverables : [],
+    acceptanceCriteria: Array.isArray(props.acceptanceCriteria) ? props.acceptanceCriteria : [],
+    requirements: Array.isArray(props.requirements) ? props.requirements : [],
+    payoutAGIALPHA: Number(props.payoutAGIALPHA || 0),
+    durationSeconds: Number(props.durationSeconds || DURATION_SECONDS_BY_UI_VALUE['1d']),
+    chainId: Number(props.chainId || 1),
+    contract: props.contract || '',
+    image: spec?.image || DEFAULT_REQUEST_IMAGE,
+    protocol: '',
+    scope: Array.isArray(props.deliverables) ? props.deliverables : [],
+    constraints: Array.isArray(props.requirements) ? props.requirements : [],
+    payment: { tokenAddress: '', symbol: 'AGIALPHA', amount: String(Number(props.payoutAGIALPHA || 0)) },
+  }
+}
+
+function toCanonicalSpecFromDraft(draft, createdBy = '') {
+  return toJobSpecV2({
+    ...createDefaultJobRequestDraft(),
+    title: draft?.title || '',
+    summary: draft?.summary || '',
+    details: draft?.details || draft?.summary || '',
+    category: draft?.category || 'other',
+    locale: draft?.locale || 'en-US',
+    tags: Array.isArray(draft?.tags) ? draft.tags : [],
+    deliverables: Array.isArray(draft?.deliverables) ? draft.deliverables : [],
+    acceptanceCriteria: Array.isArray(draft?.acceptanceCriteria) ? draft.acceptanceCriteria : [],
+    requirements: Array.isArray(draft?.requirements) ? draft.requirements : [],
+    payoutAGIALPHA: Number(draft?.payoutAGIALPHA || 0),
+    durationSeconds: Number(draft?.durationSeconds || DURATION_SECONDS_BY_UI_VALUE['1d']),
+    chainId: Number(draft?.chainId || 1),
+    contract: draft?.contract || '',
+    ...(createdBy ? { createdBy } : {}),
+  })
 }
 
 function normalizeAddress(address) {
@@ -95,9 +148,11 @@ export function JobRequestTab({ wallet }) {
   const [result, setResult] = useState(null)
 
   const [mdImportOpen, setMdImportOpen] = useState(false)
-  const [mdRaw, setMdRaw] = useState('')
-  const [mdWarnings, setMdWarnings] = useState([])
+  const [importFormat, setImportFormat] = useState('md')
+  const [importRaw, setImportRaw] = useState('')
+  const [importWarnings, setImportWarnings] = useState([])
   const [mdImported, setMdImported] = useState(false)
+  const [importedCanonicalSpec, setImportedCanonicalSpec] = useState(null)
 
   const tokenOptions = useMemo(() => [{ ...STATIC_TOKEN_OPTIONS[0], address: normalizeAddress(wallet?.agiToken) || '' }], [wallet?.agiToken])
   const protocol = useMemo(() => getProtocolOption(protocolId), [protocolId])
@@ -143,10 +198,11 @@ export function JobRequestTab({ wallet }) {
       answers,
       payment: paymentState,
       draft,
+      canonicalSpec: importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
       ipfs: ipfsResult,
       createdAt: new Date().toISOString(),
     }
-  }, [draft, ipfsResult, wallet, protocolId, rawRequest, category, answers, paymentState])
+  }, [draft, ipfsResult, wallet, protocolId, rawRequest, category, answers, paymentState, importedCanonicalSpec])
 
   useEffect(() => {
     const selected = tokenOptions[0]
@@ -214,6 +270,7 @@ export function JobRequestTab({ wallet }) {
     setAnswers({})
     setQuestionIndex(0)
     setDraft(null)
+    setImportedCanonicalSpec(null)
     setIpfsResult(null)
     setResult(null)
     setError('')
@@ -259,55 +316,102 @@ export function JobRequestTab({ wallet }) {
 
   function handleMdImport() {
     setError('')
-    setMdWarnings([])
-    if (!mdRaw.trim()) {
-      setError('Paste a markdown job spec to import.')
+    setImportWarnings([])
+    if (!importRaw.trim()) {
+      setError(importFormat === 'json' ? 'Paste a JSON job spec to import.' : 'Paste a markdown job spec to import.')
       return
     }
 
-    const { draft: parsed, protocol: detectedProtocol, warnings } = parseMdJobSpec(mdRaw)
-    setMdWarnings(warnings)
+    if (importFormat === 'json') {
+      try {
+        const parsedJson = JSON.parse(importRaw)
+        const canonical = parsedJson?.properties?.schema === 'agijobmanager/job-spec/v2'
+          ? parsedJson
+          : (parsedJson?.spec?.properties?.schema === 'agijobmanager/job-spec/v2' ? parsedJson.spec : toCanonicalSpecFromDraft(parsedJson, wallet?.account || ''))
+        const importedDraft = toDraftFromCanonicalSpec(canonical)
+        const detectedProtocol = detectProtocolFromContract(importedDraft.contract)
+        const resolvedProtocol = detectedProtocol || protocolId
+
+        if (detectedProtocol) setProtocolId(detectedProtocol)
+        if (importedDraft.payoutAGIALPHA > 0) setPayoutAmount(String(importedDraft.payoutAGIALPHA))
+
+        setDraft({
+          ...importedDraft,
+          protocol: resolvedProtocol,
+          scope: Array.isArray(importedDraft.deliverables) ? importedDraft.deliverables : [],
+          constraints: Array.isArray(importedDraft.requirements) ? importedDraft.requirements : [],
+          payment: {
+            tokenAddress: normalizeAddress(tokenAddress),
+            symbol: tokenSymbol || 'AGIALPHA',
+            amount: String(importedDraft.payoutAGIALPHA || payoutAmount || ''),
+          },
+        })
+        setImportedCanonicalSpec(canonical)
+        setCategory(importedDraft.category)
+        setRawRequest(JSON.stringify(canonical, null, 2))
+        setEditingTitle(importedDraft.title)
+        setEditingSummary(importedDraft.summary)
+        setEditingScope(toLineBlock(importedDraft.deliverables))
+        setEditingDeliverables(toLineBlock(importedDraft.deliverables))
+        setEditingAcceptance(toLineBlock(importedDraft.acceptanceCriteria))
+        setMdImported(true)
+        setStep(6)
+      } catch (e) {
+        setError(e.message || 'Failed to parse JSON job spec.')
+      }
+      return
+    }
+
+    const { draft: parsed, protocol: detectedProtocol, warnings } = parseMdJobSpec(importRaw)
+    setImportWarnings(warnings)
 
     if (!parsed.title) {
       setError('Could not parse a job title from the pasted markdown.')
       return
     }
 
-    // Auto-select protocol if detected and different from current
     if (detectedProtocol) {
       const match = PROTOCOL_OPTIONS.find(o => o.id === detectedProtocol)
       if (match) setProtocolId(detectedProtocol)
     }
 
-    // Auto-fill payout
     if (parsed.payoutAGIALPHA > 0) {
       setPayoutAmount(String(parsed.payoutAGIALPHA))
     }
 
-    // Build a draft-compatible object
+    const resolvedProtocol = detectedProtocol || protocolId
+
     const importedDraft = {
+      ...createDefaultJobRequestDraft(),
       title: parsed.title,
       summary: parsed.summary,
-      protocol: detectedProtocol || protocolId,
+      details: parsed.details,
       category: parsed.category,
-      scope: parsed.deliverables,
-      constraints: parsed.requirements,
+      locale: parsed.locale,
+      tags: parsed.tags,
       deliverables: parsed.deliverables,
       acceptanceCriteria: parsed.acceptanceCriteria,
       requirements: parsed.requirements,
-      tags: parsed.tags,
+      payoutAGIALPHA: parsed.payoutAGIALPHA,
       durationSeconds: parsed.durationSeconds,
+      chainId: parsed.chainId,
       contract: parsed.contract,
-      employer: parsed.employer,
-      lane: parsed.lane,
-      createdVia: parsed.createdVia,
-      rawUserInput: mdRaw.trim(),
-      payment: { tokenAddress, symbol: tokenSymbol, amount: String(parsed.payoutAGIALPHA || payoutAmount) },
+      protocol: resolvedProtocol,
+      scope: parsed.deliverables,
+      constraints: parsed.requirements,
+      payment: {
+        tokenAddress: normalizeAddress(tokenAddress),
+        symbol: tokenSymbol || 'AGIALPHA',
+        amount: String(parsed.payoutAGIALPHA || payoutAmount || ''),
+      },
     }
 
+    const canonical = toCanonicalSpecFromDraft(importedDraft, wallet?.account || '')
+
     setDraft(importedDraft)
+    setImportedCanonicalSpec(canonical)
     setCategory(parsed.category)
-    setRawRequest(mdRaw.trim())
+    setRawRequest(JSON.stringify(canonical, null, 2))
     setEditingTitle(parsed.title)
     setEditingSummary(parsed.summary)
     setEditingScope(toLineBlock(parsed.deliverables))
@@ -316,6 +420,7 @@ export function JobRequestTab({ wallet }) {
     setMdImported(true)
     setStep(6)
   }
+
 
   async function handleApproveToken() {
     setError('')
@@ -361,6 +466,7 @@ export function JobRequestTab({ wallet }) {
 
     if (questionIndex >= questions.length - 1) {
       const nextDraft = buildDraftJobSpec(protocolId, paymentState, rawRequest, category, answers)
+      setImportedCanonicalSpec(null)
       setDraft(nextDraft)
       setEditingTitle(nextDraft.title)
       setEditingSummary(nextDraft.summary)
@@ -380,6 +486,8 @@ export function JobRequestTab({ wallet }) {
       ...draft,
       title: editingTitle.trim(),
       summary: editingSummary.trim(),
+      protocol: draft.protocol || protocolId,
+      payment: draft.payment || { tokenAddress: normalizeAddress(tokenAddress), symbol: tokenSymbol || 'AGIALPHA', amount: payoutAmount },
       scope: parseLines(editingScope),
       deliverables: parseLines(editingDeliverables),
       acceptanceCriteria: parseLines(editingAcceptance),
@@ -390,6 +498,7 @@ export function JobRequestTab({ wallet }) {
       return
     }
     setDraft(nextDraft)
+    if (mdImported) setImportedCanonicalSpec(toCanonicalSpecFromDraft(nextDraft, wallet?.account || ''))
     setError('')
     setStep(7)
   }
@@ -413,6 +522,7 @@ export function JobRequestTab({ wallet }) {
         answers,
         payment: paymentState,
         draft,
+        canonicalSpec: importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
       }
       const ipfs = await pinJsonToIpfs(payload, `${protocolId}-${Date.now()}-job-request.json`)
       if (!ipfs?.uri || !extractCid(ipfs.uri)) {
@@ -518,34 +628,53 @@ export function JobRequestTab({ wallet }) {
           onClick={() => setMdImportOpen(!mdImportOpen)}
           className="w-full text-left flex items-center justify-between"
         >
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Import from Markdown</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Import job spec</div>
           <span className="text-xs text-slate-500">{mdImportOpen ? '▲ collapse' : '▼ expand'}</span>
         </button>
         {mdImportOpen && (
           <div className="space-y-3">
             <div className="text-xs text-slate-400">
-              Paste a complete job spec in .md format. The system will parse it into the canonical JSON, auto-detect protocol and payout, and skip to the review step.
+              Paste a complete job spec in Markdown or JSON. Markdown is normalized into canonical job-spec JSON before import.
             </div>
             <textarea
               rows={12}
-              value={mdRaw}
-              onChange={e => setMdRaw(e.target.value)}
-              placeholder={`development\nanalysis\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
+              value={importRaw}
+              onChange={e => setImportRaw(e.target.value)}
+              placeholder={importFormat === 'json' ? `{
+  "properties": {
+    "schema": "agijobmanager/job-spec/v2",
+    "title": "Your job title"
+  }
+}` : `development\nanalysis\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
             />
             <div className="flex items-center gap-3">
               <button
                 onClick={handleMdImport}
-                disabled={!mdRaw.trim()}
+                disabled={!importRaw.trim()}
                 className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
               >
                 Parse & import
               </button>
               {mdImported && <span className="text-xs text-emerald-400">Imported — review draft below</span>}
             </div>
-            {mdWarnings.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setImportFormat('md')}
+                className={`px-2 py-1 rounded border text-xs ${importFormat === 'md' ? 'border-indigo-500 text-indigo-300' : 'border-slate-700 text-slate-400'}`}
+              >
+                Markdown
+              </button>
+              <button
+                onClick={() => setImportFormat('json')}
+                className={`px-2 py-1 rounded border text-xs ${importFormat === 'json' ? 'border-indigo-500 text-indigo-300' : 'border-slate-700 text-slate-400'}`}
+              >
+                JSON
+              </button>
+            </div>
+            {importWarnings.length > 0 && (
               <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
-                {mdWarnings.map((w, i) => <div key={i}>{w}</div>)}
+                {importWarnings.map((w, i) => <div key={i}>{w}</div>)}
               </div>
             )}
           </div>
