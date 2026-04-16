@@ -50,6 +50,7 @@ export default function App() {
   const disputed  = jobs.filter(j => j.status === 'Disputed')
   const jobsDesc  = [...jobs].sort(compareJobIdDesc)
   const jobsV2 = jobsDesc.filter(j => j.source === 'agijobmanager-v2')
+  const jobsPrime = jobsDesc.filter(j => j.source === 'agiprimediscovery')
   const jobsV1 = jobsDesc.filter(j => j.source !== 'agijobmanager-v2' && j.source !== 'agiprimediscovery')
   const jobsV2Display = jobsV2.length ? jobsV2 : [{
     source: 'agijobmanager-v2',
@@ -146,29 +147,51 @@ export default function App() {
           <MetricCard label="Disputed" value={loading ? '—' : disputed.length} color="text-red-400" />
         </div>
 
-        <div className="grid md:grid-cols-[180px,1fr] gap-4">
+        <div className="grid md:grid-cols-[220px,1fr] gap-4">
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-2 h-fit">
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 px-2 py-1">Main flow</div>
+        <div className="flex flex-col gap-1 mb-3">
+          {[
+            { key: 'mission', label: 'System visual' },
+            { key: 'request', label: 'Create job' },
+            { key: 'jobs', label: 'Apply for job (3 lanes)', badge: jobsV1.length + jobsPrime.length + jobsV2.length },
+            { key: selected ? 'detail' : 'jobs', label: 'Validate a job', badge: selected ? 1 : 0 },
+            { key: 'actions', label: 'Operator queue', badge: unreadCount },
+          ].map(item => (
+            <button
+              key={item.label}
+              onClick={() => setTab(item.key)}
+              className={`w-full text-left px-3 py-2 text-xs rounded transition-colors ${
+                tab === item.key ? 'text-white bg-blue-600/25 border border-blue-500/50' : 'text-slate-300 border border-transparent hover:text-slate-100 hover:bg-slate-800'
+              }`}
+            >
+              {item.label}
+              {item.badge > 0 && (
+                <span className="ml-1 bg-blue-600 text-white text-xs rounded-full px-1.5 py-0.5">{item.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 px-2 py-1">Lanes & tools</div>
         <div className="flex flex-col gap-1">
-          {['mission', 'jobs', 'jobs-v1', 'jobs-v2', selected ? 'detail' : null, 'request', 'wallet', 'prime', 'ops', 'actions', 'workflows', 'pipelines', 'events', enableTestMode ? 'test' : null, 'ipfs'].filter(Boolean).map(t => (
+          {['jobs-v1', 'prime', 'jobs-v2', 'wallet', 'ops', 'pipelines', 'events', 'ipfs', 'workflows', enableTestMode ? 'test' : null].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`w-full text-left px-3 py-2 text-xs capitalize rounded transition-colors ${
-                tab === t ? 'text-white bg-blue-600/25 border border-blue-500/50' : 'text-slate-500 border border-transparent hover:text-slate-300 hover:bg-slate-800'
+                tab === t ? 'text-white bg-slate-700 border border-slate-500/50' : 'text-slate-500 border border-transparent hover:text-slate-300 hover:bg-slate-800'
               }`}
             >
-              {t}
-              {t === 'jobs' && assigned.length > 0 && (
-                <span className="ml-1 bg-blue-600 text-white text-xs rounded-full px-1.5 py-0.5">{assigned.length}</span>
-              )}
+              {t === 'jobs-v1' ? 'apply lane: v1' : t === 'jobs-v2' ? 'apply lane: v2' : t === 'prime' ? 'apply lane: prime v1' : t}
               {t === 'jobs-v1' && jobsV1.length > 0 && (
                 <span className="ml-1 bg-cyan-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsV1.length}</span>
               )}
               {t === 'jobs-v2' && jobsV2Display.length > 0 && (
                 <span className="ml-1 bg-fuchsia-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsV2Display.length}</span>
               )}
-              {t === 'actions' && unreadCount > 0 && (
-                <span className="ml-1 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5">{unreadCount}</span>
+              {t === 'prime' && jobsPrime.length > 0 && (
+                <span className="ml-1 bg-violet-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsPrime.length}</span>
               )}
             </button>
           ))}
@@ -189,9 +212,32 @@ export default function App() {
         )}
 
         {tab === 'jobs' && (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            <div className="rounded border border-slate-800 bg-slate-900 p-3">
+              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Apply for job</div>
+              <div className="grid md:grid-cols-3 gap-2 text-xs">
+                <button onClick={() => setTab('jobs-v1')} className="rounded border border-cyan-900/70 bg-cyan-950/20 p-3 text-left hover:border-cyan-700">
+                  <div className="text-cyan-300 font-semibold">Job-v1 lane</div>
+                  <div className="text-slate-400 mt-1">Classic AGIJobManager jobs</div>
+                  <div className="text-slate-200 mt-2">{jobsV1.length} jobs</div>
+                </button>
+                <button onClick={() => setTab('prime')} className="rounded border border-violet-900/70 bg-violet-950/20 p-3 text-left hover:border-violet-700">
+                  <div className="text-violet-300 font-semibold">Prime-v1 lane</div>
+                  <div className="text-slate-400 mt-1">Discovery / procurement competitions</div>
+                  <div className="text-slate-200 mt-2">{jobsPrime.length} jobs</div>
+                </button>
+                <button onClick={() => setTab('jobs-v2')} className="rounded border border-fuchsia-900/70 bg-fuchsia-950/20 p-3 text-left hover:border-fuchsia-700">
+                  <div className="text-fuchsia-300 font-semibold">Job-v2 lane</div>
+                  <div className="text-slate-400 mt-1">AGIJobManager v2 contract lane</div>
+                  <div className="text-slate-200 mt-2">{jobsV2.length} jobs</div>
+                </button>
+              </div>
+            </div>
+
             {loading && <div className="text-slate-600 text-xs text-center py-8">Loading...</div>}
             {error && <div className="text-red-400 text-xs p-3 bg-red-950/30 rounded-lg border border-red-900">{error}</div>}
+
+            <div className="text-xs text-slate-500 uppercase tracking-wider">All jobs (click one to validate)</div>
             {jobsDesc.map(j => (
               <JobCard
                 key={`${j.source || 'agijobmanager'}-${j.jobId}`}
@@ -263,7 +309,10 @@ export default function App() {
         )}
         {tab === 'detail' && (
           <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
-            <button onClick={() => setTab('jobs')} className="text-xs text-slate-500 mb-3 flex items-center gap-1 hover:text-slate-300">← back to jobs</button>
+            <div className="flex items-center justify-between mb-3">
+              <button onClick={() => setTab('jobs')} className="text-xs text-slate-500 flex items-center gap-1 hover:text-slate-300">← back to apply lanes</button>
+              <div className="text-[11px] uppercase tracking-wider text-slate-500">Validate job</div>
+            </div>
             <JobDetail job={selected} wallet={wallet} onRunIntake={() => {}} />
           </div>
         )}

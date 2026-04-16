@@ -43,6 +43,13 @@ export async function pinJsonToIpfs(payload, name = 'mission-control-job-request
   return data
 }
 
+export async function fetchHealthStatus() {
+  const res = await fetch(BASE + '/health')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch health status')
+  return data
+}
+
 export async function fetchActions(filter = 'pending') {
   const res = await fetch(BASE + '/api/actions?filter=' + filter)
   if (!res.ok) throw new Error('HTTP ' + res.status)

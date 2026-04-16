@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createJobRequest, pinJsonToIpfs } from '../api'
+import { createJobRequest, fetchHealthStatus, pinJsonToIpfs } from '../api'
 import {
   DEFAULT_REQUEST_IMAGE,
   DURATION_SECONDS_BY_UI_VALUE,
@@ -87,6 +87,8 @@ export function JobRequestTab({ wallet }) {
 
   const [ipfsUploading, setIpfsUploading] = useState(false)
   const [ipfsResult, setIpfsResult] = useState(null)
+  const [infraLoading, setInfraLoading] = useState(false)
+  const [ipfsPinataReady, setIpfsPinataReady] = useState(null)
 
   const [posting, setPosting] = useState(false)
   const [result, setResult] = useState(null)
@@ -114,6 +116,7 @@ export function JobRequestTab({ wallet }) {
 
   const requiredMissing = useMemo(() => getMissingRequiredQuestions(questions, answers), [questions, answers])
   const currentQuestion = questions[questionIndex]
+  const ipfsReady = ipfsPinataReady !== false
 
   const paymentState = useMemo(() => ({
     tokenAddress: normalizeAddress(tokenAddress),
@@ -148,6 +151,25 @@ export function JobRequestTab({ wallet }) {
       setPayoutAmount('100')
     }
   }, [tokenAddress, tokenOptions])
+
+  useEffect(() => {
+    let cancelled = false
+    async function refreshInfra() {
+      setInfraLoading(true)
+      try {
+        const health = await fetchHealthStatus()
+        if (!cancelled) {
+          setIpfsPinataReady(Boolean(health?.readiness?.ipfsPinata))
+        }
+      } catch {
+        if (!cancelled) setIpfsPinataReady(null)
+      } finally {
+        if (!cancelled) setInfraLoading(false)
+      }
+    }
+    refreshInfra()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     async function refreshAllowance() {
@@ -309,6 +331,10 @@ export function JobRequestTab({ wallet }) {
   async function handleUploadToIpfs() {
     if (!draft) return
     setError('')
+    if (!ipfsReady) {
+      setError('IPFS pinning is not ready: PINATA_JWT is missing on server. Add it in Render env vars and redeploy.')
+      return
+    }
     setIpfsUploading(true)
 
     try {
@@ -396,6 +422,7 @@ export function JobRequestTab({ wallet }) {
         {statusPill('step', String(step))}
         {statusPill('protocol', protocol?.label || 'not selected')}
         {statusPill('approval', approvalRequired ? 'required' : 'sufficient')}
+        {statusPill('ipfs pin', infraLoading ? 'checking…' : (ipfsReady ? 'ready' : 'missing PINATA_JWT'))}
         {!walletReady && (
           <button
             onClick={wallet?.connect}
@@ -406,6 +433,13 @@ export function JobRequestTab({ wallet }) {
           </button>
         )}
       </div>
+
+      {!infraLoading && !ipfsReady && (
+        <div className="rounded border border-amber-900 bg-amber-950/20 p-3 text-xs text-amber-200">
+          IPFS upload is disabled because PINATA_JWT is not configured on the server. This is why “Upload reviewed spec to IPFS” fails.
+          Add PINATA_JWT in Render env vars, redeploy, then retry Step 7.
+        </div>
+      )}
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
         <div className="text-xs text-slate-500 uppercase tracking-wider">Step 1 · Protocol selection</div>
@@ -587,8 +621,8 @@ export function JobRequestTab({ wallet }) {
         <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
           <div className="text-xs text-slate-500 uppercase tracking-wider">Step 7 · IPFS upload</div>
           {!ipfsResult ? (
-            <button onClick={handleUploadToIpfs} disabled={ipfsUploading} className="text-xs px-3 py-2 rounded border border-cyan-700 text-cyan-200 disabled:opacity-50">
-              {ipfsUploading ? 'Uploading to IPFS...' : 'Upload reviewed spec to IPFS'}
+            <button onClick={handleUploadToIpfs} disabled={ipfsUploading || !ipfsReady} className="text-xs px-3 py-2 rounded border border-cyan-700 text-cyan-200 disabled:opacity-50">
+              {ipfsUploading ? 'Uploading to IPFS...' : (!ipfsReady ? 'IPFS disabled (missing PINATA_JWT)' : 'Upload reviewed spec to IPFS')}
             </button>
           ) : (
             <div className="space-y-1 text-xs">

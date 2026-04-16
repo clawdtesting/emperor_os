@@ -2,34 +2,22 @@ import { RunnerToggle } from './RunnerToggle'
 
 const PLAYBOOK = [
   {
-    title: '1) Connect signing wallet',
-    detail: 'Connect MetaMask and confirm the operator account + chain before any irreversible action.',
-    tab: 'wallet',
-    cta: 'Open Wallet',
+    title: 'Create job',
+    detail: 'Use Request tab to compile spec, pin to IPFS, and generate unsigned createJob package for manual signing.',
+    tab: 'request',
+    cta: 'Open create job',
   },
   {
-    title: '2) Run AGIJobManager v1 lane',
-    detail: 'Handle legacy v1 jobs in the dedicated lane: monitor, select, and execute contract-legible artifacts.',
-    tab: 'jobs-v1',
-    cta: 'Open v1 lane',
+    title: 'Apply for job',
+    detail: 'Pick one lane based on contract family: Job-v1, Prime-v1, or Job-v2.',
+    tab: 'jobs',
+    cta: 'Open apply lanes',
   },
   {
-    title: '3) Run AGIJobManager v2 lane',
-    detail: 'Handle AGIJobManager v2 jobs separately from v1 so execution and validation lanes stay explicit.',
-    tab: 'jobs-v2',
-    cta: 'Open v2 lane',
-  },
-  {
-    title: '4) Execute operator lane',
-    detail: 'Use Prime + Ops + Actions tabs as the transaction package lifecycle lane. Never sign from runtime.',
-    tab: 'prime',
-    cta: 'Open Prime',
-  },
-  {
-    title: '5) Publish and verify delivery',
-    detail: 'Use request/IPFS utilities for structured payload creation, publication, and fetch-back verification.',
-    tab: 'ipfs',
-    cta: 'Open IPFS',
+    title: 'Validate job',
+    detail: 'Open a job and compare employer request vs agent output with scoring and dispute/approve decision support.',
+    tab: 'jobs',
+    cta: 'Open validation',
   },
 ]
 
@@ -56,11 +44,10 @@ export function MissionControlTab({ wallet, jobsCount, jobsV1Count, jobsV2Count,
       <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">Mission Command</div>
-            <h2 className="text-lg font-semibold text-slate-100">Top-level AGI operator cockpit</h2>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">Op-control visual map</div>
+            <h2 className="text-lg font-semibold text-slate-100">Create → Apply → Validate</h2>
             <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-              Single go-to surface for discovery, execution, and handoff. Runtime prepares artifacts and unsigned tx packages;
-              MetaMask + Ledger remain the human signing boundary.
+              One operational flow: create a real request, route through the right lane (v1 / Prime / v2), then validate with scoring before approve/dispute.
             </p>
           </div>
           <div className="rounded border border-blue-900 bg-blue-950/30 px-3 py-2">
@@ -79,7 +66,7 @@ export function MissionControlTab({ wallet, jobsCount, jobsV1Count, jobsV2Count,
 
       <RunnerToggle />
 
-      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid md:grid-cols-3 gap-3">
         {PLAYBOOK.map(step => (
           <div key={step.title} className="bg-slate-900 rounded-lg border border-slate-800 p-3 flex flex-col">
             <div className="text-sm font-semibold text-slate-100">{step.title}</div>
