@@ -787,24 +787,24 @@ export function JobRequestTab({ wallet }) {
             </div>
             <textarea
               rows={14}
-              value={mdRaw}
-              onChange={e => setMdRaw(e.target.value)}
+              value={importRaw}
+              onChange={e => setImportRaw(e.target.value)}
               placeholder={`development\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
             />
             <div className="flex items-center gap-3">
               <button
                 onClick={handleMdImport}
-                disabled={!mdRaw.trim()}
+                disabled={!importRaw.trim()}
                 className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
               >
                 Parse & import
               </button>
               {mdImported && <span className="text-xs text-emerald-400">Imported — review draft below</span>}
             </div>
-            {mdWarnings.length > 0 && (
+            {importWarnings.length > 0 && (
               <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
-                {mdWarnings.map((w, i) => <div key={i}>{w}</div>)}
+                {importWarnings.map((w, i) => <div key={i}>{w}</div>)}
               </div>
             )}
           </>
