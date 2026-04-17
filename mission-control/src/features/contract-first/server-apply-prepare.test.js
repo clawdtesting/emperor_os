@@ -219,3 +219,68 @@ test('POST /api/job-applications/prepare writes unsigned apply package, review m
   assert.equal(Array.isArray(state?.txPackages), true)
   assert.equal(state.txPackages.some((pkg) => pkg.action === 'apply' && pkg.unsignedTxPath === data.unsignedTxPath), true)
 })
+
+test('apply operator action finalization updates local apply state and reconcile returns summary', async (t) => {
+  cleanupApplyArtifacts()
+  const port = 3127
+  const proc = spawn('node', [SERVER], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      AGENT_SUBDOMAIN: 'lobster.agent.agi.eth',
+      AGENT_MERKLE_PROOF: '["0x1111111111111111111111111111111111111111111111111111111111111111"]',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  t.after(() => {
+    proc.kill('SIGTERM')
+    cleanupApplyArtifacts()
+  })
+
+  await waitForServer(`http://127.0.0.1:${port}/health`)
+
+  const prepareRes = await fetch(`http://127.0.0.1:${port}/api/job-applications/prepare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jobId: '77',
+      walletAddress: '0x2222222222222222222222222222222222222222',
+      contract: '0xB3AAeb69b630f0299791679c063d68d6687481d1',
+      tokenAddress: '0x5aFE3855358E112B5647B952709E6165e1c1eEEe',
+      bondAmountRaw: '1000000000000000000',
+      chainId: 1,
+    }),
+  })
+  assert.equal(prepareRes.status, 200)
+
+  const actionsRes = await fetch(`http://127.0.0.1:${port}/api/operator-actions`)
+  assert.equal(actionsRes.status, 200)
+  const actionsData = await actionsRes.json()
+  const applyAction = (actionsData.actions || []).find((item) => item.action === 'apply' && String(item.entityId) === '77')
+  assert.equal(Boolean(applyAction?.id), true)
+
+  const finalizeRes = await fetch(`http://127.0.0.1:${port}/api/operator-actions/${applyAction.id}/mark-finalized`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txHash: '0x' + 'ab'.repeat(32) }),
+  })
+  assert.equal(finalizeRes.status, 200)
+
+  const state = JSON.parse(readFileSync(APPLY_STATE_PATH, 'utf8'))
+  assert.equal(state?.status, 'applied')
+  assert.equal(state?.operatorTx?.apply?.txHash, '0x' + 'ab'.repeat(32))
+
+  const reconcileRes = await fetch(`http://127.0.0.1:${port}/api/job-applications/77/reconcile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contract: '0xB3AAeb69b630f0299791679c063d68d6687481d1' }),
+  })
+  assert.equal(reconcileRes.status, 200)
+  const reconcileData = await reconcileRes.json()
+  assert.equal(reconcileData?.ok, true)
+  assert.equal(reconcileData?.state?.status, 'applied')
+  assert.equal(reconcileData?.summary?.jobId, '77')
+  assert.equal(reconcileData?.summary?.operatorTx?.txHash, '0x' + 'ab'.repeat(32))
+})

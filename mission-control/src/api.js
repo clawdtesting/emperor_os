@@ -42,6 +42,25 @@ export async function prepareJobApplication(payload) {
   return data
 }
 
+export async function fetchJobApplicationStatus(jobId, contract = '') {
+  const qs = contract ? `?contract=${encodeURIComponent(contract)}` : ''
+  const res = await fetch(BASE + '/api/job-applications/' + encodeURIComponent(jobId) + '/status' + qs)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to load apply status')
+  return data
+}
+
+export async function reconcileJobApplication(jobId, payload = {}) {
+  const res = await fetch(BASE + '/api/job-applications/' + encodeURIComponent(jobId) + '/reconcile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to reconcile apply status')
+  return data
+}
+
 
 export async function pinJsonToIpfs(payload, name = 'mission-control-job-request.json') {
   const res = await fetch(BASE + '/api/ipfs/pin-json', {

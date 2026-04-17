@@ -1738,6 +1738,110 @@ function upsertV1ApplyTxPackage(jobId, pkg, patch = {}) {
   return { statePath, state: next }
 }
 
+function summarizeV1ApplyState(state = {}, context = null) {
+  const applyPkg = Array.isArray(state?.txPackages)
+    ? state.txPackages.find((entry) => String(entry?.action || '') === 'apply') || null
+    : null
+  const applyReceipt = Array.isArray(state?.receipts)
+    ? state.receipts.find((entry) => String(entry?.action || '') === 'apply') || null
+    : null
+  const operatorTx = state?.operatorTx?.apply || null
+  const applicantWallet = normalizeWalletAddress(state?.applyPackage?.walletAddress)
+  const onchainAssignedAgent = normalizeWalletAddress(context?.core?.assignedAgent)
+  const assignedToApplicant = Boolean(applicantWallet && onchainAssignedAgent && applicantWallet === onchainAssignedAgent)
+  const onchainStatus = context?.core ? deriveJobStatus(context.core, context.validation) : ''
+
+  return {
+    jobId: String(state?.jobId || ''),
+    status: String(state?.status || ''),
+    applicantWallet: applicantWallet || null,
+    agentSubdomain: String(state?.applyPackage?.agentSubdomain || ''),
+    bondAmountRaw: String(state?.applyPackage?.bondAmountRaw || ''),
+    operatorTx: operatorTx
+      ? {
+          txHash: String(operatorTx.txHash || ''),
+          broadcastAt: operatorTx.broadcastAt || null,
+          finalizedAt: operatorTx.finalizedAt || null,
+        }
+      : null,
+    txPackage: applyPkg
+      ? {
+          unsignedTxPath: applyPkg.unsignedTxPath || null,
+          reviewManifestPath: applyPkg.reviewManifestPath || null,
+          signed: Boolean(applyPkg.signed),
+          broadcastTxHash: applyPkg.broadcastTxHash || null,
+          finalizedAt: applyPkg.finalizedAt || null,
+        }
+      : null,
+    receipt: applyReceipt
+      ? {
+          txHash: applyReceipt.txHash || null,
+          status: applyReceipt.status || null,
+          broadcastAt: applyReceipt.broadcastAt || null,
+          finalizedAt: applyReceipt.finalizedAt || null,
+        }
+      : null,
+    onchain: {
+      status: onchainStatus || null,
+      assignedAgent: onchainAssignedAgent || null,
+      approvals: Number(context?.validation?.approvals || 0),
+      disapprovals: Number(context?.validation?.disapprovals || 0),
+    },
+    assignment: {
+      assignedToApplicant,
+      assignedToOther: Boolean(onchainAssignedAgent && applicantWallet && onchainAssignedAgent !== applicantWallet),
+    },
+  }
+}
+
+async function reconcileV1ApplyState(jobId, contractHint = '') {
+  const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
+  const state = readJsonSafe(statePath, null)
+  if (!state) {
+    const err = new Error('apply state not found')
+    err.status = 404
+    throw err
+  }
+  const applyPkg = Array.isArray(state.txPackages)
+    ? state.txPackages.find((entry) => String(entry?.action || '') === 'apply') || null
+    : null
+  if (!applyPkg) {
+    const err = new Error('apply package not found in state')
+    err.status = 404
+    throw err
+  }
+
+  const contract = /^0x[a-f0-9]{40}$/.test(String(contractHint || '').toLowerCase())
+    ? String(contractHint).toLowerCase()
+    : AGI_JOB_MANAGER_CONTRACT
+  const context = await fetchV1JobContext(jobId, contract)
+  const summaryBefore = summarizeV1ApplyState(state, context)
+  const now = new Date().toISOString()
+  const next = {
+    ...state,
+    source: 'agijobmanager',
+    applyReconciledAt: now,
+    applyReconciliation: summaryBefore,
+    updatedAt: now,
+  }
+
+  const hasFinalizedApply = Boolean(summaryBefore.operatorTx?.finalizedAt || summaryBefore.receipt?.status === 'finalized' || applyPkg?.finalizedAt)
+  if (summaryBefore.assignment.assignedToApplicant) {
+    next.status = 'assigned'
+    next.assignedAt = now
+    next.assignedAgent = summaryBefore.onchain.assignedAgent || state.assignedAgent || ''
+  } else if (hasFinalizedApply && ['application_pending_review', 'applied', 'assignment_pending', 'queued', 'scored'].includes(String(state.status || '').toLowerCase())) {
+    next.status = 'applied'
+  }
+
+  atomicWriteJson(statePath, next)
+  return {
+    statePath,
+    state: next,
+    summary: summarizeV1ApplyState(next, context),
+  }
+}
+
 function normalizeCompletionBriefPayload(payload, completionURI) {
   const data = payload && typeof payload === 'object' ? payload : {}
   const p = data.properties && typeof data.properties === 'object' ? data.properties : {}
@@ -3053,6 +3157,30 @@ app.post('/api/job-applications/prepare', async (req, res) => {
   }
 })
 
+app.get('/api/job-applications/:jobId/status', async (req, res) => {
+  try {
+    const jobId = String(req.params.jobId || '').trim()
+    if (!/^\d+$/.test(jobId)) return res.status(400).json({ error: 'jobId must be numeric' })
+    const contractHint = String(req.query.contract || '').trim().toLowerCase()
+    const result = await reconcileV1ApplyState(jobId, contractHint)
+    return res.json({ ok: true, state: result.state, summary: result.summary, statePath: result.statePath })
+  } catch (e) {
+    return res.status(e.status || 500).json({ error: e.message || 'Failed to load apply status' })
+  }
+})
+
+app.post('/api/job-applications/:jobId/reconcile', async (req, res) => {
+  try {
+    const jobId = String(req.params.jobId || '').trim()
+    if (!/^\d+$/.test(jobId)) return res.status(400).json({ error: 'jobId must be numeric' })
+    const contractHint = String(req.body?.contract || req.body?.contractHint || '').trim().toLowerCase()
+    const result = await reconcileV1ApplyState(jobId, contractHint)
+    return res.json({ ok: true, state: result.state, summary: result.summary, statePath: result.statePath })
+  } catch (e) {
+    return res.status(e.status || 500).json({ error: e.message || 'Failed to reconcile apply state' })
+  }
+})
+
 app.post('/api/job-requests', async (req, res) => {
   try {
     const specURI = normalizeAssetUri(req.body?.ipfsUri)
@@ -3854,6 +3982,20 @@ app.post('/api/operator-actions/:id/mark-finalized', (req, res) => {
         pkg.broadcastAt = pkg.broadcastAt || now
       }
       pkg.finalizedAt = now
+
+      if (action === 'apply') {
+        state.status = ['assigned', 'working', 'deliverable_ready', 'completion_pending_review', 'submitted', 'completed', 'disputed'].includes(String(state.status || '').toLowerCase())
+          ? state.status
+          : 'applied'
+        state.operatorTx = {
+          ...(state.operatorTx || {}),
+          apply: {
+            txHash: txHashRaw || pkg.broadcastTxHash || '',
+            broadcastAt: pkg.broadcastAt || now,
+            finalizedAt: now,
+          },
+        }
+      }
 
       const receipts = upsertReceipt(state.receipts, action, {
         txHash: txHashRaw || pkg.broadcastTxHash || '',

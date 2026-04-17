@@ -5,10 +5,12 @@ import {
   fetchPrimeValidatorTimeline,
   fetchProcurementArtifacts,
   fetchV2OperatorView,
+  fetchJobApplicationStatus,
   prepareJobApplication,
   preparePrimeValidatorCommit,
   preparePrimeValidatorReveal,
   prepareValidatorV1,
+  reconcileJobApplication,
   scoreCompletionUri,
   validateJobDryRun,
 } from '../api'
@@ -476,6 +478,9 @@ export function JobDetail({ job, wallet, onRunIntake }) {
   const [applyPrepareLoading, setApplyPrepareLoading] = useState(false)
   const [applyPrepareError, setApplyPrepareError] = useState('')
   const [applyPrepareResult, setApplyPrepareResult] = useState(null)
+  const [applyStatusLoading, setApplyStatusLoading] = useState(false)
+  const [applyStatusError, setApplyStatusError] = useState('')
+  const [applyStatusResult, setApplyStatusResult] = useState(null)
   const [validatorPrepareLoading, setValidatorPrepareLoading] = useState(false)
   const [validatorPrepareError, setValidatorPrepareError] = useState('')
   const [validatorPrepareResult, setValidatorPrepareResult] = useState(null)
@@ -513,6 +518,9 @@ export function JobDetail({ job, wallet, onRunIntake }) {
     setApplyPrepareLoading(false)
     setApplyPrepareError('')
     setApplyPrepareResult(null)
+    setApplyStatusLoading(false)
+    setApplyStatusError('')
+    setApplyStatusResult(null)
     setValidatorPrepareLoading(false)
     setValidatorPrepareError('')
     setValidatorPrepareResult(null)
@@ -618,6 +626,39 @@ export function JobDetail({ job, wallet, onRunIntake }) {
 
     return () => { cancelled = true }
   }, [isPrime, procurementId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!isV1 || !/^\d+$/.test(String(job?.jobId || ''))) {
+      setApplyStatusLoading(false)
+      setApplyStatusError('')
+      setApplyStatusResult(null)
+      return
+    }
+
+    ;(async () => {
+      setApplyStatusLoading(true)
+      setApplyStatusError('')
+      try {
+        const contractHint = String(job?.links?.contract || '').split('/').pop()
+        const data = await fetchJobApplicationStatus(
+          job.jobId,
+          /^0x[a-fA-F0-9]{40}$/.test(contractHint) ? contractHint : '',
+        )
+        if (!cancelled) setApplyStatusResult(data)
+      } catch (e) {
+        if (!cancelled) {
+          setApplyStatusResult(null)
+          const message = e.message || 'Failed to load apply status'
+          setApplyStatusError(/apply state not found|apply package not found/i.test(message) ? '' : message)
+        }
+      } finally {
+        if (!cancelled) setApplyStatusLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [isV1, job?.jobId, job?.links?.contract])
 
   if (!job) {
     return (
@@ -810,6 +851,16 @@ export function JobDetail({ job, wallet, onRunIntake }) {
         job,
       })
       setApplyPrepareResult(result)
+      try {
+        const refreshed = await fetchJobApplicationStatus(
+          job.jobId,
+          /^0x[a-fA-F0-9]{40}$/.test(contractHint) ? contractHint : '',
+        )
+        setApplyStatusResult(refreshed)
+        setApplyStatusError('')
+      } catch (statusErr) {
+        setApplyStatusError(statusErr.message || 'Failed to refresh apply status')
+      }
       if (result?.reviewManifestPath) openArtifactPath(result.reviewManifestPath)
       if (result?.unsignedTxPath) openArtifactPath(result.unsignedTxPath)
     } catch (e) {
@@ -817,6 +868,23 @@ export function JobDetail({ job, wallet, onRunIntake }) {
       setApplyPrepareError(e.message || 'Failed to prepare apply package')
     } finally {
       setApplyPrepareLoading(false)
+    }
+  }
+
+  async function handleReconcileApplyPackage() {
+    setApplyStatusLoading(true)
+    setApplyStatusError('')
+    try {
+      const contractHint = String(job?.links?.contract || '').split('/').pop()
+      const result = await reconcileJobApplication(job.jobId, {
+        contract: /^0x[a-fA-F0-9]{40}$/.test(contractHint) ? contractHint : undefined,
+      })
+      setApplyStatusResult(result)
+      setApplyPrepareResult((prev) => prev ? { ...prev, ...result.summary } : prev)
+    } catch (e) {
+      setApplyStatusError(e.message || 'Failed to reconcile apply status')
+    } finally {
+      setApplyStatusLoading(false)
     }
   }
 
@@ -1160,26 +1228,58 @@ export function JobDetail({ job, wallet, onRunIntake }) {
           </div>
         )}
 
-        {isV1 && job.status === 'Open' && (
+        {isV1 && (job.status === 'Open' || applyStatusResult?.summary || applyPrepareResult) && (
           <div className="rounded border border-cyan-900 bg-cyan-950/20 p-2 space-y-2">
             <div className="text-xs text-cyan-200 font-medium">Apply package (v1)</div>
             <div className="text-xs text-slate-400">
-              Build the unsigned approve + applyForJob package for this open v1 job. Op-control writes the unsigned tx bundle, review manifest, and state entry for operator review.
+              Build, track, and reconcile the unsigned approve + applyForJob package for this v1 job.
             </div>
             <div className="text-xs text-slate-400">
-              Applicant wallet: <span className="font-mono break-all">{wallet?.account || 'not connected'}</span>
+              Applicant wallet: <span className="font-mono break-all">{wallet?.account || applyStatusResult?.summary?.applicantWallet || 'not connected'}</span>
             </div>
-            <button
-              onClick={handlePrepareApplyPackage}
-              disabled={applyPrepareLoading || !/^\d+$/.test(String(job?.jobId || ''))}
-              className="w-full py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-medium"
-            >
-              {applyPrepareLoading ? 'Preparing…' : 'Prepare apply package'}
-            </button>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <button
+                onClick={handlePrepareApplyPackage}
+                disabled={applyPrepareLoading || !/^\d+$/.test(String(job?.jobId || '')) || job.status !== 'Open'}
+                className="w-full py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-medium"
+              >
+                {applyPrepareLoading ? 'Preparing…' : 'Prepare apply package'}
+              </button>
+              <button
+                onClick={handleReconcileApplyPackage}
+                disabled={applyStatusLoading || !/^\d+$/.test(String(job?.jobId || ''))}
+                className="w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-medium"
+              >
+                {applyStatusLoading ? 'Reconciling…' : 'Reconcile apply status'}
+              </button>
+            </div>
             {applyPrepareError && (
               <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{applyPrepareError}</div>
             )}
-            {applyPrepareResult && (
+            {applyStatusError && !applyPrepareError && (
+              <div className="text-xs text-amber-300 border border-amber-800 bg-amber-950/30 rounded p-2">{applyStatusError}</div>
+            )}
+            {applyStatusResult?.summary && (
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2 space-y-1 text-xs">
+                <div className="text-emerald-300">Local apply status: <span className="font-mono">{applyStatusResult.state?.status || applyStatusResult.summary?.status || 'unknown'}</span></div>
+                <div className="text-slate-300">Subdomain: <span className="font-mono break-all">{applyStatusResult.summary?.agentSubdomain || '—'}</span></div>
+                <div className="text-slate-300">Bond: <span className="font-mono">{applyStatusResult.summary?.bondAmountRaw || '0'}</span></div>
+                <div className="text-slate-300">On-chain status: <span className="font-mono">{applyStatusResult.summary?.onchain?.status || 'unknown'}</span></div>
+                <div className="text-slate-300">Assigned agent: <span className="font-mono break-all">{applyStatusResult.summary?.onchain?.assignedAgent || '—'}</span></div>
+                <div className="text-slate-300">Apply tx: <span className="font-mono break-all">{applyStatusResult.summary?.operatorTx?.txHash || applyStatusResult.summary?.receipt?.txHash || '—'}</span></div>
+                {applyStatusResult.summary?.assignment?.assignedToApplicant && (
+                  <div className="text-emerald-300">Assignment confirmed for applicant wallet.</div>
+                )}
+                {applyStatusResult.summary?.assignment?.assignedToOther && (
+                  <div className="text-amber-300">Job is assigned to a different wallet.</div>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => openArtifactPath(applyStatusResult.summary?.txPackage?.reviewManifestPath || applyPrepareResult?.reviewManifestPath)} className="px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30">Open review</button>
+                  <button onClick={() => openArtifactPath(applyStatusResult.summary?.txPackage?.unsignedTxPath || applyPrepareResult?.unsignedTxPath)} className="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Open unsigned tx</button>
+                </div>
+              </div>
+            )}
+            {!applyStatusResult?.summary && applyPrepareResult && (
               <div className="rounded border border-slate-800 bg-slate-950/40 p-2 space-y-1 text-xs">
                 <div className="text-emerald-300">Apply package ready.</div>
                 <div className="text-slate-300">Subdomain: <span className="font-mono break-all">{applyPrepareResult.agentSubdomain}</span></div>
