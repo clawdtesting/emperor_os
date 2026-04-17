@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "start": "node loops/AGIJobManager-v1/runner.js",
-    "test": "node tests/restart-reorg-integration.test.js && node validation/validation.test.js && node tests/test_prime_chaos_restart/run.js",
-    "validate:contracts": "node scripts/validate-contracts.mjs"
+    "test": "npm run test:protocol-runtime",
+    "validate:contracts": "node scripts/validate-contracts.mjs",
+    "test:protocol-runtime": "node tests/protocol-runtime/state-machines.test.js && node tests/protocol-runtime/prime-deadline-guards.test.js && node tests/protocol-runtime/artifact-and-unsigned.test.js && node tests/protocol-runtime/pipeline-progression.test.js"
   },
   "dependencies": {
     "dotenv": "^17.0.0",
