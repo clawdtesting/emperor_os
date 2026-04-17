@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   createJobRequest,
   fetchHealthStatus,
@@ -21,6 +21,7 @@ import {
 } from '../features/request/requestBuilder'
 import { PROTOCOL_OPTIONS, getProtocolOption } from '../features/request/protocolConfig'
 import { approveToken, formatUnits, parseUnits, readAllowance } from '../features/request/erc20'
+import { shouldAutoScrollToStep } from '../features/request/stepNavigation'
 import { parseMdJobSpec } from '../utils/parseMdJob'
 
 const STATIC_TOKEN_OPTIONS = [
@@ -199,6 +200,8 @@ export function JobRequestTab({ wallet }) {
   const [pushPending, setPushPending] = useState(false)
   const [pushTxHash, setPushTxHash] = useState('')
   const [pushStatus, setPushStatus] = useState('')
+  const stepRefs = useRef({})
+  const pendingScrollStepRef = useRef(null)
 
   const tokenOptions = useMemo(
     () => [{ ...STATIC_TOKEN_OPTIONS[0], address: normalizeAddress(wallet?.agiToken) || '' }],
@@ -237,6 +240,25 @@ export function JobRequestTab({ wallet }) {
 
   const currentQuestion = questions[questionIndex]
   const ipfsReady = ipfsPinataReady !== false
+
+  function registerStepRef(stepNumber) {
+    return (node) => {
+      if (node) stepRefs.current[stepNumber] = node
+      else delete stepRefs.current[stepNumber]
+    }
+  }
+
+  function moveToStep(nextStep) {
+    setStep((currentStep) => {
+      pendingScrollStepRef.current = shouldAutoScrollToStep({
+        previousStep: currentStep,
+        nextStep,
+      })
+        ? nextStep
+        : null
+      return nextStep
+    })
+  }
 
   const paymentState = useMemo(
     () => ({
@@ -374,6 +396,21 @@ export function JobRequestTab({ wallet }) {
     refreshAllowance()
   }, [walletReady, wallet, protocol, tokenAddress, approveTxHash])
 
+  useEffect(() => {
+    const scrollStep = pendingScrollStepRef.current
+    if (!scrollStep) return
+
+    pendingScrollStepRef.current = null
+    const node = stepRefs.current[scrollStep]
+    if (!node) return
+
+    const timer = setTimeout(() => {
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
+
+    return () => clearTimeout(timer)
+  }, [step])
+
   function resetAfterProtocolPaymentChange() {
     setCategory('general')
     setRawRequest('')
@@ -393,7 +430,7 @@ export function JobRequestTab({ wallet }) {
     setPushPending(false)
     setPushTxHash('')
     setPushStatus('')
-    setStep(4)
+    moveToStep(4)
   }
 
   function validateProtocolAndPayment() {
@@ -437,7 +474,7 @@ export function JobRequestTab({ wallet }) {
     setQuestions(flow)
     setAnswers({})
     setQuestionIndex(0)
-    setStep(5)
+    moveToStep(5)
   }
 
   function handleMdImport() {
@@ -496,7 +533,7 @@ export function JobRequestTab({ wallet }) {
         setEditingDeliverables(toLineBlock(importedDraft.deliverables))
         setEditingAcceptance(toLineBlock(importedDraft.acceptanceCriteria))
         setMdImported(true)
-        setStep(6)
+        moveToStep(6)
         return
       } catch (e) {
         setError(e.message || 'Failed to parse JSON job spec.')
@@ -560,7 +597,7 @@ export function JobRequestTab({ wallet }) {
     setEditingDeliverables(toLineBlock(parsed.deliverables))
     setEditingAcceptance(toLineBlock(parsed.acceptanceCriteria))
     setMdImported(true)
-    setStep(6)
+    moveToStep(6)
   }
 
   async function handleApproveToken() {
@@ -623,7 +660,7 @@ export function JobRequestTab({ wallet }) {
       setEditingScope(toLineBlock(nextDraft.scope))
       setEditingDeliverables(toLineBlock(nextDraft.deliverables))
       setEditingAcceptance(toLineBlock(nextDraft.acceptanceCriteria))
-      setStep(6)
+      moveToStep(6)
       return
     }
 
@@ -660,7 +697,7 @@ export function JobRequestTab({ wallet }) {
       setImportedCanonicalSpec(toCanonicalSpecFromDraft(nextDraft, wallet?.account || ''))
     }
     setError('')
-    setStep(7)
+    moveToStep(7)
   }
 
   async function handleUploadToIpfs() {
@@ -699,7 +736,7 @@ export function JobRequestTab({ wallet }) {
         uri: ipfs.uri,
         gatewayUrl: ipfs.gatewayUrl || '',
       })
-      setStep(8)
+      moveToStep(8)
     } catch (e) {
       setError(e.message || 'IPFS upload failed.')
     } finally {
@@ -774,7 +811,7 @@ export function JobRequestTab({ wallet }) {
       )
 
       setResult({ ...response, publishPayload })
-      setStep(9)
+      moveToStep(9)
     } catch (e) {
       setError(e.message || 'Create job request failed.')
     } finally {
@@ -882,7 +919,7 @@ export function JobRequestTab({ wallet }) {
         </div>
       )}
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+      <div ref={registerStepRef(1)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 1 · Protocol selection
         </div>
@@ -911,7 +948,7 @@ export function JobRequestTab({ wallet }) {
         </div>
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+      <div ref={registerStepRef(2)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 2 · Payment token and payout
         </div>
@@ -992,7 +1029,7 @@ export function JobRequestTab({ wallet }) {
         <div className="text-xs text-slate-400 break-words">Preview: {payoutPreview}</div>
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2 min-w-0">
+      <div ref={registerStepRef(3)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 3 · Token approval
         </div>
@@ -1033,7 +1070,7 @@ export function JobRequestTab({ wallet }) {
         )}
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4 min-w-0">
+      <div ref={registerStepRef(4)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 4 · Request input
         </div>
@@ -1125,7 +1162,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       </div>
 
       {step >= 5 && currentQuestion && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+        <div ref={registerStepRef(5)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 5 · Guided questions ({questionIndex + 1}/{questions.length})
           </div>
@@ -1170,7 +1207,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {step >= 6 && draft && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+        <div ref={registerStepRef(6)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 6 · Draft spec{' '}
             {mdImported && (
@@ -1302,7 +1339,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {step >= 7 && draft && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+        <div ref={registerStepRef(7)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 7 · IPFS upload
           </div>
@@ -1338,7 +1375,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {step >= 8 && draft && ipfsResult && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+        <div ref={registerStepRef(8)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 8 · Generate sign-ready request package
           </div>
@@ -1364,7 +1401,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {step >= 9 && result?.unsignedTxPath && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+        <div ref={registerStepRef(9)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 9 · Final push job on-chain
           </div>
