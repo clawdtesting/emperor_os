@@ -295,7 +295,7 @@ function LlmProviderPicker() {
   )
 }
 
-export default function OperationsLane({ onOpenEntity = () => {} }) {
+export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdated = () => {} }) {
   const [data, setData] = useState(null)
   const [operatorActions, setOperatorActions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -346,20 +346,22 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
       const stage = item.queueStage || 'needs_signature'
       if (!item.id) throw new Error('Missing operator action id')
 
+      let transitionResult = null
       if (stage === 'signed_awaiting_broadcast') {
         const txHash = window.prompt('Broadcast tx hash (required, 0x...)', '')
         if (txHash === null) return
-        await markOperatorActionBroadcast(item.id, String(txHash || '').trim())
+        transitionResult = await markOperatorActionBroadcast(item.id, String(txHash || '').trim())
       } else if (stage === 'broadcast_awaiting_finalization') {
         const txHash = window.prompt('Finalized tx hash (optional, leave blank to keep existing)', '')
         if (txHash === null) return
-        await markOperatorActionFinalized(item.id, String(txHash || '').trim())
+        transitionResult = await markOperatorActionFinalized(item.id, String(txHash || '').trim())
       } else {
-        await markOperatorActionSigned(item.id)
+        transitionResult = await markOperatorActionSigned(item.id)
       }
 
       setQueueMessage(`Updated: ${item.lane}/${item.entityId} ${item.action}`)
       await fetchLane()
+      await onActionUpdated(item, transitionResult)
     } catch (err) {
       setQueueMessage(`Transition failed: ${err.message}`)
     } finally {

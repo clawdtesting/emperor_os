@@ -16,6 +16,7 @@ import { ActionsPanel } from './components/ActionsPanel'
 import { PipelineRegistry } from './components/PipelineRegistry'
 import { MissionControlTab } from './components/MissionControlTab'
 import { useWallet } from './hooks/useWallet'
+import { resolveOperatorEntityCandidate } from './features/operator-actions/entity-navigation'
 
 function compareJobIdDesc(a, b) {
   try {
@@ -70,53 +71,23 @@ export default function App() {
     if (window.innerWidth < 768) setTab('detail')
   }
 
-  function extractNumericTail(value) {
-    const raw = String(value || '').trim()
-    if (!raw) return null
-    const m = raw.match(/(\d+)$/)
-    return m ? m[1] : null
-  }
-
-  function handleOpenOperatorEntity(actionItem) {
-    const lane = String(actionItem?.lane || '').toLowerCase()
-    const entityId = String(actionItem?.entityId || '').trim()
-    const entityTail = extractNumericTail(entityId)
-
-    let candidate = null
-
-    if (lane === 'prime') {
-      candidate = jobsDesc.find((j) => {
-        if (String(j?.source || '').toLowerCase() !== 'agiprimediscovery') return false
-        const pId = String(j?.procurementId || '').trim()
-        const jId = String(j?.jobId || '').trim()
-        return pId === entityId || jId === entityId || jId === `P-${entityId}`
-      }) || null
-      if (!candidate) {
-        setTab('prime')
-        return
-      }
-    } else {
-      const wantV2 = lane === 'v2'
-      candidate = jobsDesc.find((j) => {
-        const source = String(j?.source || '').toLowerCase()
-        if (wantV2 && source !== 'agijobmanager-v2') return false
-        if (!wantV2 && source === 'agijobmanager-v2') return false
-
-        const jId = String(j?.jobId || '').trim()
-        if (jId === entityId) return true
-
-        const jTail = extractNumericTail(jId)
-        return entityTail && jTail && jTail === entityTail
-      }) || null
-
-      if (!candidate) {
-        setTab(wantV2 ? 'jobs-v2' : 'jobs-v1')
-        return
-      }
+  function handleOpenOperatorEntity(actionItem, jobsOverride = jobsDesc) {
+    const { job: candidate, tab: nextTab } = resolveOperatorEntityCandidate(jobsOverride, actionItem)
+    if (!candidate) {
+      setTab(nextTab)
+      return
     }
 
     setSelected(candidate)
-    setTab('detail')
+    setTab(nextTab)
+  }
+
+  async function handleOperatorActionUpdated(actionItem) {
+    const refreshedJobs = await refetch()
+    const jobsSnapshot = Array.isArray(refreshedJobs) && refreshedJobs.length > 0
+      ? [...refreshedJobs].sort(compareJobIdDesc)
+      : jobsDesc
+    handleOpenOperatorEntity(actionItem, jobsSnapshot)
   }
 
   return (
@@ -325,7 +296,7 @@ export default function App() {
 
         {tab === 'ops' && (
           <div className="bg-slate-900 rounded-lg border border-slate-800">
-            <OperationsLane onOpenEntity={handleOpenOperatorEntity} />
+            <OperationsLane onOpenEntity={handleOpenOperatorEntity} onActionUpdated={handleOperatorActionUpdated} />
           </div>
         )}
 

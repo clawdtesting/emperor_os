@@ -47,9 +47,11 @@ export function useJobs() {
       })
       setError(null)
       setCountdown(Math.floor(POLL_INTERVAL / 1000))
+      return data
     } catch (e) {
       setError(e.message)
       addEvent('error', e.message)
+      return null
     } finally {
       setLoading(false)
     }

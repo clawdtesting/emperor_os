@@ -1,0 +1,46 @@
+function extractNumericTail(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const m = raw.match(/(\d+)$/)
+  return m ? m[1] : null
+}
+
+export function resolveOperatorEntityCandidate(jobs, actionItem) {
+  const jobsDesc = Array.isArray(jobs) ? jobs : []
+  const lane = String(actionItem?.lane || '').toLowerCase()
+  const entityId = String(actionItem?.entityId || '').trim()
+  const entityTail = extractNumericTail(entityId)
+
+  let candidate = null
+
+  if (lane === 'prime') {
+    candidate = jobsDesc.find((j) => {
+      if (String(j?.source || '').toLowerCase() !== 'agiprimediscovery') return false
+      const pId = String(j?.procurementId || '').trim()
+      const jId = String(j?.jobId || '').trim()
+      return pId === entityId || jId === entityId || jId === `P-${entityId}`
+    }) || null
+    return {
+      job: candidate,
+      tab: candidate ? 'detail' : 'prime',
+    }
+  }
+
+  const wantV2 = lane === 'v2'
+  candidate = jobsDesc.find((j) => {
+    const source = String(j?.source || '').toLowerCase()
+    if (wantV2 && source !== 'agijobmanager-v2') return false
+    if (!wantV2 && source === 'agijobmanager-v2') return false
+
+    const jId = String(j?.jobId || '').trim()
+    if (jId === entityId) return true
+
+    const jTail = extractNumericTail(jId)
+    return entityTail && jTail && jTail === entityTail
+  }) || null
+
+  return {
+    job: candidate,
+    tab: candidate ? 'detail' : (wantV2 ? 'jobs-v2' : 'jobs-v1'),
+  }
+}
