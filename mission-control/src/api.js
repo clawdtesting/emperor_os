@@ -31,6 +31,17 @@ export async function createJobRequest(payload) {
   return data
 }
 
+export async function prepareJobApplication(payload) {
+  const res = await fetch(BASE + '/api/job-applications/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to prepare apply package')
+  return data
+}
+
 
 export async function pinJsonToIpfs(payload, name = 'mission-control-job-request.json') {
   const res = await fetch(BASE + '/api/ipfs/pin-json', {

@@ -5,6 +5,7 @@ import {
   fetchPrimeValidatorTimeline,
   fetchProcurementArtifacts,
   fetchV2OperatorView,
+  prepareJobApplication,
   preparePrimeValidatorCommit,
   preparePrimeValidatorReveal,
   prepareValidatorV1,
@@ -472,6 +473,9 @@ export function JobDetail({ job, wallet, onRunIntake }) {
   const [validationError, setValidationError] = useState('')
   const [validationSummary, setValidationSummary] = useState(null)
   const [showAllValidationFailedChecks, setShowAllValidationFailedChecks] = useState(false)
+  const [applyPrepareLoading, setApplyPrepareLoading] = useState(false)
+  const [applyPrepareError, setApplyPrepareError] = useState('')
+  const [applyPrepareResult, setApplyPrepareResult] = useState(null)
   const [validatorPrepareLoading, setValidatorPrepareLoading] = useState(false)
   const [validatorPrepareError, setValidatorPrepareError] = useState('')
   const [validatorPrepareResult, setValidatorPrepareResult] = useState(null)
@@ -506,6 +510,9 @@ export function JobDetail({ job, wallet, onRunIntake }) {
     setValidationError('')
     setValidationSummary(null)
     setShowAllValidationFailedChecks(false)
+    setApplyPrepareLoading(false)
+    setApplyPrepareError('')
+    setApplyPrepareResult(null)
     setValidatorPrepareLoading(false)
     setValidatorPrepareError('')
     setValidatorPrepareResult(null)
@@ -789,6 +796,28 @@ export function JobDetail({ job, wallet, onRunIntake }) {
     if (!p) return
     const url = `/api/operator-actions/file?path=${encodeURIComponent(p)}`
     window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  async function handlePrepareApplyPackage() {
+    setApplyPrepareLoading(true)
+    setApplyPrepareError('')
+    try {
+      const contractHint = String(job?.links?.contract || '').split('/').pop()
+      const result = await prepareJobApplication({
+        jobId: job.jobId,
+        walletAddress: wallet?.account || '',
+        contract: /^0x[a-fA-F0-9]{40}$/.test(contractHint) ? contractHint : undefined,
+        job,
+      })
+      setApplyPrepareResult(result)
+      if (result?.reviewManifestPath) openArtifactPath(result.reviewManifestPath)
+      if (result?.unsignedTxPath) openArtifactPath(result.unsignedTxPath)
+    } catch (e) {
+      setApplyPrepareResult(null)
+      setApplyPrepareError(e.message || 'Failed to prepare apply package')
+    } finally {
+      setApplyPrepareLoading(false)
+    }
   }
 
   async function handlePrepareValidatorPackage() {
@@ -1126,6 +1155,40 @@ export function JobDetail({ job, wallet, onRunIntake }) {
                       : `+${validationSummary.failedChecks.length - 5} more failed checks (click to expand)`}
                   </button>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {isV1 && job.status === 'Open' && (
+          <div className="rounded border border-cyan-900 bg-cyan-950/20 p-2 space-y-2">
+            <div className="text-xs text-cyan-200 font-medium">Apply package (v1)</div>
+            <div className="text-xs text-slate-400">
+              Build the unsigned approve + applyForJob package for this open v1 job. Op-control writes the unsigned tx bundle, review manifest, and state entry for operator review.
+            </div>
+            <div className="text-xs text-slate-400">
+              Applicant wallet: <span className="font-mono break-all">{wallet?.account || 'not connected'}</span>
+            </div>
+            <button
+              onClick={handlePrepareApplyPackage}
+              disabled={applyPrepareLoading || !/^\d+$/.test(String(job?.jobId || ''))}
+              className="w-full py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-medium"
+            >
+              {applyPrepareLoading ? 'Preparing…' : 'Prepare apply package'}
+            </button>
+            {applyPrepareError && (
+              <div className="text-xs text-red-300 border border-red-800 bg-red-950/30 rounded p-2">{applyPrepareError}</div>
+            )}
+            {applyPrepareResult && (
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2 space-y-1 text-xs">
+                <div className="text-emerald-300">Apply package ready.</div>
+                <div className="text-slate-300">Subdomain: <span className="font-mono break-all">{applyPrepareResult.agentSubdomain}</span></div>
+                <div className="text-slate-300">Bond: <span className="font-mono">{applyPrepareResult.bondAmountRaw || '0'}</span></div>
+                <div className="text-slate-300">Allowance: <span className="font-mono">{applyPrepareResult.allowance?.allowanceRaw || '0'}</span></div>
+                <div className="flex gap-2">
+                  <button onClick={() => openArtifactPath(applyPrepareResult.reviewManifestPath)} className="px-2 py-1 rounded border border-blue-800 text-blue-300 hover:bg-blue-950/30">Open review</button>
+                  <button onClick={() => openArtifactPath(applyPrepareResult.unsignedTxPath)} className="px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Open unsigned tx</button>
+                </div>
               </div>
             )}
           </div>

@@ -103,3 +103,87 @@ export function buildUnsignedCreateJobTxPackage({
     ],
   }
 }
+
+export function buildUnsignedApplyJobTxPackage({
+  contract,
+  tokenAddress,
+  chainId,
+  jobId,
+  bondAmountRaw,
+  agentSubdomain,
+  merkleProof = [],
+  approveCalldata = '',
+  applyCalldata = '',
+} = {}) {
+  const manager = String(contract || '').toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(manager)) throw new Error('contract must be a valid address')
+
+  const token = String(tokenAddress || '').toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(token)) throw new Error('tokenAddress must be a valid address')
+
+  const normalizedJobId = String(jobId || '').trim()
+  if (!/^\d+$/.test(normalizedJobId)) throw new Error('jobId must be numeric')
+
+  const bond = String(bondAmountRaw || '').trim()
+  if (!/^\d+$/.test(bond)) throw new Error('bondAmountRaw must be uint string')
+
+  const subdomain = String(agentSubdomain || '').trim()
+  if (!subdomain) throw new Error('agentSubdomain is required')
+
+  const proof = Array.isArray(merkleProof)
+    ? merkleProof.map((item) => String(item || '').trim().toLowerCase())
+    : []
+  if (!proof.length) throw new Error('merkleProof is required')
+  if (proof.some((item) => !/^0x[a-f0-9]{64}$/.test(item))) {
+    throw new Error('merkleProof must be an array of bytes32 hex values')
+  }
+
+  const createdAt = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+
+  return {
+    schema: 'op-control/unsigned-tx/v1',
+    lane: 'v1',
+    action: 'apply',
+    kind: 'requestJobApplication',
+    jobId: normalizedJobId,
+    agentSubdomain: subdomain,
+    bondAmountRaw: bond,
+    tokenAddress: token,
+    to: manager,
+    chainId: String(chainId || '0x1'),
+    value: '0x0',
+    transactions: [
+      {
+        label: 'approve-bond',
+        to: token,
+        value: '0x0',
+        method: 'approve(address,uint256)',
+        args: {
+          spender: manager,
+          amount: bond,
+        },
+        data: String(approveCalldata || ''),
+      },
+      {
+        label: 'apply-for-job',
+        to: manager,
+        value: '0x0',
+        method: 'applyForJob(uint256,string,bytes32[])',
+        args: {
+          jobId: normalizedJobId,
+          subdomain,
+          proof,
+        },
+        data: String(applyCalldata || ''),
+      },
+    ],
+    createdAt,
+    expiresAt,
+    preconditions: [
+      'Confirm AGIALPHA approve amount covers the required agent bond.',
+      'Confirm jobId, agent subdomain, and merkle proof match the intended applicant identity.',
+      'Sign the approve transaction first, then the applyForJob transaction, with the applicant wallet only.',
+    ],
+  }
+}

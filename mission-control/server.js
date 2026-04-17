@@ -9,7 +9,7 @@ import { tmpdir } from 'os'
 import { createHash } from 'crypto'
 import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
-import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage } from './lib/contract-first.js'
+import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage } from './lib/contract-first.js'
 import { listProviders, getPreferredProvider, setPreferredProvider } from '../agent/llm-router.js'
 
 const app = express()
@@ -1648,6 +1648,96 @@ async function fetchV1JobContext(jobId, contractAddr) {
   }
 }
 
+function parseMerkleProofInput(input) {
+  if (Array.isArray(input)) return input
+  const raw = String(input || '').trim()
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+async function readV1AgiTokenAddress(contractAddr, iface) {
+  try {
+    const fn = iface.getFunction('agiToken()')
+    const data = iface.encodeFunctionData(fn, [])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult(fn, raw)
+    const tokenAddress = String(decoded?.[0] || '').toLowerCase()
+    if (/^0x[a-f0-9]{40}$/.test(tokenAddress)) return tokenAddress
+  } catch {}
+  return ''
+}
+
+async function readV1AgentBondRaw(contractAddr, iface) {
+  try {
+    const fn = iface.getFunction('agentBond()')
+    const data = iface.encodeFunctionData(fn, [])
+    const raw = await rpcEthCall(contractAddr, data)
+    const decoded = iface.decodeFunctionResult(fn, raw)
+    return String(decoded?.[0] || '0')
+  } catch {
+    return '0'
+  }
+}
+
+async function readV1Allowance({ walletAddress, contractAddr, tokenAddress }) {
+  const empty = { allowanceRaw: '0', tokenAddress: tokenAddress || '', source: 'unavailable' }
+  if (!walletAddress || !/^0x[a-f0-9]{40}$/.test(contractAddr) || !/^0x[a-f0-9]{40}$/.test(tokenAddress)) return empty
+  try {
+    const owner = walletAddress.replace(/^0x/, '').padStart(64, '0')
+    const spender = contractAddr.replace(/^0x/, '').padStart(64, '0')
+    const allowanceRawHex = await rpcEthCall(tokenAddress, `0xdd62ed3e${owner}${spender}`)
+    const allowanceRaw = BigInt(String(allowanceRawHex || '0x0')).toString()
+    return { allowanceRaw, tokenAddress, source: 'onchain:erc20.allowance' }
+  } catch {
+    return empty
+  }
+}
+
+function upsertV1ApplyTxPackage(jobId, pkg, patch = {}) {
+  mkdirSync(AGENT_STATE_DIR, { recursive: true })
+  const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
+  const state = readJsonSafe(statePath, null) || {
+    jobId: String(jobId),
+    source: 'agijobmanager',
+    txPackages: [],
+    receipts: [],
+    createdAt: new Date().toISOString(),
+  }
+
+  const txPackages = Array.isArray(state.txPackages) ? [...state.txPackages] : []
+  const keep = txPackages.filter((entry) => !(String(entry?.action || '') === 'apply' && entry?.opControlPreparedApply))
+  keep.push({
+    action: 'apply',
+    file: pkg.unsignedTxPath,
+    unsignedTxPath: pkg.unsignedTxPath,
+    reviewManifestPath: pkg.reviewManifestPath,
+    createdAt: pkg.createdAt,
+    expiresAt: pkg.expiresAt,
+    fresh: Date.parse(pkg.expiresAt) > Date.now(),
+    expired: Date.parse(pkg.expiresAt) <= Date.now(),
+    signed: false,
+    opControlPreparedApply: true,
+    checklist: pkg.checklist,
+  })
+
+  const next = {
+    ...state,
+    ...patch,
+    jobId: String(jobId),
+    source: 'agijobmanager',
+    status: 'application_pending_review',
+    txPackages: keep,
+    updatedAt: new Date().toISOString(),
+  }
+  atomicWriteJson(statePath, next)
+  return { statePath, state: next }
+}
+
 function normalizeCompletionBriefPayload(payload, completionURI) {
   const data = payload && typeof payload === 'object' ? payload : {}
   const p = data.properties && typeof data.properties === 'object' ? data.properties : {}
@@ -2788,6 +2878,180 @@ function toWei18(amount) {
   const wei = BigInt(whole) * 10n ** 18n + BigInt(frac || '0')
   return wei.toString()
 }
+
+app.post('/api/job-applications/prepare', async (req, res) => {
+  try {
+    const rawJobId = String(req.body?.jobId || '').trim()
+    if (!/^\d+$/.test(rawJobId)) {
+      return res.status(422).json({ error: 'jobId must be numeric' })
+    }
+
+    const agentSubdomain = String(req.body?.agentSubdomain || process.env.AGENT_SUBDOMAIN || '').trim()
+    if (!agentSubdomain) {
+      return res.status(422).json({ error: 'agentSubdomain is required to prepare apply package' })
+    }
+
+    const merkleProof = parseMerkleProofInput(req.body?.merkleProof ?? process.env.AGENT_MERKLE_PROOF)
+    if (!Array.isArray(merkleProof) || merkleProof.length === 0) {
+      return res.status(422).json({ error: 'merkleProof is required to prepare apply package' })
+    }
+
+    const contract = String(req.body?.contract || req.body?.contractHint || AGI_JOB_MANAGER_CONTRACT || '').toLowerCase()
+    if (!/^0x[a-f0-9]{40}$/.test(contract)) {
+      return res.status(422).json({ error: 'valid contract address is required' })
+    }
+
+    const { ethers, iface } = await getV1ContractInterface()
+    const chainIdNum = Number(req.body?.chainId || 1)
+    const chainId = Number.isFinite(chainIdNum) && chainIdNum > 0 ? `0x${Math.floor(chainIdNum).toString(16)}` : '0x1'
+
+    let tokenAddress = String(req.body?.tokenAddress || '').trim().toLowerCase()
+    if (!/^0x[a-f0-9]{40}$/.test(tokenAddress)) {
+      tokenAddress = await readV1AgiTokenAddress(contract, iface)
+    }
+    if (!/^0x[a-f0-9]{40}$/.test(tokenAddress)) {
+      return res.status(502).json({ error: 'failed to resolve AGIALPHA token address for v1 apply package' })
+    }
+
+    let bondAmountRaw = String(req.body?.bondAmountRaw || '').trim()
+    if (!/^\d+$/.test(bondAmountRaw)) {
+      bondAmountRaw = await readV1AgentBondRaw(contract, iface)
+    }
+    if (!/^\d+$/.test(bondAmountRaw)) {
+      return res.status(502).json({ error: 'failed to resolve agent bond amount for v1 apply package' })
+    }
+
+    const walletAddress = normalizeWalletAddress(req.body?.walletAddress)
+    const allowance = await readV1Allowance({ walletAddress, contractAddr: contract, tokenAddress })
+
+    const existingStatePath = join(AGENT_STATE_DIR, `${rawJobId}.json`)
+    const existingState = readJsonSafe(existingStatePath, null)
+    const existingStatus = String(existingState?.status || '').trim().toLowerCase()
+    const allowedExistingStatuses = new Set(['', 'queued', 'scored', 'application_pending_review', 'open'])
+    if (existingState && !allowedExistingStatuses.has(existingStatus)) {
+      return res.status(409).json({ error: `existing state is not open for apply packaging (status=${existingState.status || 'unknown'})` })
+    }
+
+    const requestedJobStatus = String(req.body?.job?.status || '').trim()
+    if (requestedJobStatus && requestedJobStatus !== 'Open') {
+      return res.status(409).json({ error: `job is not open for apply packaging (status=${requestedJobStatus})` })
+    }
+
+    const context = await fetchV1JobContext(rawJobId, contract)
+    if (context?.core) {
+      const onchainStatus = deriveJobStatus(context.core, context.validation)
+      if (onchainStatus !== 'Open') {
+        return res.status(409).json({ error: `job is not open for apply packaging (onchain status=${onchainStatus})` })
+      }
+    }
+
+    const erc20Iface = new ethers.Interface(['function approve(address spender, uint256 amount)'])
+    const approveCalldata = erc20Iface.encodeFunctionData('approve', [contract, BigInt(bondAmountRaw)])
+    const applyFn = iface.getFunction('applyForJob(uint256,string,bytes32[])')
+    if (!applyFn) return res.status(500).json({ error: 'applyForJob function missing in v1 ABI' })
+    const applyCalldata = iface.encodeFunctionData(applyFn, [BigInt(rawJobId), agentSubdomain, merkleProof])
+
+    const txPkg = buildUnsignedApplyJobTxPackage({
+      contract,
+      tokenAddress,
+      chainId,
+      jobId: rawJobId,
+      bondAmountRaw,
+      agentSubdomain,
+      merkleProof,
+      approveCalldata,
+      applyCalldata,
+    })
+
+    const dir = join(ARTIFACTS_DIR, 'applications', `job_${rawJobId}`)
+    mkdirSync(dir, { recursive: true })
+    const unsignedTxPath = join(dir, 'unsigned_apply_tx.json')
+    const reviewManifestPath = join(dir, 'review_manifest_apply.json')
+    const payloadSnapshotPath = join(dir, 'prepare_apply_payload_snapshot.json')
+
+    writeJsonFile(unsignedTxPath, txPkg)
+    writeJsonFile(payloadSnapshotPath, req.body || {})
+
+    const checklist = [
+      'Confirm applicant wallet + agent subdomain are the intended identity for this job.',
+      'Confirm merkle proof elements and jobId are correct before signing.',
+      'Sign approve first, then applyForJob, with the applicant wallet only.',
+    ]
+
+    writeJsonFile(reviewManifestPath, {
+      schema: 'op-control/review-manifest/v1',
+      lane: 'v1',
+      action: 'apply',
+      generatedAt: new Date().toISOString(),
+      guardrails: {
+        contract,
+        chainId,
+        tokenAddress,
+        agentSubdomain,
+        jobId: rawJobId,
+      },
+      prechecks: {
+        walletAddress: walletAddress || null,
+        allowanceRaw: allowance.allowanceRaw,
+        allowanceSource: allowance.source,
+        bondAmountRaw,
+        allowanceSufficient: walletAddress ? BigInt(allowance.allowanceRaw || '0') >= BigInt(bondAmountRaw) : null,
+      },
+      checklist,
+      files: {
+        unsignedTxPath,
+        payloadSnapshotPath,
+      },
+      request: {
+        jobId: rawJobId,
+        agentSubdomain,
+        merkleProof,
+        tokenAddress,
+        bondAmountRaw,
+      },
+    })
+
+    const { statePath } = upsertV1ApplyTxPackage(rawJobId, {
+      action: 'apply',
+      unsignedTxPath,
+      reviewManifestPath,
+      createdAt: txPkg.createdAt,
+      expiresAt: txPkg.expiresAt,
+      checklist,
+    }, {
+      employer: String(req.body?.job?.employer || ''),
+      assignedAgent: String(req.body?.job?.assignedAgent || ''),
+      applyPreparedAt: new Date().toISOString(),
+      applyPackage: {
+        unsignedTxPath,
+        reviewManifestPath,
+        payloadSnapshotPath,
+        walletAddress: walletAddress || null,
+        tokenAddress,
+        bondAmountRaw,
+        agentSubdomain,
+        allowance,
+      },
+    })
+
+    return res.json({
+      ok: true,
+      action: 'apply',
+      unsignedTxPath,
+      reviewManifestPath,
+      payloadSnapshotPath,
+      statePath,
+      tokenAddress,
+      bondAmountRaw,
+      agentSubdomain,
+      merkleProof,
+      allowance,
+      checklist,
+    })
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'Failed to prepare apply package' })
+  }
+})
 
 app.post('/api/job-requests', async (req, res) => {
   try {
