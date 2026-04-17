@@ -192,8 +192,10 @@ All contracts on **Ethereum Mainnet (chainId: 1)**. All chain access from the ru
 
 | Contract | Address | Purpose |
 |---|---|---|
-| **AGIJobManager** | [`0xB3AAeb69b630f0299791679c063d68d6687481d1`](https://etherscan.io/address/0xB3AAeb69b630f0299791679c063d68d6687481d1) | Job posting, escrow, assignment, completion settlement, validator voting, NFT minting |
-| **AGIJobDiscoveryPrime** | [`0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29`](https://etherscan.io/address/0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29) | Premium procurement layer: commit-reveal applications, finalist shortlisting, blind validator scoring, trial submission, winner designation |
+| **AGIJobManager v1** | [`0xB3AAeb69b630f0299791679c063d68d6687481d1`](https://etherscan.io/address/0xB3AAeb69b630f0299791679c063d68d6687481d1) | Job posting, escrow, assignment, completion settlement, validator voting, NFT minting |
+| **AGIJobManager v2** | [`0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2`](https://etherscan.io/address/0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2) | Updated v2 job-manager lane used by Op-control for contract-first v2 reads |
+| **AGIJobDiscoveryPrime v1** | [`0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29`](https://etherscan.io/address/0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29) | Premium procurement layer: commit-reveal applications, finalist shortlisting, blind validator scoring, trial submission, winner designation |
+| **AGIJobDiscoveryPrime v2** | [`0xF8fc6572098DDcAc4560E17cA4A683DF30ea993e`](https://etherscan.io/address/0xF8fc6572098DDcAc4560E17cA4A683DF30ea993e) | Next-generation Prime procurement contract address reserved in the strict repo mapping |
 | **$AGIALPHA Token** | [`0xa61a3B3a130a9c20768EEBF97E21515A6046a1fA`](https://etherscan.io/address/0xa61a3B3a130a9c20768EEBF97E21515A6046a1fA) | Native settlement and staking token (18 decimals) |
 | **AlphaAgentIdentity NFT** | `0x7811993CbcCa3b8bb35a3d919F3BA59eeFbeAA9a` | Required NFT — without it, `applyForJob()` reverts |
 

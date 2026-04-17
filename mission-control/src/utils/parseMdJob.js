@@ -33,6 +33,7 @@ const KNOWN_CONTRACTS = {
   '0xb3aaeb69b630f0299791679c063d68d6687481d1': 'agijob_v1',
   '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2': 'agijob_v2',
   '0xd5ef1dde7ac60488f697ff2a7967a52172a78f29': 'prime_v1',
+  '0xf8fc6572098ddcac4560e17ca4a683df30ea993e': 'prime_v2',
 }
 
 const KNOWN_CATEGORIES = ['creative', 'development', 'research', 'analysis', 'operations']
@@ -106,7 +107,8 @@ export function parseMdJobSpec(rawMd) {
   }
   if (!protocol) {
     const full = rawMd.toLowerCase()
-    if (full.includes('prime') || full.includes('commit-reveal')) protocol = 'prime_v1'
+    if (full.includes('prime v2') || full.includes('prime-v2')) protocol = 'prime_v2'
+    else if (full.includes('prime') || full.includes('commit-reveal')) protocol = 'prime_v1'
     else if (full.includes('v2')) protocol = 'agijob_v2'
     else protocol = 'agijob_v1'
     warnings.push('Contract address not detected — protocol inferred from keywords: ' + protocol)

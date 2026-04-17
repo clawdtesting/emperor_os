@@ -43,9 +43,9 @@ const GITHUB_TOKEN  = String(
 ).trim()
 const PINATA_JWT = String(process.env.PINATA_JWT || '').trim()
 const ENABLE_TEST_MODE = String(process.env.ENABLE_TEST_MODE || '').toLowerCase() === 'true'
-const AGI_JOB_MANAGER_V2 = '0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29'
-const AGI_JOB_MANAGER_V2_ALT = '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2'
-const KNOWN_V2_CONTRACTS = [AGI_JOB_MANAGER_V2.toLowerCase(), AGI_JOB_MANAGER_V2_ALT.toLowerCase()]
+const AGI_JOB_MANAGER_V2 = '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2'
+const KNOWN_V2_CONTRACTS = [AGI_JOB_MANAGER_V2.toLowerCase()]
+const AGI_PRIME_V2 = '0xF8fc6572098DDcAc4560E17cA4A683DF30ea993e'
 const ETH_RPC_URL = process.env.ETH_RPC_URL || process.env.RPC_URL || 'https://eth.llamarpc.com'
 const IPFS_GATEWAYS = [
   'https://ipfs.io/ipfs/',
@@ -224,7 +224,7 @@ async function buildV2ValidationReport(jobId) {
         }
       } catch {}
     }
-    if (!detectedContract) detectedContract = AGI_JOB_MANAGER_V2_ALT.toLowerCase()
+    if (!detectedContract) detectedContract = AGI_JOB_MANAGER_V2.toLowerCase()
     report.contract = detectedContract
     addCheck('v2_contract_detected', Boolean(detectedContract), detectedContract)
 
@@ -596,7 +596,7 @@ async function buildV2OperatorView(jobId, options = {}) {
     jobId: String(jobId),
     rpc: ETH_RPC_URL,
     generatedAt: new Date().toISOString(),
-    contract: hintIsKnownV2 ? contractHint : AGI_JOB_MANAGER_V2_ALT.toLowerCase(),
+    contract: hintIsKnownV2 ? contractHint : AGI_JOB_MANAGER_V2.toLowerCase(),
     mcpJob: null,
     jobRequest: {
       memo: '',

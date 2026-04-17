@@ -22,7 +22,9 @@ const require    = createRequire(import.meta.url);
 
 // ── Contract addresses ────────────────────────────────────────────────────────
 
-export const PRIME_CONTRACT  = "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29";
+export const PRIME_V1_CONTRACT = "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29";
+export const PRIME_V2_CONTRACT = "0xF8fc6572098DDcAc4560E17cA4A683DF30ea993e";
+export const PRIME_CONTRACT = PRIME_V1_CONTRACT;
 export const JOB_MGR_CONTRACT = CONFIG.CONTRACT; // 0xB3AAeb69...
 export const CHAIN_ID         = CONFIG.CHAIN_ID;  // 1
 export const AGIALPHA_TOKEN   = process.env.AGIALPHA_TOKEN_ADDRESS ?? "0xa61a3b3a130a9c20768eebf97e21515a6046a1fa";

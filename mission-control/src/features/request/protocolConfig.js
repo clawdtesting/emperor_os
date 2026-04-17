@@ -1,4 +1,4 @@
-/** @typedef {'agijob_v1'|'agijob_v2'|'prime_v1'} ProtocolType */
+/** @typedef {'agijob_v1'|'agijob_v2'|'prime_v1'|'prime_v2'} ProtocolType */
 
 /**
  * @typedef {Object} ProtocolOption
@@ -31,6 +31,13 @@ export const PROTOCOL_OPTIONS = [
     description: 'Procurement-style flow for more structured competitive job discovery.',
     contractAddress: '0xd5ef1dde7ac60488f697ff2a7967a52172a78f29',
     spenderAddress: '0xd5ef1dde7ac60488f697ff2a7967a52172a78f29',
+  },
+  {
+    id: 'prime_v2',
+    label: 'AGIJobDiscoveryPrime v2',
+    description: 'Next-generation procurement lane with the strict Prime v2 contract mapping.',
+    contractAddress: '0xf8fc6572098ddcac4560e17ca4a683df30ea993e',
+    spenderAddress: '0xf8fc6572098ddcac4560e17ca4a683df30ea993e',
   },
 ]
 

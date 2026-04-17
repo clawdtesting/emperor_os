@@ -1,4 +1,4 @@
-/** @typedef {'agijob_v1'|'agijob_v2'|'prime_v1'} ProtocolType */
+/** @typedef {'agijob_v1'|'agijob_v2'|'prime_v1'|'prime_v2'} ProtocolType */
 /** @typedef {'website'|'coding'|'design'|'research'|'content'|'automation'|'documentation'|'general'} RequestCategory */
 /** @typedef {Record<string, string|string[]>} RequestAnswers */
 

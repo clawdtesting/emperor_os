@@ -10,8 +10,10 @@ This file contains the specific technical configuration for Emperor_OS. It is th
 
 | Contract | Address | Interface |
 |---|---|---|
-| **AGIJobManager** | `0xB3AAeb69b630f0299791679c063d68d6687481d1` | Job posting, assignment, completion settlement, escrow |
-| **AGIJobDiscoveryPrime** | `0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29` | Procurement competitions: commit-reveal, shortlist, finalist, trial, winner designation |
+| **AGIJobManager v1** | `0xB3AAeb69b630f0299791679c063d68d6687481d1` | Job posting, assignment, completion settlement, escrow |
+| **AGIJobManager v2** | `0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2` | Updated v2 job-manager lane used by Op-control for contract-first v2 reads |
+| **AGIJobDiscoveryPrime v1** | `0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29` | Procurement competitions: commit-reveal, shortlist, finalist, trial, winner designation |
+| **AGIJobDiscoveryPrime v2** | `0xF8fc6572098DDcAc4560E17cA4A683DF30ea993e` | Next-generation Prime procurement contract address reserved in the strict repo mapping |
 | **$AGIALPHA Token** | `0xa61a3B3a130a9c20768EEBF97E21515A6046a1fA` | Native settlement and staking token |
 
 ### ABI Registry

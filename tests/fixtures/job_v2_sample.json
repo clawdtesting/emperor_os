@@ -19,7 +19,7 @@
       "title": "v1 vs v2 Contract Interface Comparison",
       "category": "Documentation / Technical Analysis",
       "summary": "Produce a clear technical comparison of the AGIJobManager v1 and v2 smart contract interfaces, covering function signatures, new capabilities, and migration considerations.",
-      "details": "Compare the AGIJobManager v1 (0xB3AAeb69b630f0299791679c063d68d6687481d1) and v2 (0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29) contracts. Identify new functions, changed signatures, removed functions, and any breaking changes. Include a migration checklist for agents and employers.",
+      "details": "Compare the AGIJobManager v1 (0xB3AAeb69b630f0299791679c063d68d6687481d1) and v2 (0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2) contracts. Identify new functions, changed signatures, removed functions, and any breaking changes. Include a migration checklist for agents and employers.",
       "tags": ["documentation", "technical-analysis", "v1-v2-migration"],
       "deliverables": [
         "One Markdown file with side-by-side function comparison table",
@@ -39,7 +39,7 @@
       "payoutAGIALPHA": "50000",
       "durationSeconds": 604800,
       "chainId": 1,
-      "contract": "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29"
+      "contract": "0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2"
     }
   }
 }
