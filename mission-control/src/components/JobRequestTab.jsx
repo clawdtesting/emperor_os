@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createJobRequest, fetchHealthStatus, pinJsonToIpfs } from '../api'
+import {
+  createJobRequest,
+  fetchHealthStatus,
+  pinJsonToIpfs,
+  fetchOperatorActionFile,
+} from '../api'
 import {
   DEFAULT_REQUEST_IMAGE,
   DURATION_SECONDS_BY_UI_VALUE,
@@ -117,8 +122,32 @@ function extractCid(uri) {
 function statusPill(label, value) {
   return (
     <span className="text-[11px] px-2 py-1 rounded border border-slate-700 bg-slate-950 text-slate-300">
-      {label}: <span className="text-slate-100">{value}</span>
+      {label}: <span className="text-slate-100 break-all">{value}</span>
     </span>
+  )
+}
+
+function SectionText({ children, mono = false }) {
+  return (
+    <div className={`min-w-0 whitespace-pre-wrap break-words ${mono ? 'font-mono' : ''}`}>
+      {children}
+    </div>
+  )
+}
+
+function BriefCard({ title, items }) {
+  return (
+    <div className="rounded border border-slate-700 bg-slate-950/70 p-3 space-y-2 min-w-0">
+      <div className="text-xs font-semibold text-slate-200">{title}</div>
+      <div className="space-y-2 text-xs text-slate-300 min-w-0">
+        {items.map((item, i) => (
+          <div key={i} className="min-w-0">
+            <div className="text-slate-500">{item.label}</div>
+            <SectionText mono={item.mono}>{item.value}</SectionText>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -164,6 +193,12 @@ export function JobRequestTab({ wallet }) {
   const [mdWarnings, setMdWarnings] = useState([])
   const [mdImported, setMdImported] = useState(false)
   const [importedCanonicalSpec, setImportedCanonicalSpec] = useState(null)
+
+  const [showUnsignedBrief, setShowUnsignedBrief] = useState(false)
+  const [showReviewBrief, setShowReviewBrief] = useState(false)
+  const [pushPending, setPushPending] = useState(false)
+  const [pushTxHash, setPushTxHash] = useState('')
+  const [pushStatus, setPushStatus] = useState('')
 
   const tokenOptions = useMemo(
     () => [{ ...STATIC_TOKEN_OPTIONS[0], address: normalizeAddress(wallet?.agiToken) || '' }],
@@ -241,6 +276,39 @@ export function JobRequestTab({ wallet }) {
     paymentState,
     importedCanonicalSpec,
   ])
+
+  const unsignedBriefItems = useMemo(() => {
+    if (!result?.unsignedTxPath || !publishPayload) return []
+    const props = publishPayload?.canonicalSpec?.properties || {}
+    return [
+      { label: 'Action', value: 'createJob on AGIJobManager v1' },
+      { label: 'Title', value: props.title || draft?.title || '—' },
+      { label: 'Summary', value: props.summary || draft?.summary || '—' },
+      { label: 'Contract', value: protocol?.contractAddress || draft?.contract || '—', mono: true },
+      { label: 'Payout', value: payoutPreview },
+      {
+        label: 'Duration',
+        value: `${Number(draft?.durationSeconds || 0).toLocaleString()} seconds`,
+      },
+      { label: 'IPFS spec URI', value: ipfsResult?.uri || '—', mono: true },
+      { label: 'Unsigned tx file', value: result?.unsignedTxPath || '—', mono: true },
+    ]
+  }, [result, publishPayload, draft, protocol, payoutPreview, ipfsResult])
+
+  const reviewBriefItems = useMemo(() => {
+    if (!result?.reviewManifestPath) return []
+    return [
+      { label: 'Review mode', value: 'Human-signed request package' },
+      {
+        label: 'Checklist',
+        value:
+          'Confirm contract, confirm IPFS spec, confirm payout/duration, then sign in MetaMask.',
+      },
+      { label: 'Review manifest file', value: result?.reviewManifestPath || '—', mono: true },
+      { label: 'Unsigned tx file', value: result?.unsignedTxPath || '—', mono: true },
+      { label: 'Wallet', value: wallet?.account || '—', mono: true },
+    ]
+  }, [result, wallet])
 
   useEffect(() => {
     const selected = tokenOptions[0]
@@ -320,6 +388,11 @@ export function JobRequestTab({ wallet }) {
     setMdRaw('')
     setMdWarnings([])
     setMdImported(false)
+    setShowUnsignedBrief(false)
+    setShowReviewBrief(false)
+    setPushPending(false)
+    setPushTxHash('')
+    setPushStatus('')
     setStep(4)
   }
 
@@ -636,6 +709,10 @@ export function JobRequestTab({ wallet }) {
 
   async function handleCreateJobRequest() {
     setError('')
+    setPushTxHash('')
+    setPushStatus('')
+    setShowUnsignedBrief(false)
+    setShowReviewBrief(false)
 
     if (!publishPayload) {
       setError('Publish payload is incomplete. Upload to IPFS first.')
@@ -697,6 +774,7 @@ export function JobRequestTab({ wallet }) {
       )
 
       setResult({ ...response, publishPayload })
+      setStep(9)
     } catch (e) {
       setError(e.message || 'Create job request failed.')
     } finally {
@@ -704,16 +782,80 @@ export function JobRequestTab({ wallet }) {
     }
   }
 
+  async function handlePushJobOnchain() {
+    setError('')
+    setPushStatus('')
+    setPushTxHash('')
+
+    if (!walletReady || !wallet?.account) {
+      setError('Connect MetaMask before pushing the job on-chain.')
+      return
+    }
+
+    if (!result?.unsignedTxPath) {
+      setError('Unsigned tx package is missing.')
+      return
+    }
+
+    const provider = window?.ethereum || wallet?.provider
+    if (!provider?.request) {
+      setError('No injected wallet provider found.')
+      return
+    }
+
+    setPushPending(true)
+    try {
+      const file = await fetchOperatorActionFile(result.unsignedTxPath)
+      const tx = file?.json
+
+      if (!tx || typeof tx !== 'object') {
+        throw new Error('Unsigned tx package could not be loaded as JSON.')
+      }
+
+      const desiredChainId = String(tx.chainId || wallet?.chainId || '0x1').toLowerCase()
+      const currentChainId = String(
+        wallet?.chainId || (await provider.request({ method: 'eth_chainId' })),
+      ).toLowerCase()
+
+      if (desiredChainId && desiredChainId !== currentChainId) {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: desiredChainId }],
+        })
+      }
+
+      const sendTx = {
+        from: wallet.account,
+        to: tx.to,
+        data: tx.data,
+        value: tx.value || '0x0',
+      }
+
+      setPushStatus('Opening MetaMask for final createJob signature...')
+      const txHash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [sendTx],
+      })
+
+      setPushTxHash(txHash)
+      setPushStatus('Job create transaction submitted.')
+    } catch (e) {
+      setError(e?.message || 'Failed to push job on-chain.')
+    } finally {
+      setPushPending(false)
+    }
+  }
+
   return (
-    <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 space-y-4">
-      <div>
+    <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 space-y-4 min-w-0 overflow-x-hidden">
+      <div className="min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">Request Wizard</div>
-        <div className="text-sm text-slate-300 mt-1">
+        <div className="text-sm text-slate-300 mt-1 break-words">
           Protocol-aware guided compiler for AGI job creation.
         </div>
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 flex flex-wrap items-center gap-2">
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 flex flex-wrap items-center gap-2 min-w-0">
         {statusPill('wallet', walletReady ? 'connected' : 'not connected')}
         {statusPill('step', String(step))}
         {statusPill('protocol', protocol?.label || 'not selected')}
@@ -733,18 +875,18 @@ export function JobRequestTab({ wallet }) {
       </div>
 
       {!infraLoading && !ipfsReady && (
-        <div className="rounded border border-amber-900 bg-amber-950/20 p-3 text-xs text-amber-200">
+        <div className="rounded border border-amber-900 bg-amber-950/20 p-3 text-xs text-amber-200 break-words">
           IPFS upload is disabled because PINATA_JWT is not configured on the server. This is why
           “Upload reviewed spec to IPFS” fails. Add PINATA_JWT in Render env vars, redeploy, then
           retry Step 7.
         </div>
       )}
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 1 · Protocol selection
         </div>
-        <div className="grid md:grid-cols-3 gap-2">
+        <div className="grid md:grid-cols-3 gap-2 min-w-0">
           {PROTOCOL_OPTIONS.map((option) => {
             const selected = protocolId === option.id
             return (
@@ -755,26 +897,26 @@ export function JobRequestTab({ wallet }) {
                   resetAfterProtocolPaymentChange()
                 }}
                 disabled={!walletReady}
-                className={`text-left rounded border p-3 ${
+                className={`text-left rounded border p-3 min-w-0 ${
                   selected
                     ? 'border-blue-500 bg-blue-950/30'
                     : 'border-slate-700 bg-slate-900'
                 } disabled:opacity-60`}
               >
-                <div className="text-sm text-slate-100 font-semibold">{option.label}</div>
-                <div className="text-xs text-slate-400 mt-1">{option.description}</div>
+                <div className="text-sm text-slate-100 font-semibold break-words">{option.label}</div>
+                <div className="text-xs text-slate-400 mt-1 break-words">{option.description}</div>
               </button>
             )
           })}
         </div>
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 2 · Payment token and payout
         </div>
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="space-y-1">
+        <div className="grid md:grid-cols-2 gap-3 min-w-0">
+          <label className="space-y-1 min-w-0">
             <span className="text-xs text-slate-400">Token</span>
             <select
               value={tokenAddress}
@@ -786,7 +928,7 @@ export function JobRequestTab({ wallet }) {
                 setTokenDecimals(selected?.decimals || 18)
                 setApproveTxHash('')
               }}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             >
               {tokenOptions.map((option) => (
                 <option key={option.id} value={option.address}>
@@ -796,7 +938,7 @@ export function JobRequestTab({ wallet }) {
             </select>
           </label>
 
-          <label className="space-y-1">
+          <label className="space-y-1 min-w-0">
             <span className="text-xs text-slate-400">Token address</span>
             <input
               value={tokenAddress}
@@ -806,33 +948,33 @@ export function JobRequestTab({ wallet }) {
                 setApproveTxHash('')
               }}
               placeholder="0x..."
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
           </label>
 
-          <label className="space-y-1">
+          <label className="space-y-1 min-w-0">
             <span className="text-xs text-slate-400">Token symbol</span>
             <input
               value={tokenSymbol}
               disabled={!walletReady || !protocol}
               onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())}
               placeholder="AGIALPHA"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
           </label>
 
-          <label className="space-y-1">
+          <label className="space-y-1 min-w-0">
             <span className="text-xs text-slate-400">Token decimals</span>
             <input
               value={tokenDecimals}
               disabled={!walletReady || !protocol}
               onChange={(e) => setTokenDecimals(e.target.value)}
               placeholder="18"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
           </label>
 
-          <label className="space-y-1">
+          <label className="space-y-1 min-w-0">
             <span className="text-xs text-slate-400">Payout amount</span>
             <input
               value={payoutAmount}
@@ -842,22 +984,22 @@ export function JobRequestTab({ wallet }) {
                 setApproveTxHash('')
               }}
               placeholder="100"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
           </label>
         </div>
 
-        <div className="text-xs text-slate-400">Preview: {payoutPreview}</div>
+        <div className="text-xs text-slate-400 break-words">Preview: {payoutPreview}</div>
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2">
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 3 · Token approval
         </div>
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-400 break-all">
           Spender: <span className="font-mono">{protocol?.spenderAddress || '—'}</span>
         </div>
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-400 break-words">
           Allowance:{' '}
           {allowanceLoading
             ? 'loading...'
@@ -891,19 +1033,19 @@ export function JobRequestTab({ wallet }) {
         )}
       </div>
 
-      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4">
+      <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4 min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">
           Step 4 · Request input
         </div>
-        <div className="text-xs text-slate-400">
+        <div className="text-xs text-slate-400 break-words">
           Two ways to create a request — use either box. Chat input runs the guided wizard
           (Step 5). Markdown paste skips the wizard and lands you on the draft review (Step 6).
         </div>
 
-        <div className="grid md:grid-cols-2 gap-3">
-          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2">
+        <div className="grid md:grid-cols-2 gap-3 min-w-0">
+          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2 min-w-0">
             <div className="text-xs text-slate-300 font-semibold">Chat input</div>
-            <div className="text-[11px] text-slate-500">
+            <div className="text-[11px] text-slate-500 break-words">
               Describe your job in plain words — the wizard will ask clarifying questions.
             </div>
             <textarea
@@ -912,7 +1054,7 @@ export function JobRequestTab({ wallet }) {
               value={rawRequest}
               onChange={(e) => setRawRequest(e.target.value)}
               placeholder="Describe what you need in simple words"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
             <button
               onClick={handleBuildRequest}
@@ -923,9 +1065,9 @@ export function JobRequestTab({ wallet }) {
             </button>
           </div>
 
-          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2">
+          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2 min-w-0">
             <div className="text-xs text-slate-300 font-semibold">Paste .md file</div>
-            <div className="text-[11px] text-slate-500">
+            <div className="text-[11px] text-slate-500 break-words">
               Paste a complete job spec in Markdown. JSON also works if you paste canonical spec.
             </div>
             <textarea
@@ -955,9 +1097,9 @@ criterion 2
 Requirements
 requirement 1
 Employer: you · Contract: 0x... · createdVia: Emperor_os`}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200 min-w-0"
             />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={handleMdImport}
                 disabled={!mdRaw.trim()}
@@ -972,9 +1114,9 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
               )}
             </div>
             {mdWarnings.length > 0 && (
-              <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
+              <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1 min-w-0">
                 {mdWarnings.map((w, i) => (
-                  <div key={i}>{w}</div>
+                  <div key={i} className="break-words">{w}</div>
                 ))}
               </div>
             )}
@@ -983,11 +1125,11 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       </div>
 
       {step >= 5 && currentQuestion && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 5 · Guided questions ({questionIndex + 1}/{questions.length})
           </div>
-          <div className="text-sm text-slate-100 font-semibold">{currentQuestion.prompt}</div>
+          <div className="text-sm text-slate-100 font-semibold break-words">{currentQuestion.prompt}</div>
           <div className="space-y-2">
             {currentQuestion.options.map((option) => {
               const checked = answers[currentQuestion.id] === option.value
@@ -1004,12 +1146,12 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
                     checked={checked}
                     onChange={() => handleSelectAnswer(option.value)}
                   />
-                  <span className="text-sm">{option.label}</span>
+                  <span className="text-sm break-words">{option.label}</span>
                 </label>
               )
             })}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setQuestionIndex((i) => Math.max(0, i - 1))}
               disabled={questionIndex === 0}
@@ -1028,7 +1170,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {step >= 6 && draft && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 6 · Draft spec{' '}
             {mdImported && (
@@ -1038,64 +1180,71 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
             )}
           </div>
 
-          <label className="space-y-1 block">
+          <label className="space-y-1 block min-w-0">
             <span className="text-xs text-slate-400">Title</span>
             <input
               value={editingTitle}
               onChange={(e) => setEditingTitle(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
           </label>
 
-          <label className="space-y-1 block">
+          <label className="space-y-1 block min-w-0">
             <span className="text-xs text-slate-400">Summary</span>
             <textarea
-              rows={3}
+              rows={4}
               value={editingSummary}
               onChange={(e) => setEditingSummary(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
           </label>
 
-          <div className="grid md:grid-cols-2 gap-3">
-            <label className="space-y-1 block">
+          <div className="rounded border border-slate-700 bg-slate-900/60 p-3 min-w-0">
+            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">
+              Wrapped preview
+            </div>
+            <SectionText>{editingSummary || 'No summary yet.'}</SectionText>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3 min-w-0">
+            <label className="space-y-1 block min-w-0">
               <span className="text-xs text-slate-400">{mdImported ? 'Deliverables' : 'Scope'}</span>
               <textarea
                 rows={4}
                 value={editingScope}
                 onChange={(e) => setEditingScope(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
               />
             </label>
 
-            <label className="space-y-1 block">
+            <label className="space-y-1 block min-w-0">
               <span className="text-xs text-slate-400">Deliverables</span>
               <textarea
                 rows={4}
                 value={editingDeliverables}
                 onChange={(e) => setEditingDeliverables(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
               />
             </label>
           </div>
 
-          <label className="space-y-1 block">
+          <label className="space-y-1 block min-w-0">
             <span className="text-xs text-slate-400">Acceptance criteria</span>
             <textarea
               rows={4}
               value={editingAcceptance}
               onChange={(e) => setEditingAcceptance(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
             />
           </label>
 
           {mdImported && (
-            <div className="grid md:grid-cols-2 gap-3">
-              <div className="space-y-1">
+            <div className="grid md:grid-cols-2 gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
                 <span className="text-xs text-slate-400">Requirements (read-only)</span>
-                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 space-y-1 max-h-40 overflow-y-auto">
+                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 space-y-1 max-h-40 overflow-y-auto min-w-0">
                   {(draft.requirements || []).map((r, i) => (
-                    <div key={i}>{r}</div>
+                    <div key={i} className="break-words">{r}</div>
                   ))}
                   {(!draft.requirements || draft.requirements.length === 0) && (
                     <div className="text-slate-500 italic">none</div>
@@ -1103,13 +1252,13 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
                 </div>
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <span className="text-xs text-slate-400">Tags</span>
-                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 flex flex-wrap gap-1">
+                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 flex flex-wrap gap-1 min-w-0">
                   {(draft.tags || []).map((t, i) => (
                     <span
                       key={i}
-                      className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700"
+                      className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 break-all"
                     >
                       {t}
                     </span>
@@ -1122,7 +1271,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
             </div>
           )}
 
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-slate-400 break-words">
             Protocol: {protocol?.label || draft.protocol} · Category: {draft.category}
             {mdImported && draft.durationSeconds && (
               <>
@@ -1136,14 +1285,12 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
               <>
                 {' '}
                 · Contract:{' '}
-                <span className="font-mono">
-                  {draft.contract.slice(0, 6)}...{draft.contract.slice(-4)}
-                </span>
+                <span className="font-mono break-all">{draft.contract}</span>
               </>
             )}
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={handleApplyDraftEdits}
               className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200"
@@ -1155,7 +1302,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {step >= 7 && draft && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
             Step 7 · IPFS upload
           </div>
@@ -1172,7 +1319,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
                   : 'Upload reviewed spec to IPFS'}
             </button>
           ) : (
-            <div className="space-y-1 text-xs">
+            <div className="space-y-1 text-xs min-w-0">
               <div className="text-emerald-300">IPFS upload complete.</div>
               <div className="text-slate-400 font-mono break-all">URI: {ipfsResult.uri}</div>
               {ipfsResult.gatewayUrl && (
@@ -1180,7 +1327,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
                   href={ipfsResult.gatewayUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-blue-400"
+                  className="text-blue-400 break-all"
                 >
                   Open gateway ↗
                 </a>
@@ -1191,19 +1338,19 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {step >= 8 && draft && ipfsResult && (
-        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
+        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
           <div className="text-xs text-slate-500 uppercase tracking-wider">
-            Step 8 · Final review / generate sign-ready request package
+            Step 8 · Generate sign-ready request package
           </div>
-          <div className="text-xs text-slate-300 space-y-1">
-            <div>
+          <div className="text-xs text-slate-300 space-y-1 min-w-0">
+            <div className="break-all">
               Wallet: <span className="font-mono">{wallet?.account || '—'}</span>
             </div>
-            <div>Protocol: {protocol?.label}</div>
-            <div>Payment: {payoutPreview}</div>
-            <div>Approval status: {approvalRequired ? 'insufficient' : 'sufficient'}</div>
-            <div>
-              IPFS URI: <span className="font-mono break-all">{ipfsResult.uri}</span>
+            <div className="break-words">Protocol: {protocol?.label}</div>
+            <div className="break-words">Payment: {payoutPreview}</div>
+            <div className="break-words">Approval status: {approvalRequired ? 'insufficient' : 'sufficient'}</div>
+            <div className="break-all">
+              IPFS URI: <span className="font-mono">{ipfsResult.uri}</span>
             </div>
           </div>
           <button
@@ -1213,45 +1360,104 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
           >
             {posting ? 'Generating package...' : 'Generate sign-ready request package'}
           </button>
+        </div>
+      )}
 
-          {result?.unsignedTxPath && (
-            <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2 text-xs space-y-1">
-              <div className="text-emerald-300">Sign-ready request package generated.</div>
-              <div className="text-slate-300 break-all">
-                unsigned tx:{' '}
-                <a
-                  className="text-blue-300 underline"
-                  href={`/api/operator-actions/file?path=${encodeURIComponent(
-                    result.unsignedTxPath,
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  open
-                </a>
-              </div>
-              <div className="text-slate-300 break-all">
-                review manifest:{' '}
-                <a
-                  className="text-blue-300 underline"
-                  href={`/api/operator-actions/file?path=${encodeURIComponent(
-                    result.reviewManifestPath || '',
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  open
-                </a>
-              </div>
+      {step >= 9 && result?.unsignedTxPath && (
+        <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+          <div className="text-xs text-slate-500 uppercase tracking-wider">
+            Step 9 · Final push job on-chain
+          </div>
+
+          <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2 text-xs space-y-2 min-w-0">
+            <div className="text-emerald-300">Sign-ready request package generated.</div>
+
+            <div className="text-slate-300 break-all">
+              unsigned tx:{' '}
+              <a
+                className="text-blue-300 underline"
+                href={`/api/operator-actions/file?path=${encodeURIComponent(
+                  result.unsignedTxPath,
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                open
+              </a>
+              {' · '}
+              <button
+                type="button"
+                onClick={() => setShowUnsignedBrief((v) => !v)}
+                className="text-blue-300 underline"
+              >
+                brief
+              </button>
             </div>
+
+            <div className="text-slate-300 break-all">
+              review manifest:{' '}
+              <a
+                className="text-blue-300 underline"
+                href={`/api/operator-actions/file?path=${encodeURIComponent(
+                  result.reviewManifestPath || '',
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                open
+              </a>
+              {' · '}
+              <button
+                type="button"
+                onClick={() => setShowReviewBrief((v) => !v)}
+                className="text-blue-300 underline"
+              >
+                brief
+              </button>
+            </div>
+          </div>
+
+          {showUnsignedBrief && (
+            <BriefCard title="Unsigned tx brief" items={unsignedBriefItems} />
           )}
 
+          {showReviewBrief && (
+            <BriefCard title="Review manifest brief" items={reviewBriefItems} />
+          )}
+
+          <div className="rounded border border-slate-700 bg-slate-900/60 p-3 space-y-2 min-w-0">
+            <div className="text-xs text-slate-300 font-semibold">
+              Human-controlled contract submission
+            </div>
+            <div className="text-xs text-slate-400 break-words">
+              This final step reads the unsigned package, opens MetaMask, and submits the
+              createJob transaction on-chain from your connected wallet.
+            </div>
+
+            <button
+              onClick={handlePushJobOnchain}
+              disabled={pushPending || !walletReady}
+              className="px-3 py-2 rounded bg-violet-600 text-white text-sm disabled:opacity-50"
+            >
+              {pushPending ? 'Opening MetaMask...' : 'Push job on-chain in MetaMask'}
+            </button>
+
+            {pushStatus && (
+              <div className="text-xs text-slate-300 break-words">{pushStatus}</div>
+            )}
+            {pushTxHash && (
+              <div className="text-xs text-emerald-300 break-all">
+                tx hash: {pushTxHash}
+              </div>
+            )}
+          </div>
+
           {result?.publishPayload && (
-            <details>
+            <details className="min-w-0">
               <summary className="text-xs text-slate-300 cursor-pointer">
                 View publish payload
               </summary>
-              <pre className="mt-2 p-2 rounded bg-slate-900 text-xs text-slate-300 overflow-x-auto">
+              <pre className="mt-2 p-2 rounded bg-slate-900 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap break-words">
                 {JSON.stringify(result.publishPayload, null, 2)}
               </pre>
             </details>
@@ -1260,7 +1466,7 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
       )}
 
       {error && (
-        <div className="text-xs text-red-400 bg-red-950/30 border border-red-900 rounded p-2">
+        <div className="text-xs text-red-400 bg-red-950/30 border border-red-900 rounded p-2 break-words min-w-0">
           {error}
         </div>
       )}
