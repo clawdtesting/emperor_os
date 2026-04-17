@@ -1138,26 +1138,6 @@ app.get('/health', async (_, res) => {
   })
 })
 
-// ── LLM provider selection ────────────────────────────────────────────────────
-
-app.get('/api/llm/providers', (_req, res) => {
-  try {
-    res.json({ providers: listProviders(), preferred: getPreferredProvider() })
-  } catch (e) {
-    res.status(500).json({ error: e.message })
-  }
-})
-
-app.post('/api/llm/preferred', (req, res) => {
-  try {
-    const providerId = String(req.body?.providerId || '').trim()
-    const result = setPreferredProvider(providerId)
-    res.json({ ok: true, preferred: result.providerId, providers: listProviders() })
-  } catch (e) {
-    res.status(400).json({ error: e.message })
-  }
-})
-
 // ── ENS reverse lookup proxy (avoids browser CORS / rate-limits) ──────────────
 app.get('/api/ens/:address', async (req, res) => {
   const address = req.params.address.toLowerCase()
@@ -1216,6 +1196,7 @@ app.post('/api/llm/select', (req, res) => {
 
     if (!requested) {
       const saved = saveLlmSelection({ preferredProvider: '' })
+      try { setPreferredProvider('') } catch {}
       return res.json({
         ok: true,
         preferredProvider: saved.preferredProvider,
@@ -1230,6 +1211,7 @@ app.post('/api/llm/select', (req, res) => {
     if (!provider.enabled) return res.status(400).json({ error: `provider_disabled:${requested}` })
 
     const saved = saveLlmSelection({ preferredProvider: requested })
+    try { setPreferredProvider(requested) } catch {}
     return res.json({
       ok: true,
       preferredProvider: saved.preferredProvider,

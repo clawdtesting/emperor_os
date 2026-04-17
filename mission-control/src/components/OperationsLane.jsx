@@ -5,7 +5,7 @@ import {
   markOperatorActionBroadcast,
   markOperatorActionFinalized,
   fetchLlmProviders,
-  setLlmPreferred,
+  selectLlmProvider,
 } from '../api'
 
 const STAGES = [
@@ -226,7 +226,7 @@ function LlmProviderPicker() {
     try {
       const data = await fetchLlmProviders()
       setProviders(Array.isArray(data?.providers) ? data.providers : [])
-      setPreferred(data?.preferred || '')
+      setPreferred(data?.preferredProvider || '')
     } catch (err) {
       setMessage(`Load failed: ${err.message}`)
     }
@@ -234,13 +234,13 @@ function LlmProviderPicker() {
 
   useEffect(() => { refresh() }, [])
 
-  const choose = async (providerId) => {
+  const choose = async (provider) => {
     setBusy(true)
     try {
-      const data = await setLlmPreferred(providerId)
-      setPreferred(data?.preferred || '')
+      const data = await selectLlmProvider(provider)
+      setPreferred(data?.preferredProvider || '')
       setProviders(Array.isArray(data?.providers) ? data.providers : providers)
-      setMessage(providerId ? `Preferred provider: ${providerId}` : 'Preference cleared — first available provider will be used')
+      setMessage(provider ? `Preferred provider: ${provider}` : 'Preference cleared — first available provider will be used')
     } catch (err) {
       setMessage(`Update failed: ${err.message}`)
     } finally {
