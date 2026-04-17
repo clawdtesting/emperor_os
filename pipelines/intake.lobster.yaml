@@ -1,0 +1,35 @@
+name: v1_test_intake
+version: 1
+mode: dry_run_unsigned_handoff
+description: >
+  Mission Control intake pipeline for AGIJobManager v1 test execution.
+  Treats AGIJobManager-v1-test-job.md like a real assigned job, executes agent stages,
+  and produces artifacts + unsigned completion package without broadcasting any transaction.
+
+inputs:
+  job_id:
+    type: string
+    default: v1_990001
+  job_markdown:
+    type: string
+    default: AGIJobManager-v1-test-job.md
+  skip_submit:
+    type: boolean
+    default: false
+
+steps:
+  - id: seed_and_execute
+    run: >-
+      node agent/Job-v1/run_test_job_pipeline.js
+      --job-id "${job_id}"
+      --job-md "${job_markdown}"
+      ${skip_submit:+--skip-submit}
+
+artifacts:
+  - agent/state/jobs/${job_id}.json
+  - artifacts/job_${job_id}/brief.json
+  - artifacts/job_${job_id}/normalized_spec.json
+  - artifacts/job_${job_id}/deliverable.md
+  - artifacts/job_${job_id}/execution_validation.json
+  - artifacts/job_${job_id}/publication_validation.json
+  - artifacts/job_${job_id}/unsigned_completion.json

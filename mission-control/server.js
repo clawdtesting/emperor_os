@@ -27,6 +27,7 @@ const NOTIF_STATE_DIR   = resolve(__dirname, 'state')
 const NOTIF_STATE_FILE  = join(NOTIF_STATE_DIR, 'notifications.json')
 const NOTIF_LOG_FILE    = join(NOTIF_STATE_DIR, 'actions.log.jsonl')
 const OPERATOR_TX_LOG_FILE = join(NOTIF_STATE_DIR, 'operator-action-transitions.jsonl')
+const LLM_SELECTION_FILE = join(NOTIF_STATE_DIR, 'llm-selection.json')
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID
 const MC_URL             = process.env.MISSION_CONTROL_URL || 'http://100.104.194.128:3000'
@@ -79,6 +80,22 @@ function saveNotifState(state) {
   const tmp = NOTIF_STATE_FILE + '.tmp'
   writeFileSync(tmp, JSON.stringify(state, null, 2))
   renameSync(tmp, NOTIF_STATE_FILE)
+}
+
+function readLlmSelection() {
+  return readJsonSafe(LLM_SELECTION_FILE, {
+    preferredProvider: '',
+    updatedAt: null,
+  })
+}
+
+function saveLlmSelection(selection) {
+  const payload = {
+    preferredProvider: String(selection?.preferredProvider || '').trim(),
+    updatedAt: new Date().toISOString(),
+  }
+  atomicWriteJson(LLM_SELECTION_FILE, payload)
+  return payload
 }
 
 function appendActionLog(entry) {
@@ -1094,11 +1111,12 @@ async function pinJsonViaPinata(payload, name) {
 }
 
 const PIPELINE_META = {
-  'intake.lobster.yaml':      { desc: 'fetch -> extract -> analyze -> approve', status: 'active' },
-  'creative.lobster.yaml':    { desc: 'research -> draft -> review -> approve',  status: 'ready'  },
-  'development.lobster.yaml': { desc: 'plan -> implement -> review -> approve',  status: 'ready'  },
-  'research.lobster.yaml':    { desc: 'gather -> analyze -> approve',            status: 'ready'  },
-  'analysis.lobster.yaml':    { desc: 'audit -> report -> approve',              status: 'ready'  },
+  'intake.lobster.yaml':      { desc: 'v1 test intake -> execute -> validate -> unsigned completion', status: 'active' },
+  'v1-test-job.lobster.yaml': { desc: 'local markdown job -> assigned -> execution pipeline dry-run', status: 'ready'  },
+  'creative.lobster.yaml':    { desc: 'research -> draft -> review -> approve',                       status: 'ready'  },
+  'development.lobster.yaml': { desc: 'plan -> implement -> review -> approve',                       status: 'ready'  },
+  'research.lobster.yaml':    { desc: 'gather -> analyze -> approve',                                 status: 'ready'  },
+  'analysis.lobster.yaml':    { desc: 'audit -> report -> approve',                                   status: 'ready'  },
 }
 
 app.get('/health', async (_, res) => {
@@ -1174,6 +1192,55 @@ app.get('/api/agent', (_, res) => res.json({
   chain: 'Base Sepolia',
   infra: 'GitHub Actions + Render',
 }))
+
+app.get('/api/llm/providers', (_req, res) => {
+  try {
+    const providers = listProviders()
+    const selection = readLlmSelection()
+    const preferredProvider = selection.preferredProvider || ''
+    return res.json({
+      providers,
+      preferredProvider,
+      selectedProvider: preferredProvider || null,
+      updatedAt: selection.updatedAt || null,
+    })
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'failed_to_list_providers' })
+  }
+})
+
+app.post('/api/llm/select', (req, res) => {
+  try {
+    const requested = String(req.body?.provider || '').trim()
+    const providers = listProviders()
+
+    if (!requested) {
+      const saved = saveLlmSelection({ preferredProvider: '' })
+      return res.json({
+        ok: true,
+        preferredProvider: saved.preferredProvider,
+        selectedProvider: null,
+        providers,
+        updatedAt: saved.updatedAt,
+      })
+    }
+
+    const provider = providers.find((p) => p.name === requested)
+    if (!provider) return res.status(400).json({ error: `unknown_provider:${requested}` })
+    if (!provider.enabled) return res.status(400).json({ error: `provider_disabled:${requested}` })
+
+    const saved = saveLlmSelection({ preferredProvider: requested })
+    return res.json({
+      ok: true,
+      preferredProvider: saved.preferredProvider,
+      selectedProvider: saved.preferredProvider,
+      providers,
+      updatedAt: saved.updatedAt,
+    })
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'failed_to_select_provider' })
+  }
+})
 
 app.get('/api/github/workflows', async (req, res) => {
   try {

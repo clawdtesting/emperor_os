@@ -305,6 +305,8 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
   const [busyActionKey, setBusyActionKey] = useState('')
   const [filePreview, setFilePreview] = useState(null)
   const [queueMessage, setQueueMessage] = useState('')
+  const [llmProviders, setLlmProviders] = useState([])
+  const [selectedProvider, setSelectedProvider] = useState('')
 
   const fetchLane = async () => {
     try {
@@ -314,8 +316,11 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
       ])
       const laneJson = await laneRes.json()
       const actionJson = await actionRes.json().catch(() => ({ actions: [] }))
+      const llmJson = await fetchLlmProviders().catch(() => ({ providers: [], selectedProvider: null }))
       setData(laneJson)
       setOperatorActions(Array.isArray(actionJson?.actions) ? actionJson.actions : [])
+      setLlmProviders(Array.isArray(llmJson?.providers) ? llmJson.providers : [])
+      setSelectedProvider(llmJson?.selectedProvider || '')
     } catch (err) {
       console.error('Failed to fetch operations lane:', err)
       setQueueMessage(`Queue refresh failed: ${err.message}`)
@@ -387,6 +392,7 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
     return acc
   }, {})
   const queueRows = operatorActions.filter((a) => (a.queueStage || 'needs_signature') === queueTab)
+  const enabledProviders = llmProviders.filter((p) => p.enabled)
 
   return (
     <div className="p-4">
