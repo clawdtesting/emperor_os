@@ -18,7 +18,7 @@
 // SAFETY CONTRACT: No signing. No broadcasting. No private keys.
 
 import { createHash } from "crypto";
-import { llmCall } from "../../config/llm_router.js";
+import { llmChat } from "../llm-router.js";
 
 // ── IPFS publish ──────────────────────────────────────────────────────────────
 
@@ -293,22 +293,15 @@ export async function draftWithLLM({ phase, procurementId, jobSpec, fitEvaluatio
     `\nProduce the ${phase} document now. Use markdown. Start with a # heading.`,
   ].filter(Boolean).join("\n");
 
-  const result = await llmCall([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userPrompt },
-  ], {
-    spec: typeof jobSpec === "object" ? jobSpec : null,
-    provider: process.env.PRIME_LLM_PROVIDER || "",
-    model: process.env.OPENAI_MODEL ?? "gpt-4.1",
-    max_tokens: 4096,
+  const text = await llmChat(systemPrompt, userPrompt, {
+    spec: typeof jobSpec === "object" ? jobSpec : undefined,
+    maxTokens: 4096,
     temperature: 0.2,
-    timeout_ms: 300_000,
   });
-  const text = String(result?.content || "").trim();
 
-  if (!text) throw new Error("OpenAI returned empty output");
+  if (!text) throw new Error("LLM returned empty output");
   if (/\*\[[^\]]{3,}\]\*/.test(text)) {
-    throw new Error("OpenAI output contains forbidden placeholder markers");
+    throw new Error("LLM output contains forbidden placeholder markers");
   }
   return text;
 }

@@ -6,17 +6,10 @@
  * Stdout: JSON { content: "string", filename: "string", format: "string" }
  * Exit:   Always 0
  *
- * Env: ANTHROPIC_API_KEY, ANTHROPIC_MODEL
+ * Uses the provider-agnostic llm-router (see agent/llm-router.js).
  */
-"use strict";
 
-let _llmCall = null;
-async function loadLlmCall() {
-  if (_llmCall) return _llmCall;
-  const mod = await import("../../config/llm_router.js");
-  _llmCall = mod.llmCall;
-  return _llmCall;
-}
+import { llmChat } from '../llm-router.js'
 
 const SYSTEM = `You are an expert technical writer and autonomous AI agent working for EmpireOS.
 You produce high-quality deliverables for on-chain job specifications.
@@ -28,10 +21,10 @@ Rules:
 - Be accurate — do not invent facts about the protocol
 - Write from the perspective of a capable autonomous AI agent
 - Minimum length: meet or exceed any word count requirements
-- No placeholders, no "TODO", no incomplete sections`;
+- No placeholders, no "TODO", no incomplete sections`
 
 function buildPrompt(job) {
-  const props = job.spec?.properties || {};
+  const props = job.spec?.properties || {}
   return `You are completing this AGI Alpha on-chain job. Produce the full deliverable now.
 
 JOB TITLE: ${job.title}
@@ -50,54 +43,49 @@ ${(props.acceptanceCriteria || []).map((c, i) => `${i + 1}. ${c}`).join("\n")}
 FULL DETAILS:
 ${props.details || job.summary}
 
-Produce the complete deliverable now. Output the full content — do not summarize or truncate.`;
+Produce the complete deliverable now. Output the full content — do not summarize or truncate.`
 }
 
 function inferFilename(job) {
-  const cat = (job.category || "").toLowerCase();
-  if (cat.includes("press")) return "press-release.md";
-  if (cat.includes("art") || cat.includes("image")) return "description.md";
-  if (cat.includes("doc") || cat.includes("guide")) return "guide.md";
-  if (cat.includes("dev") || cat.includes("code") || cat.includes("cli")) return "deliverable.js";
-  if (cat.includes("creative") || cat.includes("content")) return "post.md";
-  return "deliverable.md";
+  const cat = (job.category || "").toLowerCase()
+  if (cat.includes("press")) return "press-release.md"
+  if (cat.includes("art") || cat.includes("image")) return "description.md"
+  if (cat.includes("doc") || cat.includes("guide")) return "guide.md"
+  if (cat.includes("dev") || cat.includes("code") || cat.includes("cli")) return "deliverable.js"
+  if (cat.includes("creative") || cat.includes("content")) return "post.md"
+  return "deliverable.md"
 }
 
 async function main() {
-  const chunks = [];
+  const chunks = []
   await new Promise((resolve, reject) => {
-    process.stdin.on("data", c => chunks.push(c));
-    process.stdin.on("end", resolve);
-    process.stdin.on("error", reject);
-  });
+    process.stdin.on("data", c => chunks.push(c))
+    process.stdin.on("end", resolve)
+    process.stdin.on("error", reject)
+  })
 
-  let job;
+  let job
   try {
-    job = JSON.parse(Buffer.concat(chunks).toString().trim());
+    job = JSON.parse(Buffer.concat(chunks).toString().trim())
   } catch (e) {
-    process.stderr.write(`[writer] stdin parse error: ${e.message}\n`);
-    process.stdout.write(JSON.stringify({ error: e.message, content: null }));
-    return;
+    process.stderr.write(`[writer] stdin parse error: ${e.message}\n`)
+    process.stdout.write(JSON.stringify({ error: e.message, content: null }))
+    return
   }
 
-  process.stderr.write(`[writer] Writing deliverable for job ${job.jobId}: "${job.title}"\n`);
+  process.stderr.write(`[writer] Writing deliverable for job ${job.jobId}: "${job.title}"\n`)
 
-  const prompt = buildPrompt(job);
-  const filename = inferFilename(job);
+  const prompt   = buildPrompt(job)
+  const filename = inferFilename(job)
 
-  let content;
+  let content
   try {
-    const llmCall = await loadLlmCall();
-    content = await llmCall(SYSTEM, prompt, job.spec || null, {
-      max_tokens: 4096,
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
-      temperature: 0.2,
-    });
-    process.stderr.write(`[writer] Generated ${content.length} chars\n`);
+    content = await llmChat(SYSTEM, prompt, { spec: job.spec, maxTokens: 4096 })
+    process.stderr.write(`[writer] Generated ${content.length} chars\n`)
   } catch (e) {
-    process.stderr.write(`[writer] LLM error: ${e.message}\n`);
-    process.stdout.write(JSON.stringify({ error: e.message, content: null }));
-    return;
+    process.stderr.write(`[writer] LLM error: ${e.message}\n`)
+    process.stdout.write(JSON.stringify({ error: e.message, content: null }))
+    return
   }
 
   const result = {
@@ -108,13 +96,13 @@ async function main() {
     content,
     length:   content.length,
     generated_at: new Date().toISOString(),
-  };
+  }
 
-  process.stdout.write(JSON.stringify(result));
-  process.stderr.write(`[writer] Done — ${filename} (${content.length} chars)\n`);
+  process.stdout.write(JSON.stringify(result))
+  process.stderr.write(`[writer] Done — ${filename} (${content.length} chars)\n`)
 }
 
 main().catch(e => {
-  process.stderr.write(`[writer] Unexpected error: ${e.message}\n`);
-  process.stdout.write(JSON.stringify({ error: e.message, content: null }));
-});
+  process.stderr.write(`[writer] Unexpected error: ${e.message}\n`)
+  process.stdout.write(JSON.stringify({ error: e.message, content: null }))
+})

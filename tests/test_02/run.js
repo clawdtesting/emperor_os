@@ -1,17 +1,20 @@
 // test_02 — full flow simulation
-// Pin job spec → generate SVG logo via Claude → pin SVG → pin completion metadata
+// Pin job spec → generate SVG logo via LLM router → pin SVG → pin completion metadata
 // Run from repo root: node tests/test_02/run.js
 
 import { readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { llmCall } from '../../config/llm_router.js'
+import { llmChat, listProviders } from '../../agent/llm-router.js'
 
-const DIR   = join(dirname(fileURLToPath(import.meta.url)))
-const JWT   = process.env.PINATA_JWT
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
+const DIR = join(dirname(fileURLToPath(import.meta.url)))
+const JWT = process.env.PINATA_JWT
 
-if (!JWT)  { console.error('PINATA_JWT required');        process.exit(1) }
+if (!JWT) { console.error('PINATA_JWT required'); process.exit(1) }
+if (!listProviders().some(p => p.enabled)) {
+  console.error('No LLM provider enabled — set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY, or run Ollama.')
+  process.exit(1)
+}
 
 // ── Pinata helpers ──────────────────────────────────────────────────────────
 
@@ -40,17 +43,10 @@ async function pinFile(content, filename, mimeType) {
   return { uri: `ipfs://${IpfsHash}`, cid: IpfsHash, gateway: `https://ipfs.io/ipfs/${IpfsHash}` }
 }
 
-// ── Claude call ─────────────────────────────────────────────────────────────
+// ── LLM call (provider-agnostic) ────────────────────────────────────────────
 
 async function claudeCall(system, user, maxTokens = 8192) {
-  const text = await llmCall(system, user, null, {
-    model: MODEL,
-    max_tokens: maxTokens,
-    temperature: 0,
-    timeout_ms: 300_000,
-  })
-  if (!text) throw new Error('Empty Claude response')
-  return text
+  return llmChat(system, user, { maxTokens, temperature: 0, timeoutMs: 300_000 })
 }
 
 async function generate(spec) {
@@ -118,8 +114,8 @@ async function run() {
   console.log(`      ✓ ${specPin.uri}`)
   console.log(`        ${specPin.gateway}`)
 
-  // 2. Generate SVG logo via Claude
-  console.log('\n[2/4] Generating SVG logo (Claude)...')
+  // 2. Generate SVG logo via LLM router
+  console.log('\n[2/4] Generating SVG logo (via llm-router)...')
   const work = await generate(spec)
   console.log(`      ✓ ${work.deliverable.length} chars of SVG produced`)
 

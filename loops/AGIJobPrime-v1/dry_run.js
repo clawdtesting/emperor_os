@@ -5,7 +5,7 @@
 
 import { ethers } from 'ethers'
 import dotenv from 'dotenv'
-import { llmCall } from '../../config/llm_router.js'
+import { llmChat } from '../../agent/llm-router.js'
 dotenv.config()
 
 const DRY = '[DRY RUN]'
@@ -128,12 +128,7 @@ function fmt(s) {
 }
 
 async function claudeChat(system, user, maxTokens = 4096, timeoutMs = CLAUDE_TIMEOUT_MS) {
-  return await llmCall(system, user, null, {
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-    max_tokens: maxTokens,
-    timeout_ms: timeoutMs,
-    temperature: 0.2,
-  })
+  return llmChat(system, user, { maxTokens, timeoutMs })
 }
 
 async function evaluate(specContent) {

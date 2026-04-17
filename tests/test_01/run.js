@@ -1,17 +1,20 @@
 // test_01 — full flow simulation
-// Pin job spec → generate deliverable via Claude → pin deliverable → pin completion metadata
+// Pin job spec → generate deliverable via LLM router → pin deliverable → pin completion metadata
 // Run from: agent/ directory (node ../tests/test_01/run.js)
 
 import { readFileSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { llmCall } from '../../config/llm_router.js'
+import { llmChat, listProviders } from '../../agent/llm-router.js'
 
-const DIR   = join(dirname(fileURLToPath(import.meta.url)))
-const JWT   = process.env.PINATA_JWT
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
+const DIR = join(dirname(fileURLToPath(import.meta.url)))
+const JWT = process.env.PINATA_JWT
 
-if (!JWT)  { console.error('PINATA_JWT required');         process.exit(1) }
+if (!JWT) { console.error('PINATA_JWT required'); process.exit(1) }
+if (!listProviders().some(p => p.enabled)) {
+  console.error('No LLM provider enabled — set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY, or run Ollama.')
+  process.exit(1)
+}
 
 // ── Pinata helpers ──────────────────────────────────────────────────────────
 
@@ -40,7 +43,7 @@ async function pinFile(content, filename, mimeType) {
   return { uri: `ipfs://${IpfsHash}`, cid: IpfsHash, gateway: `https://ipfs.io/ipfs/${IpfsHash}` }
 }
 
-// ── Claude call ─────────────────────────────────────────────────────────────
+// ── LLM call (provider-agnostic) ────────────────────────────────────────────
 
 async function generate(spec) {
   const props = spec.properties
@@ -70,15 +73,8 @@ Output only the JSON object. No preamble.`
     tags:               props.tags
   })
 
-  const text = await llmCall(system, user, spec, {
-    model: MODEL,
-    max_tokens: 8192,
-    temperature: 0,
-    timeout_ms: 120_000,
-  })
-  const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-  if (!cleaned) throw new Error('Empty LLM response')
-  return JSON.parse(cleaned)
+  const text = await llmChat(system, user, { spec, maxTokens: 8192, temperature: 0, timeoutMs: 120_000 })
+  return JSON.parse(text)
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -97,8 +93,8 @@ async function run() {
   console.log(`      ✓ ${specPin.uri}`)
   console.log(`        ${specPin.gateway}`)
 
-  // 2. Generate deliverable via Claude
-  console.log('\n[2/4] Generating deliverable (Claude)...')
+  // 2. Generate deliverable via LLM router
+  console.log('\n[2/4] Generating deliverable (via llm-router)...')
   const work = await generate(spec)
   console.log(`      ✓ ${work.deliverable.length} chars produced`)
 
