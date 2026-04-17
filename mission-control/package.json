@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "check:conflicts": "if command -v rg >/dev/null 2>&1; then if rg -n \"^(<<<<<<<|=======|>>>>>>>)\" src; then echo \"Merge conflict markers found. Resolve conflicts before build.\"; exit 1; else rc=$?; if [ \"$rc\" -eq 1 ]; then echo \"No merge conflict markers found.\"; exit 0; fi; echo \"Conflict check failed (rg exit $rc).\"; exit \"$rc\"; fi; else if grep -R -n -E \"^(<<<<<<<|=======|>>>>>>>)\" src >/dev/null 2>&1; then echo \"Merge conflict markers found. Resolve conflicts before build.\"; exit 1; else echo \"No merge conflict markers found.\"; fi; fi",
-    "build": "npm run check:conflicts && vite build",
+    "build": "npm run check:conflicts && npm run check:exports && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:exports": "node scripts/check-duplicate-exports.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",
