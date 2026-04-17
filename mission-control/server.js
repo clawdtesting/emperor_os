@@ -10,6 +10,7 @@ import { createHash } from 'crypto'
 import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
 import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage } from './lib/contract-first.js'
+import { buildV1OperatorViewModel } from './lib/v1-operator-view.js'
 import { buildAssignedJobRunner } from './lib/intake-runner.js'
 import { listProviders, getPreferredProvider, setPreferredProvider } from '../agent/llm-router.js'
 
@@ -758,6 +759,156 @@ async function buildV2OperatorView(jobId, options = {}) {
   }
 
   return report
+}
+
+async function buildV1OperatorView(jobId, options = {}) {
+  const numericJobId = Number(jobId)
+  const contractHint = String(options?.contractHint || '').toLowerCase()
+  const report = {
+    schema: 'mission-control/v1-operator-view/v1-onchain-only',
+    manager: 'AGIJobManager-v1',
+    jobId: String(jobId),
+    rpc: ETH_RPC_URL,
+    generatedAt: new Date().toISOString(),
+    contract: /^0x[a-f0-9]{40}$/.test(contractHint) ? contractHint : AGI_JOB_MANAGER_CONTRACT,
+    jobRequest: {
+      memo: '',
+      specURI: '',
+      completionURI: '',
+      specFetch: { ok: false, error: 'not attempted', source: null },
+      spec: null,
+    },
+    applications: [],
+    validations: [],
+    completionRequests: [],
+    completionEvents: [],
+    disputeEvents: [],
+    errors: [],
+  }
+
+  try {
+    const reachable = await rpcIsReachable()
+    if (!reachable) {
+      report.errors.push('onchain scan skipped: RPC unreachable')
+      return report
+    }
+
+    const { ethers, iface } = await getV1ContractInterface()
+    const topicJobId = ethers.zeroPadValue(ethers.toBeHex(BigInt(numericJobId)), 32)
+    const eventsToScan = ['JobCreated', 'JobApplied', 'JobCompletionRequested', 'JobValidated', 'JobDisapproved', 'JobCompleted', 'JobDisputed']
+    const all = []
+
+    const toSimple = (evt, address, rawLog) => {
+      const named = {}
+      try {
+        const inputs = evt?.fragment?.inputs || []
+        for (let i = 0; i < inputs.length; i++) {
+          const key = String(inputs[i]?.name || '').trim()
+          if (!key) continue
+          named[key] = evt.args?.[i]
+        }
+      } catch {}
+      return {
+        blockNumber: Number(BigInt(rawLog.blockNumber || '0x0')),
+        txHash: rawLog.transactionHash,
+        contract: String(address || '').toLowerCase(),
+        name: evt.name,
+        args: named,
+      }
+    }
+
+    for (const eventName of eventsToScan) {
+      try {
+        const fragment = iface.getEvent(eventName)
+        const logs = await rpcGetLogs({
+          address: report.contract,
+          topics: [fragment.topicHash, topicJobId],
+        })
+        for (const log of logs) {
+          const parsed = iface.parseLog(log)
+          if (!parsed) continue
+          all.push(toSimple(parsed, report.contract, log))
+        }
+      } catch {}
+    }
+
+    all.sort((a, b) => a.blockNumber - b.blockNumber)
+    const created = all.find((e) => e.name === 'JobCreated')
+    const context = await fetchV1JobContext(numericJobId, report.contract)
+    const specFetch = await fetchIpfsJson(context.specURI)
+
+    report.contract = created?.contract || report.contract
+    const view = buildV1OperatorViewModel({
+      jobId: numericJobId,
+      contract: report.contract,
+      rpc: ETH_RPC_URL,
+      context,
+      createdEvent: created,
+      specFetch,
+      applications: await Promise.all(all
+        .filter((e) => e.name === 'JobApplied')
+        .map(async (e) => {
+          let ensSubdomain = ''
+          try {
+            const tx = await rpcGetTransactionByHash(e.txHash)
+            const parsedTx = tx?.input ? iface.parseTransaction({ data: tx.input, value: tx.value || '0x0' }) : null
+            ensSubdomain = String(parsedTx?.args?.[1] || '')
+          } catch {}
+          return {
+            agent: String(e.args?.agent || ''),
+            ensSubdomain,
+            applicationIpfsURI: null,
+            note: 'AGIJobManager-v1 applyForJob stores agent address; ENS subdomain is inferred from tx calldata when available.',
+            blockNumber: e.blockNumber,
+            txHash: e.txHash,
+            contract: e.contract,
+          }
+        })),
+      validations: all
+        .filter((e) => e.name === 'JobValidated' || e.name === 'JobDisapproved')
+        .map((e) => ({
+          verdict: e.name === 'JobValidated' ? 'approve' : 'disapprove',
+          validator: String(e.args?.validator || ''),
+          blockNumber: e.blockNumber,
+          txHash: e.txHash,
+        })),
+      completionRequests: all
+        .filter((e) => e.name === 'JobCompletionRequested')
+        .map((e) => ({
+          agent: String(e.args?.agent || ''),
+          jobCompletionURI: String(e.args?.jobCompletionURI || ''),
+          blockNumber: e.blockNumber,
+          txHash: e.txHash,
+        })),
+      completionEvents: all
+        .filter((e) => e.name === 'JobCompleted')
+        .map((e) => ({
+          agent: String(e.args?.agent || ''),
+          reputationPoints: String(e.args?.reputationPoints || ''),
+          blockNumber: e.blockNumber,
+          txHash: e.txHash,
+        })),
+      disputeEvents: all
+        .filter((e) => e.name === 'JobDisputed')
+        .map((e) => ({
+          disputant: String(e.args?.disputant || ''),
+          blockNumber: e.blockNumber,
+          txHash: e.txHash,
+        })),
+      errors: report.errors,
+    })
+
+    return view
+  } catch (err) {
+    report.errors.push(`onchain scan failed: ${err.message}`)
+    return buildV1OperatorViewModel({
+      jobId: numericJobId,
+      contract: report.contract,
+      rpc: ETH_RPC_URL,
+      context: {},
+      errors: report.errors,
+    })
+  }
 }
 
 async function listV2JobsFromChain() {
@@ -2210,12 +2361,14 @@ app.get('/api/jobs/:jobId/operator-view', async (req, res) => {
     const source = String(req.query?.source || '').toLowerCase()
     const managerVersion = String(req.query?.managerVersion || '').toLowerCase()
     const contractHint = String(req.query?.contractHint || '').trim()
-    if (source !== 'agijobmanager-v2' && managerVersion !== 'v2') {
-      return res.status(400).json({ error: 'operator-view currently supports AGIJobManager v2 only' })
+
+    if (source === 'agijobmanager-v2' || managerVersion === 'v2') {
+      const view = await buildV2OperatorView(numericJobId, { contractHint })
+      return res.json({ ok: true, ...view })
     }
 
-    const view = await buildV2OperatorView(numericJobId, { contractHint })
-    res.json({ ok: true, ...view })
+    const view = await buildV1OperatorView(numericJobId, { contractHint })
+    return res.json({ ok: true, ...view })
   } catch (e) {
     res.status(500).json({ error: e.message || 'Failed to build operator view' })
   }

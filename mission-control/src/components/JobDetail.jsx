@@ -4,7 +4,7 @@ import { resolveEns, shortAddr } from '../utils/ens'
 import {
   fetchPrimeValidatorTimeline,
   fetchProcurementArtifacts,
-  fetchV2OperatorView,
+  fetchOperatorView,
   fetchJobApplicationStatus,
   prepareJobApplication,
   preparePrimeValidatorCommit,
@@ -543,7 +543,7 @@ export function JobDetail({ job, wallet, onRunIntake }) {
 
   useEffect(() => {
     let cancelled = false
-    if (!isV2 || !job?.jobId) {
+    if ((!isV1 && !isV2) || !job?.jobId) {
       setOperatorLoading(false)
       setOperatorError('')
       setOperatorView(null)
@@ -560,9 +560,9 @@ export function JobDetail({ job, wallet, onRunIntake }) {
           ? linkAddr
           : (/^0x[a-fA-F0-9]{40}$/.test(employerHint) ? employerHint : '')
 
-        const data = await fetchV2OperatorView(job.jobId, {
+        const data = await fetchOperatorView(job.jobId, {
           source: job.source,
-          managerVersion: 'v2',
+          managerVersion: isV2 ? 'v2' : 'v1',
           contractHint,
         })
         if (!cancelled) setOperatorView(data)
@@ -577,7 +577,7 @@ export function JobDetail({ job, wallet, onRunIntake }) {
     })()
 
     return () => { cancelled = true }
-  }, [isV2, job?.jobId, job?.source, job?.links?.contract, job?.employer])
+  }, [isV1, isV2, job?.jobId, job?.source, job?.links?.contract, job?.employer])
 
   useEffect(() => {
     let cancelled = false
@@ -1020,10 +1020,10 @@ export function JobDetail({ job, wallet, onRunIntake }) {
 
       <EnsRows job={job} />
 
-      {isV2 && (
+      {(isV1 || isV2) && (
         <div className="rounded-lg border border-fuchsia-800/60 bg-fuchsia-950/15 p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="text-xs font-medium text-fuchsia-300">Operator view (v2)</div>
+            <div className="text-xs font-medium text-fuchsia-300">Operator view ({isV2 ? 'v2' : 'v1'})</div>
             {operatorLoading && <div className="text-[11px] text-slate-400">loading…</div>}
           </div>
 
@@ -1040,7 +1040,7 @@ export function JobDetail({ job, wallet, onRunIntake }) {
                 </div>
                 <div className="rounded border border-slate-800 bg-slate-950/40 p-2">
                   <div className="text-slate-500">Procurement</div>
-                  <div className="font-mono text-slate-200">{operatorView.procurement || 'not exposed on AGIJobManager-v2'}</div>
+                  <div className="font-mono text-slate-200">{isV2 ? (operatorView.procurement || 'not exposed on AGIJobManager-v2') : 'n/a for v1'}</div>
                 </div>
               </div>
 

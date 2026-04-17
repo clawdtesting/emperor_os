@@ -186,7 +186,7 @@ export async function fetchRunnerLogs(since) {
   return res.json()
 }
 
-export async function fetchV2OperatorView(jobId, options = {}) {
+export async function fetchOperatorView(jobId, options = {}) {
   const params = new URLSearchParams()
   if (options?.source) params.set('source', options.source)
   if (options?.managerVersion) params.set('managerVersion', options.managerVersion)
@@ -196,6 +196,10 @@ export async function fetchV2OperatorView(jobId, options = {}) {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data?.error || 'Failed to fetch operator view')
   return data
+}
+
+export async function fetchV2OperatorView(jobId, options = {}) {
+  return fetchOperatorView(jobId, options)
 }
 
 export async function fetchProcurementArtifacts(procurementId) {
