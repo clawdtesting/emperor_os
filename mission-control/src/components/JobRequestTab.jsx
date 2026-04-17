@@ -30,7 +30,10 @@ const DEADLINE_TO_DURATION = {
 }
 
 function parseLines(raw) {
-  return String(raw || '').split('\n').map(v => v.trim()).filter(Boolean)
+  return String(raw || '')
+    .split('\n')
+    .map((v) => v.trim())
+    .filter(Boolean)
 }
 
 function toLineBlock(list) {
@@ -40,7 +43,9 @@ function toLineBlock(list) {
 function detectProtocolFromContract(contract) {
   const normalized = normalizeAddress(contract)
   if (!normalized) return ''
-  const match = PROTOCOL_OPTIONS.find(option => normalizeAddress(option.contractAddress) === normalized)
+  const match = PROTOCOL_OPTIONS.find(
+    (option) => normalizeAddress(option.contractAddress) === normalized,
+  )
   return match?.id || ''
 }
 
@@ -65,7 +70,11 @@ function toDraftFromCanonicalSpec(spec) {
     protocol: '',
     scope: Array.isArray(props.deliverables) ? props.deliverables : [],
     constraints: Array.isArray(props.requirements) ? props.requirements : [],
-    payment: { tokenAddress: '', symbol: 'AGIALPHA', amount: String(Number(props.payoutAGIALPHA || 0)) },
+    payment: {
+      tokenAddress: '',
+      symbol: 'AGIALPHA',
+      amount: String(Number(props.payoutAGIALPHA || 0)),
+    },
   }
 }
 
@@ -79,10 +88,14 @@ function toCanonicalSpecFromDraft(draft, createdBy = '') {
     locale: draft?.locale || 'en-US',
     tags: Array.isArray(draft?.tags) ? draft.tags : [],
     deliverables: Array.isArray(draft?.deliverables) ? draft.deliverables : [],
-    acceptanceCriteria: Array.isArray(draft?.acceptanceCriteria) ? draft.acceptanceCriteria : [],
+    acceptanceCriteria: Array.isArray(draft?.acceptanceCriteria)
+      ? draft.acceptanceCriteria
+      : [],
     requirements: Array.isArray(draft?.requirements) ? draft.requirements : [],
     payoutAGIALPHA: Number(draft?.payoutAGIALPHA || 0),
-    durationSeconds: Number(draft?.durationSeconds || DURATION_SECONDS_BY_UI_VALUE['1d']),
+    durationSeconds: Number(
+      draft?.durationSeconds || DURATION_SECONDS_BY_UI_VALUE['1d'],
+    ),
     chainId: Number(draft?.chainId || 1),
     contract: draft?.contract || '',
     ...(createdBy ? { createdBy } : {}),
@@ -152,8 +165,13 @@ export function JobRequestTab({ wallet }) {
   const [mdImported, setMdImported] = useState(false)
   const [importedCanonicalSpec, setImportedCanonicalSpec] = useState(null)
 
-  const tokenOptions = useMemo(() => [{ ...STATIC_TOKEN_OPTIONS[0], address: normalizeAddress(wallet?.agiToken) || '' }], [wallet?.agiToken])
+  const tokenOptions = useMemo(
+    () => [{ ...STATIC_TOKEN_OPTIONS[0], address: normalizeAddress(wallet?.agiToken) || '' }],
+    [wallet?.agiToken],
+  )
+
   const protocol = useMemo(() => getProtocolOption(protocolId), [protocolId])
+
   const amountBaseUnits = useMemo(() => {
     try {
       if (!payoutAmount) return 0n
@@ -165,25 +183,36 @@ export function JobRequestTab({ wallet }) {
 
   const payoutPreview = useMemo(() => {
     if (amountBaseUnits === null) return 'invalid amount'
-    return `${formatUnits(amountBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${tokenSymbol || 'TOKEN'}`
+    return `${formatUnits(amountBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${
+      tokenSymbol || 'TOKEN'
+    }`
   }, [amountBaseUnits, tokenDecimals, tokenSymbol])
 
   const approvalRequired = useMemo(() => {
-    if (!walletReady || !protocol || !normalizeAddress(tokenAddress) || amountBaseUnits === null) return false
+    if (!walletReady || !protocol || !normalizeAddress(tokenAddress) || amountBaseUnits === null) {
+      return false
+    }
     return (allowanceBaseUnits || 0n) < (amountBaseUnits || 0n)
   }, [walletReady, protocol, tokenAddress, amountBaseUnits, allowanceBaseUnits])
 
-  const requiredMissing = useMemo(() => getMissingRequiredQuestions(questions, answers), [questions, answers])
+  const requiredMissing = useMemo(
+    () => getMissingRequiredQuestions(questions, answers),
+    [questions, answers],
+  )
+
   const currentQuestion = questions[questionIndex]
   const ipfsReady = ipfsPinataReady !== false
 
-  const paymentState = useMemo(() => ({
-    tokenAddress: normalizeAddress(tokenAddress),
-    symbol: tokenSymbol,
-    decimals: Number(tokenDecimals || 18),
-    amount: payoutAmount,
-    amountBaseUnits: amountBaseUnits ? amountBaseUnits.toString() : '',
-  }), [tokenAddress, tokenSymbol, tokenDecimals, payoutAmount, amountBaseUnits])
+  const paymentState = useMemo(
+    () => ({
+      tokenAddress: normalizeAddress(tokenAddress),
+      symbol: tokenSymbol,
+      decimals: Number(tokenDecimals || 18),
+      amount: payoutAmount,
+      amountBaseUnits: amountBaseUnits ? amountBaseUnits.toString() : '',
+    }),
+    [tokenAddress, tokenSymbol, tokenDecimals, payoutAmount, amountBaseUnits],
+  )
 
   const publishPayload = useMemo(() => {
     if (!draft || !ipfsResult || !wallet?.account) return null
@@ -196,11 +225,22 @@ export function JobRequestTab({ wallet }) {
       answers,
       payment: paymentState,
       draft,
-      canonicalSpec: importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
+      canonicalSpec:
+        importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
       ipfs: ipfsResult,
       createdAt: new Date().toISOString(),
     }
-  }, [draft, ipfsResult, wallet, protocolId, rawRequest, category, answers, paymentState, importedCanonicalSpec])
+  }, [
+    draft,
+    ipfsResult,
+    wallet,
+    protocolId,
+    rawRequest,
+    category,
+    answers,
+    paymentState,
+    importedCanonicalSpec,
+  ])
 
   useEffect(() => {
     const selected = tokenOptions[0]
@@ -214,6 +254,7 @@ export function JobRequestTab({ wallet }) {
 
   useEffect(() => {
     let cancelled = false
+
     async function refreshInfra() {
       setInfraLoading(true)
       try {
@@ -227,8 +268,11 @@ export function JobRequestTab({ wallet }) {
         if (!cancelled) setInfraLoading(false)
       }
     }
+
     refreshInfra()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -237,6 +281,7 @@ export function JobRequestTab({ wallet }) {
         setAllowanceBaseUnits(0n)
         return
       }
+
       const normalizedToken = normalizeAddress(tokenAddress)
       if (!normalizedToken) {
         setAllowanceBaseUnits(0n)
@@ -272,6 +317,9 @@ export function JobRequestTab({ wallet }) {
     setIpfsResult(null)
     setResult(null)
     setError('')
+    setMdRaw('')
+    setMdWarnings([])
+    setMdImported(false)
     setStep(4)
   }
 
@@ -280,23 +328,30 @@ export function JobRequestTab({ wallet }) {
     if (!protocol) return 'Select a protocol before continuing.'
     if (!normalizeAddress(tokenAddress)) return 'Valid token address is required.'
     if (!tokenSymbol.trim()) return 'Token symbol is required.'
-    if (!Number.isFinite(Number(tokenDecimals)) || Number(tokenDecimals) < 0) return 'Token decimals must be valid.'
-    if (amountBaseUnits === null || amountBaseUnits <= 0n) return 'Payout amount must be greater than zero.'
+    if (!Number.isFinite(Number(tokenDecimals)) || Number(tokenDecimals) < 0) {
+      return 'Token decimals must be valid.'
+    }
+    if (amountBaseUnits === null || amountBaseUnits <= 0n) {
+      return 'Payout amount must be greater than zero.'
+    }
     return ''
   }
 
   function handleBuildRequest() {
     setError('')
     setResult(null)
+
     const protocolAndPaymentError = validateProtocolAndPayment()
     if (protocolAndPaymentError) {
       setError(protocolAndPaymentError)
       return
     }
+
     if (approvalRequired) {
       setError('Token approval is required before request building.')
       return
     }
+
     if (!rawRequest.trim()) {
       setError('Request text is required.')
       return
@@ -314,36 +369,51 @@ export function JobRequestTab({ wallet }) {
 
   function handleMdImport() {
     setError('')
-    setImportWarnings([])
-    if (!importRaw.trim()) {
-      setError(importFormat === 'json' ? 'Paste a JSON job spec to import.' : 'Paste a markdown job spec to import.')
+    setMdWarnings([])
+
+    if (!mdRaw.trim()) {
+      setError('Paste a markdown job spec to import.')
       return
     }
 
-    if (importFormat === 'json') {
+    const trimmed = mdRaw.trim()
+
+    if (trimmed.startsWith('{')) {
       try {
-        const parsedJson = JSON.parse(importRaw)
-        const canonical = parsedJson?.properties?.schema === 'agijobmanager/job-spec/v2'
-          ? parsedJson
-          : (parsedJson?.spec?.properties?.schema === 'agijobmanager/job-spec/v2' ? parsedJson.spec : toCanonicalSpecFromDraft(parsedJson, wallet?.account || ''))
+        const parsedJson = JSON.parse(trimmed)
+        const canonical =
+          parsedJson?.properties?.schema === 'agijobmanager/job-spec/v2'
+            ? parsedJson
+            : parsedJson?.spec?.properties?.schema === 'agijobmanager/job-spec/v2'
+              ? parsedJson.spec
+              : toCanonicalSpecFromDraft(parsedJson, wallet?.account || '')
+
         const importedDraft = toDraftFromCanonicalSpec(canonical)
         const detectedProtocol = detectProtocolFromContract(importedDraft.contract)
         const resolvedProtocol = detectedProtocol || protocolId
 
         if (detectedProtocol) setProtocolId(detectedProtocol)
-        if (importedDraft.payoutAGIALPHA > 0) setPayoutAmount(String(importedDraft.payoutAGIALPHA))
+        if (importedDraft.payoutAGIALPHA > 0) {
+          setPayoutAmount(String(importedDraft.payoutAGIALPHA))
+        }
 
-        setDraft({
+        const nextDraft = {
           ...importedDraft,
           protocol: resolvedProtocol,
-          scope: Array.isArray(importedDraft.deliverables) ? importedDraft.deliverables : [],
-          constraints: Array.isArray(importedDraft.requirements) ? importedDraft.requirements : [],
+          scope: Array.isArray(importedDraft.deliverables)
+            ? importedDraft.deliverables
+            : [],
+          constraints: Array.isArray(importedDraft.requirements)
+            ? importedDraft.requirements
+            : [],
           payment: {
             tokenAddress: normalizeAddress(tokenAddress),
             symbol: tokenSymbol || 'AGIALPHA',
             amount: String(importedDraft.payoutAGIALPHA || payoutAmount || ''),
           },
-        })
+        }
+
+        setDraft(nextDraft)
         setImportedCanonicalSpec(canonical)
         setCategory(importedDraft.category)
         setRawRequest(JSON.stringify(canonical, null, 2))
@@ -354,14 +424,15 @@ export function JobRequestTab({ wallet }) {
         setEditingAcceptance(toLineBlock(importedDraft.acceptanceCriteria))
         setMdImported(true)
         setStep(6)
+        return
       } catch (e) {
         setError(e.message || 'Failed to parse JSON job spec.')
+        return
       }
-      return
     }
 
-    const { draft: parsed, protocol: detectedProtocol, warnings } = parseMdJobSpec(importRaw)
-    setImportWarnings(warnings)
+    const { draft: parsed, protocol: detectedProtocol, warnings } = parseMdJobSpec(trimmed)
+    setMdWarnings(warnings || [])
 
     if (!parsed.title) {
       setError('Could not parse a job title from the pasted markdown.')
@@ -369,7 +440,7 @@ export function JobRequestTab({ wallet }) {
     }
 
     if (detectedProtocol) {
-      const match = PROTOCOL_OPTIONS.find(o => o.id === detectedProtocol)
+      const match = PROTOCOL_OPTIONS.find((o) => o.id === detectedProtocol)
       if (match) setProtocolId(detectedProtocol)
     }
 
@@ -419,13 +490,14 @@ export function JobRequestTab({ wallet }) {
     setStep(6)
   }
 
-
   async function handleApproveToken() {
     setError('')
+
     if (!walletReady || !protocol?.spenderAddress || !wallet?.account) {
       setError('Wallet and protocol are required for token approval.')
       return
     }
+
     const normalizedToken = normalizeAddress(tokenAddress)
     if (!normalizedToken || amountBaseUnits === null || amountBaseUnits <= 0n) {
       setError('Valid token and payout amount are required for approval.')
@@ -450,12 +522,13 @@ export function JobRequestTab({ wallet }) {
 
   function handleSelectAnswer(value) {
     if (!currentQuestion) return
-    setAnswers(prev => ({ ...prev, [currentQuestion.id]: value }))
+    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: value }))
     setError('')
   }
 
   function handleNextQuestion() {
     if (!currentQuestion) return
+
     const currentAnswer = String(answers[currentQuestion.id] || '').trim()
     if (currentQuestion.required && !currentAnswer) {
       setError('Select an option to continue.')
@@ -463,7 +536,13 @@ export function JobRequestTab({ wallet }) {
     }
 
     if (questionIndex >= questions.length - 1) {
-      const nextDraft = buildDraftJobSpec(protocolId, paymentState, rawRequest, category, answers)
+      const nextDraft = buildDraftJobSpec(
+        protocolId,
+        paymentState,
+        rawRequest,
+        category,
+        answers,
+      )
       setImportedCanonicalSpec(null)
       setDraft(nextDraft)
       setEditingTitle(nextDraft.title)
@@ -475,41 +554,54 @@ export function JobRequestTab({ wallet }) {
       return
     }
 
-    setQuestionIndex(index => index + 1)
+    setQuestionIndex((index) => index + 1)
   }
 
   function handleApplyDraftEdits() {
     if (!draft) return
+
     const nextDraft = {
       ...draft,
       title: editingTitle.trim(),
       summary: editingSummary.trim(),
       protocol: draft.protocol || protocolId,
-      payment: draft.payment || { tokenAddress: normalizeAddress(tokenAddress), symbol: tokenSymbol || 'AGIALPHA', amount: payoutAmount },
+      payment:
+        draft.payment || {
+          tokenAddress: normalizeAddress(tokenAddress),
+          symbol: tokenSymbol || 'AGIALPHA',
+          amount: payoutAmount,
+        },
       scope: parseLines(editingScope),
       deliverables: parseLines(editingDeliverables),
       acceptanceCriteria: parseLines(editingAcceptance),
     }
+
     const validation = validateDraftJobSpec(nextDraft)
     if (validation.length > 0) {
       setError(validation[0])
       return
     }
+
     setDraft(nextDraft)
-    if (mdImported) setImportedCanonicalSpec(toCanonicalSpecFromDraft(nextDraft, wallet?.account || ''))
+    if (mdImported) {
+      setImportedCanonicalSpec(toCanonicalSpecFromDraft(nextDraft, wallet?.account || ''))
+    }
     setError('')
     setStep(7)
   }
 
   async function handleUploadToIpfs() {
     if (!draft) return
+
     setError('')
     if (!ipfsReady) {
-      setError('IPFS pinning is not ready: PINATA_JWT is missing on server. Add it in Render env vars and redeploy.')
+      setError(
+        'IPFS pinning is not ready: PINATA_JWT is missing on server. Add it in Render env vars and redeploy.',
+      )
       return
     }
-    setIpfsUploading(true)
 
+    setIpfsUploading(true)
     try {
       const payload = {
         version: 'mission-control-job-request-spec/v1',
@@ -520,13 +612,20 @@ export function JobRequestTab({ wallet }) {
         answers,
         payment: paymentState,
         draft,
-        canonicalSpec: importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
+        canonicalSpec:
+          importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
       }
+
       const ipfs = await pinJsonToIpfs(payload, `${protocolId}-${Date.now()}-job-request.json`)
       if (!ipfs?.uri || !extractCid(ipfs.uri)) {
         throw new Error('IPFS upload did not return a valid URI.')
       }
-      setIpfsResult({ cid: ipfs.cid || extractCid(ipfs.uri), uri: ipfs.uri, gatewayUrl: ipfs.gatewayUrl || '' })
+
+      setIpfsResult({
+        cid: ipfs.cid || extractCid(ipfs.uri),
+        uri: ipfs.uri,
+        gatewayUrl: ipfs.gatewayUrl || '',
+      })
       setStep(8)
     } catch (e) {
       setError(e.message || 'IPFS upload failed.')
@@ -537,14 +636,17 @@ export function JobRequestTab({ wallet }) {
 
   async function handleCreateJobRequest() {
     setError('')
+
     if (!publishPayload) {
       setError('Publish payload is incomplete. Upload to IPFS first.')
       return
     }
+
     if (approvalRequired) {
       setError('Approval must be sufficient before creating a job request.')
       return
     }
+
     if (requiredMissing.length > 0) {
       setError('All required questions must be answered.')
       return
@@ -552,13 +654,20 @@ export function JobRequestTab({ wallet }) {
 
     setPosting(true)
     try {
-      const durationKey = DEADLINE_TO_DURATION[String(answers.deadline || 'normal_1w')] || '7d'
-      const resolvedDuration = (mdImported && draft.durationSeconds)
-        ? draft.durationSeconds
-        : (DURATION_SECONDS_BY_UI_VALUE[durationKey] || DURATION_SECONDS_BY_UI_VALUE['7d'])
-      const resolvedTags = (mdImported && Array.isArray(draft.tags) && draft.tags.length > 0)
-        ? draft.tags
-        : [draft.category, draft.protocol, paymentState.symbol]
+      const durationKey =
+        DEADLINE_TO_DURATION[String(answers.deadline || 'normal_1w')] || '7d'
+
+      const resolvedDuration =
+        mdImported && draft.durationSeconds
+          ? draft.durationSeconds
+          : DURATION_SECONDS_BY_UI_VALUE[durationKey] ||
+            DURATION_SECONDS_BY_UI_VALUE['7d']
+
+      const resolvedTags =
+        mdImported && Array.isArray(draft.tags) && draft.tags.length > 0
+          ? draft.tags
+          : [draft.category, draft.protocol, paymentState.symbol]
+
       const draftModel = {
         ...createDefaultJobRequestDraft(),
         title: draft.title,
@@ -576,11 +685,16 @@ export function JobRequestTab({ wallet }) {
         createdBy: wallet.account,
       }
 
-      const response = await createJobRequest(toLegacyJobRequestPayload(draftModel, {
-        durationUiValue: (mdImported && draft.durationSeconds) ? `${Math.round(draft.durationSeconds)}s` : durationKey,
-        ipfsUri: ipfsResult.uri,
-        imageUri: DEFAULT_REQUEST_IMAGE,
-      }))
+      const response = await createJobRequest(
+        toLegacyJobRequestPayload(draftModel, {
+          durationUiValue:
+            mdImported && draft.durationSeconds
+              ? `${Math.round(draft.durationSeconds)}s`
+              : durationKey,
+          ipfsUri: ipfsResult.uri,
+          imageUri: DEFAULT_REQUEST_IMAGE,
+        }),
+      )
 
       setResult({ ...response, publishPayload })
     } catch (e) {
@@ -594,7 +708,9 @@ export function JobRequestTab({ wallet }) {
     <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 space-y-4">
       <div>
         <div className="text-xs text-slate-500 uppercase tracking-wider">Request Wizard</div>
-        <div className="text-sm text-slate-300 mt-1">Protocol-aware guided compiler for AGI job creation.</div>
+        <div className="text-sm text-slate-300 mt-1">
+          Protocol-aware guided compiler for AGI job creation.
+        </div>
       </div>
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 flex flex-wrap items-center gap-2">
@@ -602,29 +718,34 @@ export function JobRequestTab({ wallet }) {
         {statusPill('step', String(step))}
         {statusPill('protocol', protocol?.label || 'not selected')}
         {statusPill('approval', approvalRequired ? 'required' : 'sufficient')}
-        {statusPill('ipfs pin', infraLoading ? 'checking…' : (ipfsReady ? 'ready' : 'missing PINATA_JWT'))}
+        {statusPill('ipfs pin', infraLoading ? 'checking…' : ipfsReady ? 'ready' : 'missing PINATA_JWT')}
         {!walletReady && (
           <button
             onClick={wallet?.connect}
             disabled={!wallet?.providerAvailable || wallet?.status === 'connecting'}
             className="text-xs px-3 py-1.5 rounded border border-amber-700 text-amber-200 hover:bg-amber-900/30 disabled:opacity-50"
           >
-            {wallet?.status === 'connecting' ? 'Connecting...' : 'Connect MetaMask to create a request'}
+            {wallet?.status === 'connecting'
+              ? 'Connecting...'
+              : 'Connect MetaMask to create a request'}
           </button>
         )}
       </div>
 
       {!infraLoading && !ipfsReady && (
         <div className="rounded border border-amber-900 bg-amber-950/20 p-3 text-xs text-amber-200">
-          IPFS upload is disabled because PINATA_JWT is not configured on the server. This is why “Upload reviewed spec to IPFS” fails.
-          Add PINATA_JWT in Render env vars, redeploy, then retry Step 7.
+          IPFS upload is disabled because PINATA_JWT is not configured on the server. This is why
+          “Upload reviewed spec to IPFS” fails. Add PINATA_JWT in Render env vars, redeploy, then
+          retry Step 7.
         </div>
       )}
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 1 · Protocol selection</div>
+        <div className="text-xs text-slate-500 uppercase tracking-wider">
+          Step 1 · Protocol selection
+        </div>
         <div className="grid md:grid-cols-3 gap-2">
-          {PROTOCOL_OPTIONS.map(option => {
+          {PROTOCOL_OPTIONS.map((option) => {
             const selected = protocolId === option.id
             return (
               <button
@@ -634,7 +755,11 @@ export function JobRequestTab({ wallet }) {
                   resetAfterProtocolPaymentChange()
                 }}
                 disabled={!walletReady}
-                className={`text-left rounded border p-3 ${selected ? 'border-blue-500 bg-blue-950/30' : 'border-slate-700 bg-slate-900'} disabled:opacity-60`}
+                className={`text-left rounded border p-3 ${
+                  selected
+                    ? 'border-blue-500 bg-blue-950/30'
+                    : 'border-slate-700 bg-slate-900'
+                } disabled:opacity-60`}
               >
                 <div className="text-sm text-slate-100 font-semibold">{option.label}</div>
                 <div className="text-xs text-slate-400 mt-1">{option.description}</div>
@@ -645,15 +770,17 @@ export function JobRequestTab({ wallet }) {
       </div>
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 2 · Payment token and payout</div>
+        <div className="text-xs text-slate-500 uppercase tracking-wider">
+          Step 2 · Payment token and payout
+        </div>
         <div className="grid md:grid-cols-2 gap-3">
           <label className="space-y-1">
             <span className="text-xs text-slate-400">Token</span>
             <select
               value={tokenAddress}
               disabled={!walletReady || !protocol}
-              onChange={e => {
-                const selected = tokenOptions.find(item => item.address === e.target.value)
+              onChange={(e) => {
+                const selected = tokenOptions.find((item) => item.address === e.target.value)
                 setTokenAddress(selected?.address || '')
                 setTokenSymbol(selected?.symbol || '')
                 setTokenDecimals(selected?.decimals || 18)
@@ -661,17 +788,20 @@ export function JobRequestTab({ wallet }) {
               }}
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
             >
-              {tokenOptions.map(option => (
-                <option key={option.id} value={option.address}>{option.symbol}</option>
+              {tokenOptions.map((option) => (
+                <option key={option.id} value={option.address}>
+                  {option.symbol}
+                </option>
               ))}
             </select>
           </label>
+
           <label className="space-y-1">
             <span className="text-xs text-slate-400">Token address</span>
             <input
               value={tokenAddress}
               disabled={!walletReady || !protocol}
-              onChange={e => {
+              onChange={(e) => {
                 setTokenAddress(e.target.value)
                 setApproveTxHash('')
               }}
@@ -685,17 +815,18 @@ export function JobRequestTab({ wallet }) {
             <input
               value={tokenSymbol}
               disabled={!walletReady || !protocol}
-              onChange={e => setTokenSymbol(e.target.value.toUpperCase())}
+              onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())}
               placeholder="AGIALPHA"
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
             />
           </label>
+
           <label className="space-y-1">
             <span className="text-xs text-slate-400">Token decimals</span>
             <input
               value={tokenDecimals}
               disabled={!walletReady || !protocol}
-              onChange={e => setTokenDecimals(e.target.value)}
+              onChange={(e) => setTokenDecimals(e.target.value)}
               placeholder="18"
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
             />
@@ -706,7 +837,7 @@ export function JobRequestTab({ wallet }) {
             <input
               value={payoutAmount}
               disabled={!walletReady || !protocol}
-              onChange={e => {
+              onChange={(e) => {
                 setPayoutAmount(e.target.value)
                 setApproveTxHash('')
               }}
@@ -715,16 +846,31 @@ export function JobRequestTab({ wallet }) {
             />
           </label>
         </div>
+
         <div className="text-xs text-slate-400">Preview: {payoutPreview}</div>
       </div>
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 3 · Token approval</div>
-        <div className="text-xs text-slate-400">Spender: <span className="font-mono">{protocol?.spenderAddress || '—'}</span></div>
-        <div className="text-xs text-slate-400">Allowance: {allowanceLoading ? 'loading...' : `${formatUnits(allowanceBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${tokenSymbol || 'TOKEN'}`}</div>
+        <div className="text-xs text-slate-500 uppercase tracking-wider">
+          Step 3 · Token approval
+        </div>
+        <div className="text-xs text-slate-400">
+          Spender: <span className="font-mono">{protocol?.spenderAddress || '—'}</span>
+        </div>
+        <div className="text-xs text-slate-400">
+          Allowance:{' '}
+          {allowanceLoading
+            ? 'loading...'
+            : `${formatUnits(allowanceBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${
+                tokenSymbol || 'TOKEN'
+              }`}
+        </div>
+
         {approvalRequired ? (
           <div className="space-y-2">
-            <div className="text-xs text-amber-300">Approval required before request generation and publish.</div>
+            <div className="text-xs text-amber-300">
+              Approval required before request generation and publish.
+            </div>
             <button
               onClick={handleApproveToken}
               disabled={approvePending || !walletReady || !protocol}
@@ -732,26 +878,39 @@ export function JobRequestTab({ wallet }) {
             >
               {approvePending ? 'Approving...' : 'Approve token spending'}
             </button>
-            {approveTxHash && <div className="text-xs text-slate-400 font-mono break-all">approval tx: {approveTxHash}</div>}
+            {approveTxHash && (
+              <div className="text-xs text-slate-400 font-mono break-all">
+                approval tx: {approveTxHash}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="text-xs text-emerald-300">Approval sufficient for selected payout.</div>
+          <div className="text-xs text-emerald-300">
+            Approval sufficient for selected payout.
+          </div>
         )}
       </div>
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 4 · Request input</div>
-        <div className="text-xs text-slate-400">Two ways to create a request — use either box. Chat input runs the guided wizard (Step 5). Markdown paste skips the wizard and lands you on the draft review (Step 6).</div>
+        <div className="text-xs text-slate-500 uppercase tracking-wider">
+          Step 4 · Request input
+        </div>
+        <div className="text-xs text-slate-400">
+          Two ways to create a request — use either box. Chat input runs the guided wizard
+          (Step 5). Markdown paste skips the wizard and lands you on the draft review (Step 6).
+        </div>
 
         <div className="grid md:grid-cols-2 gap-3">
           <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2">
             <div className="text-xs text-slate-300 font-semibold">Chat input</div>
-            <div className="text-[11px] text-slate-500">Describe your job in plain words — the wizard will ask clarifying questions.</div>
+            <div className="text-[11px] text-slate-500">
+              Describe your job in plain words — the wizard will ask clarifying questions.
+            </div>
             <textarea
               rows={10}
               disabled={!walletReady || !protocol || approvalRequired}
               value={rawRequest}
-              onChange={e => setRawRequest(e.target.value)}
+              onChange={(e) => setRawRequest(e.target.value)}
               placeholder="Describe what you need in simple words"
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
             />
@@ -766,27 +925,57 @@ export function JobRequestTab({ wallet }) {
 
           <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2">
             <div className="text-xs text-slate-300 font-semibold">Paste .md file</div>
-            <div className="text-[11px] text-slate-500">Paste a complete job spec in Markdown. Protocol, payout, duration, deliverables, and acceptance criteria are auto-detected.</div>
+            <div className="text-[11px] text-slate-500">
+              Paste a complete job spec in Markdown. JSON also works if you paste canonical spec.
+            </div>
             <textarea
               rows={14}
-              value={importRaw}
-              onChange={e => setImportRaw(e.target.value)}
-              placeholder={`development\nEthereum mainnet · AGIJobManager v1\nYour job title here\n\nJob description paragraph...\n\ntag1\ntag2\nPayout\n10,000\nAGIALPHA tokens\nDuration\n7 days\n604,800 sec window\nDeliverables\ndeliverable item 1\ndeliverable item 2\nAcceptance criteria\ncriterion 1\ncriterion 2\nRequirements\nrequirement 1\nEmployer: you · Contract: 0x... · createdVia: Emperor_os`}
+              value={mdRaw}
+              onChange={(e) => setMdRaw(e.target.value)}
+              placeholder={`development
+Ethereum mainnet · AGIJobManager v1
+Your job title here
+
+Job description paragraph...
+
+tag1
+tag2
+Payout
+10,000
+AGIALPHA tokens
+Duration
+7 days
+604,800 sec window
+Deliverables
+deliverable item 1
+deliverable item 2
+Acceptance criteria
+criterion 1
+criterion 2
+Requirements
+requirement 1
+Employer: you · Contract: 0x... · createdVia: Emperor_os`}
               className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200"
             />
             <div className="flex items-center gap-3">
               <button
                 onClick={handleMdImport}
-                disabled={!importRaw.trim()}
+                disabled={!mdRaw.trim()}
                 className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
               >
                 Parse & import
               </button>
-              {mdImported && <span className="text-xs text-emerald-400">Imported — review draft below</span>}
+              {mdImported && (
+                <span className="text-xs text-emerald-400">
+                  Imported — review draft below
+                </span>
+              )}
             </div>
-            {importWarnings.length > 0 && (
+            {mdWarnings.length > 0 && (
               <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1">
-                {importWarnings.map((w, i) => <div key={i}>{w}</div>)}
+                {mdWarnings.map((w, i) => (
+                  <div key={i}>{w}</div>
+                ))}
               </div>
             )}
           </div>
@@ -795,78 +984,207 @@ export function JobRequestTab({ wallet }) {
 
       {step >= 5 && currentQuestion && (
         <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 5 · Guided questions ({questionIndex + 1}/{questions.length})</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">
+            Step 5 · Guided questions ({questionIndex + 1}/{questions.length})
+          </div>
           <div className="text-sm text-slate-100 font-semibold">{currentQuestion.prompt}</div>
           <div className="space-y-2">
-            {currentQuestion.options.map(option => {
+            {currentQuestion.options.map((option) => {
               const checked = answers[currentQuestion.id] === option.value
               return (
-                <label key={option.id} className={`flex items-center gap-2 px-3 py-2 rounded border ${checked ? 'border-blue-500 bg-blue-950/30' : 'border-slate-700'}`}>
-                  <input type="radio" name={currentQuestion.id} checked={checked} onChange={() => handleSelectAnswer(option.value)} />
+                <label
+                  key={option.id}
+                  className={`flex items-center gap-2 px-3 py-2 rounded border ${
+                    checked ? 'border-blue-500 bg-blue-950/30' : 'border-slate-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={currentQuestion.id}
+                    checked={checked}
+                    onChange={() => handleSelectAnswer(option.value)}
+                  />
                   <span className="text-sm">{option.label}</span>
                 </label>
               )
             })}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setQuestionIndex(i => Math.max(0, i - 1))} disabled={questionIndex === 0} className="text-xs px-3 py-2 rounded border border-slate-700 disabled:opacity-50">Back</button>
-            <button onClick={handleNextQuestion} className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200">{questionIndex === questions.length - 1 ? 'Generate draft' : 'Next'}</button>
+            <button
+              onClick={() => setQuestionIndex((i) => Math.max(0, i - 1))}
+              disabled={questionIndex === 0}
+              className="text-xs px-3 py-2 rounded border border-slate-700 disabled:opacity-50"
+            >
+              Back
+            </button>
+            <button
+              onClick={handleNextQuestion}
+              className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200"
+            >
+              {questionIndex === questions.length - 1 ? 'Generate draft' : 'Next'}
+            </button>
           </div>
         </div>
       )}
 
       {step >= 6 && draft && (
         <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 6 · Draft spec {mdImported && <span className="text-indigo-400 normal-case ml-1">(imported from Markdown)</span>}</div>
-          <label className="space-y-1 block"><span className="text-xs text-slate-400">Title</span><input value={editingTitle} onChange={e => setEditingTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
-          <label className="space-y-1 block"><span className="text-xs text-slate-400">Summary</span><textarea rows={3} value={editingSummary} onChange={e => setEditingSummary(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
-          <div className="grid md:grid-cols-2 gap-3">
-            <label className="space-y-1 block"><span className="text-xs text-slate-400">{mdImported ? 'Deliverables' : 'Scope'}</span><textarea rows={4} value={editingScope} onChange={e => setEditingScope(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
-            <label className="space-y-1 block"><span className="text-xs text-slate-400">Deliverables</span><textarea rows={4} value={editingDeliverables} onChange={e => setEditingDeliverables(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">
+            Step 6 · Draft spec{' '}
+            {mdImported && (
+              <span className="text-indigo-400 normal-case ml-1">
+                (imported from Markdown / JSON)
+              </span>
+            )}
           </div>
-          <label className="space-y-1 block"><span className="text-xs text-slate-400">Acceptance criteria</span><textarea rows={4} value={editingAcceptance} onChange={e => setEditingAcceptance(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm" /></label>
+
+          <label className="space-y-1 block">
+            <span className="text-xs text-slate-400">Title</span>
+            <input
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+            />
+          </label>
+
+          <label className="space-y-1 block">
+            <span className="text-xs text-slate-400">Summary</span>
+            <textarea
+              rows={3}
+              value={editingSummary}
+              onChange={(e) => setEditingSummary(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+            />
+          </label>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="space-y-1 block">
+              <span className="text-xs text-slate-400">{mdImported ? 'Deliverables' : 'Scope'}</span>
+              <textarea
+                rows={4}
+                value={editingScope}
+                onChange={(e) => setEditingScope(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              />
+            </label>
+
+            <label className="space-y-1 block">
+              <span className="text-xs text-slate-400">Deliverables</span>
+              <textarea
+                rows={4}
+                value={editingDeliverables}
+                onChange={(e) => setEditingDeliverables(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+
+          <label className="space-y-1 block">
+            <span className="text-xs text-slate-400">Acceptance criteria</span>
+            <textarea
+              rows={4}
+              value={editingAcceptance}
+              onChange={(e) => setEditingAcceptance(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm"
+            />
+          </label>
+
           {mdImported && (
             <div className="grid md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <span className="text-xs text-slate-400">Requirements (read-only)</span>
                 <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 space-y-1 max-h-40 overflow-y-auto">
-                  {(draft.requirements || []).map((r, i) => <div key={i}>{r}</div>)}
-                  {(!draft.requirements || draft.requirements.length === 0) && <div className="text-slate-500 italic">none</div>}
+                  {(draft.requirements || []).map((r, i) => (
+                    <div key={i}>{r}</div>
+                  ))}
+                  {(!draft.requirements || draft.requirements.length === 0) && (
+                    <div className="text-slate-500 italic">none</div>
+                  )}
                 </div>
               </div>
+
               <div className="space-y-1">
                 <span className="text-xs text-slate-400">Tags</span>
                 <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 flex flex-wrap gap-1">
-                  {(draft.tags || []).map((t, i) => <span key={i} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">{t}</span>)}
-                  {(!draft.tags || draft.tags.length === 0) && <span className="text-slate-500 italic">none</span>}
+                  {(draft.tags || []).map((t, i) => (
+                    <span
+                      key={i}
+                      className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                  {(!draft.tags || draft.tags.length === 0) && (
+                    <span className="text-slate-500 italic">none</span>
+                  )}
                 </div>
               </div>
             </div>
           )}
+
           <div className="text-xs text-slate-400">
             Protocol: {protocol?.label || draft.protocol} · Category: {draft.category}
-            {mdImported && draft.durationSeconds && <> · Duration: {Math.round(draft.durationSeconds / 86400 * 100) / 100} days ({draft.durationSeconds.toLocaleString()}s)</>}
+            {mdImported && draft.durationSeconds && (
+              <>
+                {' '}
+                · Duration: {Math.round((draft.durationSeconds / 86400) * 100) / 100} days (
+                {draft.durationSeconds.toLocaleString()}s)
+              </>
+            )}
             {!mdImported && draft.complexity && <> · Complexity: {draft.complexity}</>}
-            {mdImported && draft.contract && <> · Contract: <span className="font-mono">{draft.contract.slice(0, 6)}...{draft.contract.slice(-4)}</span></>}
+            {mdImported && draft.contract && (
+              <>
+                {' '}
+                · Contract:{' '}
+                <span className="font-mono">
+                  {draft.contract.slice(0, 6)}...{draft.contract.slice(-4)}
+                </span>
+              </>
+            )}
           </div>
+
           <div className="flex gap-2">
-            <button onClick={handleApplyDraftEdits} className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200">Continue to IPFS</button>
+            <button
+              onClick={handleApplyDraftEdits}
+              className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200"
+            >
+              Continue to IPFS
+            </button>
           </div>
         </div>
       )}
 
       {step >= 7 && draft && (
         <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 7 · IPFS upload</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">
+            Step 7 · IPFS upload
+          </div>
           {!ipfsResult ? (
-            <button onClick={handleUploadToIpfs} disabled={ipfsUploading || !ipfsReady} className="text-xs px-3 py-2 rounded border border-cyan-700 text-cyan-200 disabled:opacity-50">
-              {ipfsUploading ? 'Uploading to IPFS...' : (!ipfsReady ? 'IPFS disabled (missing PINATA_JWT)' : 'Upload reviewed spec to IPFS')}
+            <button
+              onClick={handleUploadToIpfs}
+              disabled={ipfsUploading || !ipfsReady}
+              className="text-xs px-3 py-2 rounded border border-cyan-700 text-cyan-200 disabled:opacity-50"
+            >
+              {ipfsUploading
+                ? 'Uploading to IPFS...'
+                : !ipfsReady
+                  ? 'IPFS disabled (missing PINATA_JWT)'
+                  : 'Upload reviewed spec to IPFS'}
             </button>
           ) : (
             <div className="space-y-1 text-xs">
               <div className="text-emerald-300">IPFS upload complete.</div>
               <div className="text-slate-400 font-mono break-all">URI: {ipfsResult.uri}</div>
-              {ipfsResult.gatewayUrl && <a href={ipfsResult.gatewayUrl} target="_blank" rel="noreferrer" className="text-blue-400">Open gateway ↗</a>}
+              {ipfsResult.gatewayUrl && (
+                <a
+                  href={ipfsResult.gatewayUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-400"
+                >
+                  Open gateway ↗
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -874,13 +1192,19 @@ export function JobRequestTab({ wallet }) {
 
       {step >= 8 && draft && ipfsResult && (
         <div className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 8 · Final review / generate sign-ready request package</div>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">
+            Step 8 · Final review / generate sign-ready request package
+          </div>
           <div className="text-xs text-slate-300 space-y-1">
-            <div>Wallet: <span className="font-mono">{wallet?.account || '—'}</span></div>
+            <div>
+              Wallet: <span className="font-mono">{wallet?.account || '—'}</span>
+            </div>
             <div>Protocol: {protocol?.label}</div>
             <div>Payment: {payoutPreview}</div>
             <div>Approval status: {approvalRequired ? 'insufficient' : 'sufficient'}</div>
-            <div>IPFS URI: <span className="font-mono break-all">{ipfsResult.uri}</span></div>
+            <div>
+              IPFS URI: <span className="font-mono break-all">{ipfsResult.uri}</span>
+            </div>
           </div>
           <button
             onClick={handleCreateJobRequest}
@@ -889,23 +1213,57 @@ export function JobRequestTab({ wallet }) {
           >
             {posting ? 'Generating package...' : 'Generate sign-ready request package'}
           </button>
+
           {result?.unsignedTxPath && (
             <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2 text-xs space-y-1">
               <div className="text-emerald-300">Sign-ready request package generated.</div>
-              <div className="text-slate-300 break-all">unsigned tx: <a className="text-blue-300 underline" href={`/api/operator-actions/file?path=${encodeURIComponent(result.unsignedTxPath)}`} target="_blank" rel="noreferrer">open</a></div>
-              <div className="text-slate-300 break-all">review manifest: <a className="text-blue-300 underline" href={`/api/operator-actions/file?path=${encodeURIComponent(result.reviewManifestPath || '')}`} target="_blank" rel="noreferrer">open</a></div>
+              <div className="text-slate-300 break-all">
+                unsigned tx:{' '}
+                <a
+                  className="text-blue-300 underline"
+                  href={`/api/operator-actions/file?path=${encodeURIComponent(
+                    result.unsignedTxPath,
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  open
+                </a>
+              </div>
+              <div className="text-slate-300 break-all">
+                review manifest:{' '}
+                <a
+                  className="text-blue-300 underline"
+                  href={`/api/operator-actions/file?path=${encodeURIComponent(
+                    result.reviewManifestPath || '',
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  open
+                </a>
+              </div>
             </div>
           )}
+
           {result?.publishPayload && (
             <details>
-              <summary className="text-xs text-slate-300 cursor-pointer">View publish payload</summary>
-              <pre className="mt-2 p-2 rounded bg-slate-900 text-xs text-slate-300 overflow-x-auto">{JSON.stringify(result.publishPayload, null, 2)}</pre>
+              <summary className="text-xs text-slate-300 cursor-pointer">
+                View publish payload
+              </summary>
+              <pre className="mt-2 p-2 rounded bg-slate-900 text-xs text-slate-300 overflow-x-auto">
+                {JSON.stringify(result.publishPayload, null, 2)}
+              </pre>
             </details>
           )}
         </div>
       )}
 
-      {error && <div className="text-xs text-red-400 bg-red-950/30 border border-red-900 rounded p-2">{error}</div>}
+      {error && (
+        <div className="text-xs text-red-400 bg-red-950/30 border border-red-900 rounded p-2">
+          {error}
+        </div>
+      )}
     </div>
   )
 }
