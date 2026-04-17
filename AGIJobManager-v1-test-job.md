@@ -12,7 +12,7 @@ agent-tooling
 json
 ethereum
 Payout
-10,000
+1,000
 AGIALPHA tokens
 Duration
 1 day
