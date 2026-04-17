@@ -94,6 +94,7 @@ export function listProviders() {
   const preferred = getPreferredProvider()
   return PROVIDERS.map(p => ({
     id:         p.id,
+    name:       p.id,
     label:      p.label,
     enabled:    isProviderEnabled(p),
     selected:   preferred === p.id,
