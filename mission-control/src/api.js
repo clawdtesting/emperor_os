@@ -218,3 +218,21 @@ export async function fetchPrimeValidatorTimeline(procurementId) {
   if (!res.ok) throw new Error(data?.error || 'Failed to fetch prime validator timeline')
   return data
 }
+
+export async function fetchLlmProviders() {
+  const res = await fetch(BASE + '/api/llm/providers')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch LLM providers')
+  return data
+}
+
+export async function setLlmPreferred(providerId) {
+  const res = await fetch(BASE + '/api/llm/preferred', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ providerId }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to set preferred LLM provider')
+  return data
+}

@@ -6,7 +6,8 @@
 // Env vars required:
 //   AGENT_PRIVATE_KEY      wallet private key
 //   ETH_RPC_URL            Ethereum HTTP RPC endpoint
-//   ANTHROPIC_API_KEY      Claude API key
+//   LLM provider key       at least one of ANTHROPIC_API_KEY / OPENAI_API_KEY /
+//                          GEMINI_API_KEY / OPENROUTER_API_KEY (or run Ollama locally)
 //   PINATA_JWT             Pinata JWT for IPFS pinning
 //   AGENT_SUBDOMAIN        e.g. emperor-os.alpha.agent.agi.eth
 //   AGENT_MERKLE_PROOF     JSON array string of bytes32 proof elements
@@ -16,6 +17,7 @@ import { ethers } from 'ethers'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { llmChat } from '../../agent/llm-router.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -124,36 +126,17 @@ async function pinWithRetry(content, filename) {
   }
 }
 
-// ── Claude ────────────────────────────────────────────────────────────────────
+// ── LLM (provider-agnostic via agent/llm-router.js) ───────────────────────────
 
-async function claudeChat(system, user, maxTokens = 4096, timeoutMs = CLAUDE_TIMEOUT_MS) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:  'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model:      MODEL,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content: user }],
-    }),
-    signal: AbortSignal.timeout(timeoutMs),
-  })
-  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`)
-  const data = await res.json()
-  const text = data.content?.[0]?.text
-  if (!text) throw new Error('empty Anthropic response')
-  return text.trim()
+async function llmRouterChat(system, user, maxTokens = 4096, timeoutMs = CLAUDE_TIMEOUT_MS) {
+  return llmChat(system, user, { maxTokens, timeoutMs })
 }
 
 async function evaluateAndDraft(specContent, agentAddress) {
   const system = `You are Emperor_OS, an autonomous AI agent participating in the AGIJobManager marketplace on Ethereum. You evaluate job specs and, when suitable, draft the application — all in a single response to minimise API calls.`
   const user   = `Job spec:\n\n${specContent}\n\nAgent address: ${agentAddress}\n\nDecide whether Emperor_OS should apply, then draft the application if yes.\n\nRespond in this exact format:\n\n\`\`\`json\n{"shouldApply": true_or_false, "reason": "one sentence"}\n\`\`\`\n\nIf shouldApply is true, write the complete application document in Markdown immediately after the JSON block. Cover: who Emperor_OS is, why it suits this job, proposed approach, estimated timeline. Be specific, no filler.\n\nIf shouldApply is false, stop after the JSON block.`
 
-  const raw      = await claudeChat(system, user, 4352)
+  const raw      = await llmRouterChat(system, user, 4352)
   const jsonMatch = raw.match(/```json\s*([\s\S]*?)```/)
   if (!jsonMatch) throw new Error('evaluateAndDraft: missing JSON block in response')
 
@@ -170,7 +153,7 @@ async function draftTrial(specContent, agentAddress) {
   const system = `You are Emperor_OS, an autonomous AI agent delivering paid work on the AGIJobManager marketplace. Produce the actual deliverable described in the job spec — not an application, but the real work product.`
   const user   = `Job spec:\n\n${specContent}\n\nAgent address: ${agentAddress}\n\nProduce the complete deliverable described in the job spec. Follow every acceptance criterion. Output clean Markdown.`
 
-  return await claudeChat(system, user, 8192, CLAUDE_LONG_TIMEOUT_MS)
+  return await llmRouterChat(system, user, 8192, CLAUDE_LONG_TIMEOUT_MS)
 }
 
 async function draftTrialWithRetry(specContent, agentAddress, retries = 2) {
@@ -529,9 +512,9 @@ export { poll, loadState, saveState }
 export function start() {
   if (!process.env.AGENT_PRIVATE_KEY) { console.error('[procurement] AGENT_PRIVATE_KEY not set'); return }
   if (!process.env.ETH_RPC_URL)       { console.error('[procurement] ETH_RPC_URL not set'); return }
-  if (!process.env.ANTHROPIC_API_KEY) { console.error('[procurement] ANTHROPIC_API_KEY not set'); return }
   if (!process.env.PINATA_JWT)        { console.error('[procurement] PINATA_JWT not set'); return }
   if (!process.env.AGENT_SUBDOMAIN)   { console.error('[procurement] AGENT_SUBDOMAIN not set'); return }
+  // Note: LLM provider availability is checked by agent/llm-router.js at call time.
 
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true })
 

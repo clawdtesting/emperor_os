@@ -4,6 +4,8 @@ import {
   markOperatorActionSigned,
   markOperatorActionBroadcast,
   markOperatorActionFinalized,
+  fetchLlmProviders,
+  setLlmPreferred,
 } from '../api'
 
 const STAGES = [
@@ -214,6 +216,85 @@ function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }
   )
 }
 
+function LlmProviderPicker() {
+  const [providers, setProviders] = useState([])
+  const [preferred, setPreferred] = useState('')
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const refresh = async () => {
+    try {
+      const data = await fetchLlmProviders()
+      setProviders(Array.isArray(data?.providers) ? data.providers : [])
+      setPreferred(data?.preferred || '')
+    } catch (err) {
+      setMessage(`Load failed: ${err.message}`)
+    }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  const choose = async (providerId) => {
+    setBusy(true)
+    try {
+      const data = await setLlmPreferred(providerId)
+      setPreferred(data?.preferred || '')
+      setProviders(Array.isArray(data?.providers) ? data.providers : providers)
+      setMessage(providerId ? `Preferred provider: ${providerId}` : 'Preference cleared — first available provider will be used')
+    } catch (err) {
+      setMessage(`Update failed: ${err.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const enabledCount = providers.filter(p => p.enabled).length
+
+  return (
+    <div className="mb-5 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-slate-200">LLM provider</h3>
+        <span className="text-xs text-slate-500">{enabledCount} of {providers.length} available</span>
+      </div>
+      <div className="flex flex-wrap gap-2 mb-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => choose('')}
+          className={`px-3 py-1 rounded text-xs border ${!preferred ? 'border-cyan-700 bg-cyan-950/40 text-cyan-200' : 'border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+          title="Auto: use the first enabled provider"
+        >
+          Auto
+        </button>
+        {providers.map(p => {
+          const selected = preferred === p.id
+          const base = p.enabled
+            ? (selected ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200' : 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500')
+            : 'border-slate-800 bg-slate-900/50 text-slate-500 cursor-not-allowed'
+          return (
+            <button
+              key={p.id}
+              type="button"
+              disabled={!p.enabled || busy}
+              onClick={() => choose(p.id)}
+              className={`px-3 py-1 rounded text-xs border ${base}`}
+              title={p.enabled ? `${p.label} (${p.model})` : `${p.label} — set ${p.envKey} to enable`}
+            >
+              {p.label}
+              {!p.enabled && <span className="ml-1 text-[10px] text-slate-600">missing {p.envKey}</span>}
+              {p.enabled && <span className="ml-1 text-[10px] text-slate-400">{p.model}</span>}
+            </button>
+          )
+        })}
+      </div>
+      {message && <div className="text-xs text-amber-300">{message}</div>}
+      {enabledCount === 0 && (
+        <div className="text-xs text-red-400">No providers available. Set an API key (ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY) or run Ollama locally.</div>
+      )}
+    </div>
+  )
+}
+
 export default function OperationsLane({ onOpenEntity = () => {} }) {
   const [data, setData] = useState(null)
   const [operatorActions, setOperatorActions] = useState([])
@@ -316,6 +397,8 @@ export default function OperationsLane({ onOpenEntity = () => {} }) {
           <button onClick={() => setTab('jobs')} className={`px-3 py-1 rounded text-xs ${tab === 'jobs' ? 'bg-cyan-900 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>Jobs (v1/v2)</button>
         </div>
       </div>
+
+      <LlmProviderPicker />
 
       <div className="mb-5 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
         <div className="flex items-center justify-between mb-3">
