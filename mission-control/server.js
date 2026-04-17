@@ -10,6 +10,7 @@ import { createHash } from 'crypto'
 import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
 import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage } from './lib/contract-first.js'
+import { buildAssignedJobRunner } from './lib/intake-runner.js'
 import { listProviders, getPreferredProvider, setPreferredProvider } from '../agent/llm-router.js'
 
 const app = express()
@@ -3393,7 +3394,7 @@ app.post('/api/test-run', (req, res) => {
   req.on('close',  ()   => proc.kill())
 })
 
-// ── Intake pipeline runner (for real MCP jobs) ───────────────────────────────
+// ── Assigned-job script runner ───────────────────────────────────────────────
 app.post('/api/intake-run', (req, res) => {
   const { jobId, job } = req.body || {}
   if (!job || typeof job !== 'object') {
@@ -3410,17 +3411,14 @@ app.post('/api/intake-run', (req, res) => {
 
   const safeJobId = String(jobId || job.jobId || Date.now()).replace(/[^a-z0-9_-]/gi, '_')
   const tmpFile = join(tmpdir(), `intake-job-${safeJobId}.json`)
+  const runner = buildAssignedJobRunner({
+    workspaceRoot: WORKSPACE_ROOT,
+    jobFile: tmpFile,
+    jobId: String(jobId || job.jobId || '').trim(),
+  })
 
-  // Find intake pipeline
-  let pipelinePath = null
-  if (existsSync(PIPELINES_DIR)) {
-    const files = readdirSync(PIPELINES_DIR).filter(f => f.endsWith('.yaml') || f.endsWith('.lobster'))
-    const intakeFile = files.find(f => f.toLowerCase().includes('intake')) || files[0] || null
-    if (intakeFile) pipelinePath = join(PIPELINES_DIR, intakeFile)
-  }
-
-  if (!pipelinePath) {
-    send('error', { message: 'No production intake pipeline found in pipelines/. Add intake.lobster.yaml (real mode) to enable autonomous on-chain intake.' })
+  if (!existsSync(runner.scriptPath)) {
+    send('error', { message: `Assigned-job script not found at ${runner.scriptPath}` })
     res.end()
     return
   }
@@ -3433,9 +3431,9 @@ app.post('/api/intake-run', (req, res) => {
     return
   }
 
-  send('start', { pipeline: pipelinePath, jobId: safeJobId, ts: new Date().toISOString() })
+  send('start', { script: runner.scriptPath, jobId: safeJobId, ts: new Date().toISOString() })
 
-  const proc = spawn('lobster', ['run', pipelinePath, '--json-input', tmpFile], {
+  const proc = spawn(runner.command, runner.args, {
     cwd: WORKSPACE_ROOT,
     env: { ...process.env },
   })
@@ -3465,7 +3463,7 @@ app.post('/api/intake-run', (req, res) => {
 
   proc.on('error', err => {
     const msg = err.code === 'ENOENT'
-      ? 'lobster not found in PATH. Install lobster to enable pipeline execution.'
+      ? `Node runtime not found while starting ${runner.scriptPath}`
       : err.message
     send('error', { message: msg })
     try { unlinkSync(tmpFile) } catch {}
