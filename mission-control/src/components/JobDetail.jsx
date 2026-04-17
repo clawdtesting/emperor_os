@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { resolveEns, shortAddr } from '../utils/ens'
 import {
@@ -481,6 +481,9 @@ export function JobDetail({ job, wallet, onRunIntake }) {
   const [applyStatusLoading, setApplyStatusLoading] = useState(false)
   const [applyStatusError, setApplyStatusError] = useState('')
   const [applyStatusResult, setApplyStatusResult] = useState(null)
+  const [highlightedSection, setHighlightedSection] = useState('')
+  const applyStatusRef = useRef(null)
+  const highlightTimeoutRef = useRef(null)
   const [validatorPrepareLoading, setValidatorPrepareLoading] = useState(false)
   const [validatorPrepareError, setValidatorPrepareError] = useState('')
   const [validatorPrepareResult, setValidatorPrepareResult] = useState(null)
@@ -521,6 +524,11 @@ export function JobDetail({ job, wallet, onRunIntake }) {
     setApplyStatusLoading(false)
     setApplyStatusError('')
     setApplyStatusResult(null)
+    setHighlightedSection('')
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current)
+      highlightTimeoutRef.current = null
+    }
     setValidatorPrepareLoading(false)
     setValidatorPrepareError('')
     setValidatorPrepareResult(null)
@@ -659,6 +667,27 @@ export function JobDetail({ job, wallet, onRunIntake }) {
 
     return () => { cancelled = true }
   }, [isV1, job?.jobId, job?.links?.contract])
+
+  useEffect(() => {
+    if (job?.__operatorFocus !== 'apply-status') return
+    if (!applyStatusRef.current) return
+    applyStatusRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightedSection('apply-status')
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedSection('')
+      highlightTimeoutRef.current = null
+    }, 2200)
+  }, [job?.jobId, job?.__operatorFocus, applyStatusResult?.state?.status])
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current)
+        highlightTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   if (!job) {
     return (
@@ -1229,7 +1258,10 @@ export function JobDetail({ job, wallet, onRunIntake }) {
         )}
 
         {isV1 && (job.status === 'Open' || applyStatusResult?.summary || applyPrepareResult) && (
-          <div className="rounded border border-cyan-900 bg-cyan-950/20 p-2 space-y-2">
+          <div
+            ref={applyStatusRef}
+            className={`rounded border p-2 space-y-2 transition-all duration-500 ${highlightedSection === 'apply-status' ? 'border-cyan-400 bg-cyan-900/30 ring-2 ring-cyan-500/40 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]' : 'border-cyan-900 bg-cyan-950/20'}`}
+          >
             <div className="text-xs text-cyan-200 font-medium">Apply package (v1)</div>
             <div className="text-xs text-slate-400">
               Build, track, and reconcile the unsigned approve + applyForJob package for this v1 job.

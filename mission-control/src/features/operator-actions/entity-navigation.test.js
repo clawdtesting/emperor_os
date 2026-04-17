@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { resolveOperatorEntityCandidate } from './entity-navigation.js'
+import { resolveOperatorEntityCandidate, operatorActionFocusHint } from './entity-navigation.js'
 
 test('resolveOperatorEntityCandidate returns refreshed v1 job for operator action entity', () => {
   const jobs = [
@@ -9,10 +9,11 @@ test('resolveOperatorEntityCandidate returns refreshed v1 job for operator actio
     { source: 'agijobmanager-v2', jobId: 'V2-77', status: 'Observed' },
   ]
 
-  const result = resolveOperatorEntityCandidate(jobs, { lane: 'v1', entityId: '77' })
+  const result = resolveOperatorEntityCandidate(jobs, { lane: 'v1', entityId: '77', action: 'apply' })
 
   assert.equal(result?.job?.source, 'agijobmanager')
   assert.equal(result?.job?.jobId, '77')
+  assert.equal(result?.job?.__operatorFocus, 'apply-status')
   assert.equal(result?.tab, 'detail')
 })
 
@@ -35,4 +36,9 @@ test('resolveOperatorEntityCandidate falls back to lane tab when refreshed entit
 
   assert.equal(result?.job, null)
   assert.equal(result?.tab, 'jobs-v1')
+})
+
+test('operatorActionFocusHint returns apply section focus for apply actions', () => {
+  assert.equal(operatorActionFocusHint({ action: 'apply' }), 'apply-status')
+  assert.equal(operatorActionFocusHint({ action: 'validate' }), '')
 })

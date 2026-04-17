@@ -5,11 +5,16 @@ function extractNumericTail(value) {
   return m ? m[1] : null
 }
 
+export function operatorActionFocusHint(actionItem) {
+  return String(actionItem?.action || '').toLowerCase() === 'apply' ? 'apply-status' : ''
+}
+
 export function resolveOperatorEntityCandidate(jobs, actionItem) {
   const jobsDesc = Array.isArray(jobs) ? jobs : []
   const lane = String(actionItem?.lane || '').toLowerCase()
   const entityId = String(actionItem?.entityId || '').trim()
   const entityTail = extractNumericTail(entityId)
+  const focus = operatorActionFocusHint(actionItem)
 
   let candidate = null
 
@@ -21,8 +26,9 @@ export function resolveOperatorEntityCandidate(jobs, actionItem) {
       return pId === entityId || jId === entityId || jId === `P-${entityId}`
     }) || null
     return {
-      job: candidate,
+      job: candidate ? { ...candidate, __operatorFocus: focus } : null,
       tab: candidate ? 'detail' : 'prime',
+      focus,
     }
   }
 
@@ -40,7 +46,8 @@ export function resolveOperatorEntityCandidate(jobs, actionItem) {
   }) || null
 
   return {
-    job: candidate,
+    job: candidate ? { ...candidate, __operatorFocus: focus } : null,
     tab: candidate ? 'detail' : (wantV2 ? 'jobs-v2' : 'jobs-v1'),
+    focus,
   }
 }
