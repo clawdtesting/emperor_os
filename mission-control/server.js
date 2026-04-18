@@ -1561,13 +1561,19 @@ async function listPrimeJobsFromChain() {
     const abiRaw = readJsonSafe(abiPath, [])
     const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
     const iface = new ethers.Interface(abi)
-    const procurementCreatedTopic = iface.getEvent('ProcurementCreated').topicHash
-    const premiumJobCreatedTopic = iface.getEvent('PremiumJobCreated').topicHash
+    let procurementCreatedTopic = null
+    let premiumJobCreatedTopic = null
+    try { procurementCreatedTopic = iface.getEvent('ProcurementCreated')?.topicHash || null } catch {}
+    try { premiumJobCreatedTopic = iface.getEvent('PremiumJobCreated')?.topicHash || null } catch {}
 
-    const [procurementLogs, premiumLogs] = await Promise.all([
-      rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [procurementCreatedTopic] }),
-      rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [premiumJobCreatedTopic] }),
-    ])
+    // Keep v1 discovery indexing resilient even when premium event ABI/signature is unavailable.
+    // Do not let one event-family failure zero out all prime rows.
+    const procurementLogs = procurementCreatedTopic
+      ? await rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [procurementCreatedTopic] }).catch(() => [])
+      : []
+    const premiumLogs = premiumJobCreatedTopic
+      ? await rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [premiumJobCreatedTopic] }).catch(() => [])
+      : []
 
     const rows = []
     const seenKeys = new Set()
