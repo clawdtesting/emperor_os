@@ -148,6 +148,38 @@ function queueStageLabel(stage) {
   return 'Needs signature'
 }
 
+function summarizeManifest(filePreview) {
+  if (!filePreview?.text) return null
+  try {
+    const data = JSON.parse(filePreview.text)
+    if (!data || typeof data !== 'object') return null
+    const source = data.source || data.type || data.kind || 'manifest'
+    const title = data.title || data.summary || data.action || data.phase || 'Review manifest'
+    const checklist = Array.isArray(data.checklist)
+      ? data.checklist
+      : Array.isArray(data.reviewChecklist)
+        ? data.reviewChecklist
+        : []
+    const files = Array.isArray(data.files)
+      ? data.files
+      : Array.isArray(data.artifacts)
+        ? data.artifacts
+        : []
+
+    return {
+      source,
+      title,
+      status: data.status || data.lifecycleStage || data.stage || 'n/a',
+      entity: data.entityId || data.jobId || data.procurementId || data.id || 'n/a',
+      action: data.action || data.nextAction || data.operatorAction || 'n/a',
+      checklist: checklist.map((item) => (typeof item === 'string' ? item : item?.label || item?.title || item?.name || JSON.stringify(item))).slice(0, 8),
+      files: files.map((item) => (typeof item === 'string' ? item : item?.path || item?.uri || item?.name || JSON.stringify(item))).slice(0, 8),
+    }
+  } catch {
+    return null
+  }
+}
+
 function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }) {
   const laneColor = item.lane === 'prime'
     ? 'text-cyan-300 bg-cyan-950/40 border-cyan-700'
@@ -162,37 +194,37 @@ function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }
       : 'Mark signed / attach tx hash'
 
   return (
-    <div className="grid grid-cols-12 gap-2 items-center border border-slate-800 rounded-md p-2 text-xs">
-      <div className="col-span-2 flex items-center gap-2">
+    <div className="grid md:grid-cols-12 gap-2 items-start border border-slate-800 rounded-md p-2 text-xs min-w-0">
+      <div className="md:col-span-2 flex items-center gap-2 min-w-0">
         <button
           type="button"
-          className="flex items-center gap-2 text-left hover:opacity-90 disabled:opacity-50"
+          className="flex items-center gap-2 text-left hover:opacity-90 disabled:opacity-50 min-w-0"
           onClick={() => onOpenEntity(item)}
           disabled={typeof onOpenEntity !== 'function' || busy}
           title="Open entity detail"
         >
           <span className={`text-[10px] px-2 py-0.5 rounded border uppercase tracking-wider ${laneColor}`}>{item.lane}</span>
-          <span className="text-slate-500 font-mono underline decoration-dotted">{item.entityId}</span>
+          <span className="text-slate-500 font-mono underline decoration-dotted break-all">{item.entityId}</span>
         </button>
       </div>
-      <div className="col-span-2 text-slate-200 font-semibold">
-        <div>{item.action}</div>
+      <div className="md:col-span-2 text-slate-200 font-semibold min-w-0">
+        <div className="break-words">{item.action}</div>
         <div className="text-[10px] text-slate-500 mt-0.5">
           checklist: {Array.isArray(item.checklist) ? item.checklist.length : 0}
         </div>
       </div>
-      <div className="col-span-2 text-slate-400">{countdown(item.deadlineAt)}</div>
-      <div className="col-span-2">
+      <div className="md:col-span-2 text-slate-400">{countdown(item.deadlineAt)}</div>
+      <div className="md:col-span-2">
         <button
           type="button"
           className="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-40"
           disabled={!item.reviewManifestPath || busy}
           onClick={() => onOpenFile(item.reviewManifestPath)}
         >
-          Open review
+          Open review manifest
         </button>
       </div>
-      <div className="col-span-2">
+      <div className="md:col-span-2">
         <button
           type="button"
           className="px-2 py-1 rounded bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-40"
@@ -202,7 +234,7 @@ function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }
           Open unsigned tx
         </button>
       </div>
-      <div className="col-span-2 flex justify-end">
+      <div className="md:col-span-2 flex md:justify-end">
         <button
           type="button"
           className="px-2 py-1 rounded bg-cyan-900 text-cyan-200 hover:bg-cyan-800 disabled:opacity-40"
@@ -395,6 +427,7 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
   }, {})
   const queueRows = operatorActions.filter((a) => (a.queueStage || 'needs_signature') === queueTab)
   const enabledProviders = llmProviders.filter((p) => p.enabled)
+  const manifestSummary = summarizeManifest(filePreview)
 
   return (
     <div className="p-4">
@@ -427,11 +460,11 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
           ))}
         </div>
 
-        <div className="grid grid-cols-12 gap-2 px-2 py-1 text-[11px] text-slate-500 border-b border-slate-800 mb-2">
+        <div className="hidden md:grid grid-cols-12 gap-2 px-2 py-1 text-[11px] text-slate-500 border-b border-slate-800 mb-2">
           <div className="col-span-2">Lane</div>
           <div className="col-span-2">Action</div>
           <div className="col-span-2">Deadline countdown</div>
-          <div className="col-span-2">Review</div>
+          <div className="col-span-2">Review manifest</div>
           <div className="col-span-2">Unsigned tx</div>
           <div className="col-span-2 text-right">Update</div>
         </div>
@@ -500,6 +533,26 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
               <div className="text-xs text-slate-400 break-all">{filePreview.path}</div>
               <button type="button" className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300" onClick={() => setFilePreview(null)}>Close</button>
             </div>
+            {manifestSummary && (
+              <div className="p-4 border-b border-slate-800 bg-slate-900/60">
+                <div className="text-[11px] text-slate-500 uppercase tracking-wider mb-2">Review manifest · brief mode</div>
+                <div className="grid sm:grid-cols-2 gap-2 text-xs">
+                  <div className="rounded border border-slate-800 bg-slate-950 p-2"><span className="text-slate-500">Source:</span> <span className="text-slate-200 break-words">{manifestSummary.source}</span></div>
+                  <div className="rounded border border-slate-800 bg-slate-950 p-2"><span className="text-slate-500">Entity:</span> <span className="text-slate-200 break-all">{manifestSummary.entity}</span></div>
+                  <div className="rounded border border-slate-800 bg-slate-950 p-2"><span className="text-slate-500">Action:</span> <span className="text-slate-200 break-words">{manifestSummary.action}</span></div>
+                  <div className="rounded border border-slate-800 bg-slate-950 p-2"><span className="text-slate-500">Status:</span> <span className="text-slate-200 break-words">{manifestSummary.status}</span></div>
+                </div>
+                <div className="mt-2 text-xs text-slate-300 break-words">{manifestSummary.title}</div>
+                {manifestSummary.checklist.length > 0 && (
+                  <div className="mt-2 text-xs">
+                    <div className="text-slate-500 mb-1">Checklist snapshot</div>
+                    <ul className="list-disc list-inside text-slate-300 space-y-0.5">
+                      {manifestSummary.checklist.map((item) => <li key={item} className="break-words">{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
             <pre className="p-4 text-xs text-slate-200 whitespace-pre-wrap break-words">{filePreview.text}</pre>
           </div>
         </div>
