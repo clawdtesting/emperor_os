@@ -1561,19 +1561,26 @@ async function listPrimeJobsFromChain() {
     const abiRaw = readJsonSafe(abiPath, [])
     const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
     const iface = new ethers.Interface(abi)
-    let procurementCreatedTopic = null
-    let premiumJobCreatedTopic = null
-    try { procurementCreatedTopic = iface.getEvent('ProcurementCreated')?.topicHash || null } catch {}
-    try { premiumJobCreatedTopic = iface.getEvent('PremiumJobCreated')?.topicHash || null } catch {}
+    const PROCUREMENT_CREATED_TOPIC = '0xd88f0bdc06a889b3707026296f02b1cb95e0b68fc3b0cf11cb82bb0ecc805d53'
+    const PREMIUM_JOB_CREATED_TOPIC = '0xcd958add2ab89c161b8e05f40140e87d03e664bd32eea370e4aec86096bcb3f6'
+
+    let procurementCreatedTopic = PROCUREMENT_CREATED_TOPIC
+    let premiumJobCreatedTopic = PREMIUM_JOB_CREATED_TOPIC
+    try { procurementCreatedTopic = iface.getEvent('ProcurementCreated')?.topicHash || PROCUREMENT_CREATED_TOPIC } catch {}
+    try { premiumJobCreatedTopic = iface.getEvent('PremiumJobCreated')?.topicHash || PREMIUM_JOB_CREATED_TOPIC } catch {}
 
     // Keep v1 discovery indexing resilient even when premium event ABI/signature is unavailable.
     // Do not let one event-family failure zero out all prime rows.
     const procurementLogs = procurementCreatedTopic
       ? await rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [procurementCreatedTopic] }).catch(() => [])
       : []
-    const premiumLogs = premiumJobCreatedTopic
+    const premiumLogsPrimary = premiumJobCreatedTopic
       ? await rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [premiumJobCreatedTopic] }).catch(() => [])
       : []
+    const premiumLogsV2 = premiumJobCreatedTopic
+      ? await rpcGetLogs({ address: AGI_PRIME_V2.toLowerCase(), topics: [premiumJobCreatedTopic] }).catch(() => [])
+      : []
+    const premiumLogs = [...premiumLogsPrimary, ...premiumLogsV2]
 
     const rows = []
     const seenKeys = new Set()
@@ -1654,14 +1661,28 @@ async function listPrimeJobsFromChain() {
 
     for (const log of premiumLogs) {
       try {
-        const parsed = iface.parseLog(log)
+        let parsed = null
+        try {
+          parsed = iface.parseLog(log)
+        } catch {
+          const topics = Array.isArray(log?.topics) ? log.topics : []
+          if (topics.length < 4) continue
+          parsed = {
+            args: {
+              procurementId: BigInt(topics[1]),
+              jobId: BigInt(topics[2]),
+              employer: `0x${String(topics[3]).slice(-40)}`,
+            },
+          }
+        }
         const baseRow = buildPrimeListRow({ parsed, source: 'agijobmanagerprime' })
         if (!baseRow) continue
+        const premiumAddress = String(log?.address || AGI_PRIME_V2).toLowerCase()
         pushPrimeRow({
           ...baseRow,
           status: 'PrimeSettlement',
           links: {
-            contract: `https://etherscan.io/address/${AGI_PRIME_CONTRACT}`,
+            contract: `https://etherscan.io/address/${premiumAddress}`,
           },
         })
       } catch {}
