@@ -52,7 +52,13 @@ export default function App() {
   const jobsDesc  = [...jobs].sort(compareJobIdDesc)
   const jobsV2 = jobsDesc.filter(j => j.source === 'agijobmanager-v2')
   const jobsPrime = jobsDesc.filter(j => j.source === 'agiprimediscovery')
-  const jobsV1 = jobsDesc.filter(j => j.source !== 'agijobmanager-v2' && j.source !== 'agiprimediscovery')
+  const jobsPrimeV2 = jobsDesc.filter(j => j.source === 'agijobmanagerprime' || j.source === 'agijobmanager-prime')
+  const jobsV1 = jobsDesc.filter(j =>
+    j.source !== 'agijobmanager-v2'
+    && j.source !== 'agiprimediscovery'
+    && j.source !== 'agijobmanagerprime'
+    && j.source !== 'agijobmanager-prime',
+  )
   const jobsV2Display = jobsV2.length ? jobsV2 : [{
     source: 'agijobmanager-v2',
     jobId: 'V2-1',
@@ -96,8 +102,8 @@ export default function App() {
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">⬡</div>
           <div>
-            <div className="text-sm font-semibold leading-tight">AGI Alpha Mission Control</div>
-            <div className="text-xs text-slate-500 leading-tight">Operator console for job requests, applies, and validation</div>
+            <div className="text-sm font-semibold leading-tight">Emperor_OS Mission Control</div>
+            <div className="text-xs text-slate-500 leading-tight break-words">Operator console for contract lanes, manifests, and unsigned transaction review</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -125,7 +131,7 @@ export default function App() {
           {[
             { key: 'mission', label: 'System visual' },
             { key: 'request', label: 'Create job' },
-            { key: 'jobs', label: 'Apply for job (3 lanes)', badge: jobsV1.length + jobsPrime.length + jobsV2.length },
+            { key: 'jobs', label: 'Apply for job (4 lanes)', badge: jobsV1.length + jobsV2.length + jobsPrime.length + jobsPrimeV2.length },
             { key: selected ? 'detail' : 'jobs', label: 'Validate a job', badge: selected ? 1 : 0 },
             { key: 'actions', label: 'Operator queue', badge: unreadCount },
           ].map(item => (
@@ -146,7 +152,7 @@ export default function App() {
 
         <div className="text-[11px] uppercase tracking-wider text-slate-500 px-2 py-1">Lanes & tools</div>
         <div className="flex flex-col gap-1">
-          {['jobs-v1', 'prime', 'jobs-v2', 'wallet', 'ops', 'pipelines', 'events', 'ipfs', 'workflows', enableTestMode ? 'test' : null].filter(Boolean).map(t => (
+          {['jobs-v1', 'jobs-v2', 'prime', 'prime-v2', 'wallet', 'ops', 'pipelines', 'events', 'ipfs', 'workflows', enableTestMode ? 'test' : null].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -154,7 +160,7 @@ export default function App() {
                 tab === t ? 'text-white bg-slate-700 border border-slate-500/50' : 'text-slate-500 border border-transparent hover:text-slate-300 hover:bg-slate-800'
               }`}
             >
-              {t === 'jobs-v1' ? 'apply lane: v1' : t === 'jobs-v2' ? 'apply lane: v2' : t === 'prime' ? 'apply lane: prime v1' : t}
+              {t === 'jobs-v1' ? 'apply lane: v1' : t === 'jobs-v2' ? 'apply lane: v2' : t === 'prime' ? 'apply lane: prime v1' : t === 'prime-v2' ? 'apply lane: prime v2' : t}
               {t === 'jobs-v1' && jobsV1.length > 0 && (
                 <span className="ml-1 bg-cyan-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsV1.length}</span>
               )}
@@ -164,11 +170,14 @@ export default function App() {
               {t === 'prime' && jobsPrime.length > 0 && (
                 <span className="ml-1 bg-violet-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsPrime.length}</span>
               )}
+              {t === 'prime-v2' && jobsPrimeV2.length > 0 && (
+                <span className="ml-1 bg-amber-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsPrimeV2.length}</span>
+              )}
             </button>
           ))}
         </div>
         </div>
-        <div>
+        <div className="min-w-0">
 
         {tab === 'mission' && (
           <MissionControlTab
@@ -176,6 +185,7 @@ export default function App() {
             jobsCount={jobsDesc.length}
             jobsV1Count={jobsV1.length}
             jobsV2Count={jobsV2Display.length}
+            jobsPrimeCount={jobsPrime.length}
             assignedCount={assigned.length}
             unreadCount={unreadCount}
             onOpenTab={setTab}
@@ -186,21 +196,26 @@ export default function App() {
           <div className="space-y-3">
             <div className="rounded border border-slate-800 bg-slate-900 p-3">
               <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Apply for job</div>
-              <div className="grid md:grid-cols-3 gap-2 text-xs">
+              <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-2 text-xs">
                 <button onClick={() => setTab('jobs-v1')} className="rounded border border-cyan-900/70 bg-cyan-950/20 p-3 text-left hover:border-cyan-700">
                   <div className="text-cyan-300 font-semibold">Job-v1 lane</div>
                   <div className="text-slate-400 mt-1">Classic AGIJobManager jobs</div>
                   <div className="text-slate-200 mt-2">{jobsV1.length} jobs</div>
+                </button>
+                <button onClick={() => setTab('jobs-v2')} className="rounded border border-fuchsia-900/70 bg-fuchsia-950/20 p-3 text-left hover:border-fuchsia-700">
+                  <div className="text-fuchsia-300 font-semibold">Job-v2 lane</div>
+                  <div className="text-slate-400 mt-1">AGIJobManager v2 contract lane</div>
+                  <div className="text-slate-200 mt-2">{jobsV2.length} jobs</div>
                 </button>
                 <button onClick={() => setTab('prime')} className="rounded border border-violet-900/70 bg-violet-950/20 p-3 text-left hover:border-violet-700">
                   <div className="text-violet-300 font-semibold">Prime-v1 lane</div>
                   <div className="text-slate-400 mt-1">Discovery / procurement competitions</div>
                   <div className="text-slate-200 mt-2">{jobsPrime.length} jobs</div>
                 </button>
-                <button onClick={() => setTab('jobs-v2')} className="rounded border border-fuchsia-900/70 bg-fuchsia-950/20 p-3 text-left hover:border-fuchsia-700">
-                  <div className="text-fuchsia-300 font-semibold">Job-v2 lane</div>
-                  <div className="text-slate-400 mt-1">AGIJobManager v2 contract lane</div>
-                  <div className="text-slate-200 mt-2">{jobsV2.length} jobs</div>
+                <button onClick={() => setTab('prime-v2')} className="rounded border border-amber-900/70 bg-amber-950/20 p-3 text-left hover:border-amber-700">
+                  <div className="text-amber-300 font-semibold">Prime-v2 lane</div>
+                  <div className="text-slate-400 mt-1">Prime settlement / manager lane</div>
+                  <div className="text-slate-200 mt-2">{jobsPrimeV2.length} jobs</div>
                 </button>
               </div>
             </div>
@@ -208,15 +223,33 @@ export default function App() {
             {loading && <div className="text-slate-600 text-xs text-center py-8">Loading...</div>}
             {error && <div className="text-red-400 text-xs p-3 bg-red-950/30 rounded-lg border border-red-900">{error}</div>}
 
-            <div className="text-xs text-slate-500 uppercase tracking-wider">All jobs (click one to validate)</div>
-            {jobsDesc.map(j => (
-              <JobCard
-                key={`${j.source || 'agijobmanager'}-${j.jobId}`}
-                job={j}
-                selected={selected?.jobId === j.jobId && selected?.source === j.source}
-                onClick={() => handleSelectJob(j)}
-              />
-            ))}
+            <div className="text-xs text-slate-500 uppercase tracking-wider">Jobs by lane (click one to validate)</div>
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
+              {[
+                { key: 'jobs-v1', title: 'Job-v1 lane', tone: 'border-cyan-900/60 bg-cyan-950/10', jobs: jobsV1 },
+                { key: 'jobs-v2', title: 'Job-v2 lane', tone: 'border-fuchsia-900/60 bg-fuchsia-950/10', jobs: jobsV2Display },
+                { key: 'prime', title: 'Prime-v1 lane', tone: 'border-violet-900/60 bg-violet-950/10', jobs: jobsPrime },
+                { key: 'prime-v2', title: 'Prime-v2 lane', tone: 'border-amber-900/60 bg-amber-950/10', jobs: jobsPrimeV2 },
+              ].map(col => (
+                <div key={col.key} className={`rounded border p-2 ${col.tone} min-w-0`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-slate-200">{col.title}</div>
+                    <button onClick={() => setTab(col.key)} className="text-[11px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800">open</button>
+                  </div>
+                  <div className="space-y-2">
+                    {col.jobs.map(j => (
+                      <JobCard
+                        key={`${j.source || 'agijobmanager'}-${j.jobId}`}
+                        job={j}
+                        selected={selected?.jobId === j.jobId && selected?.source === j.source}
+                        onClick={() => handleSelectJob(j)}
+                      />
+                    ))}
+                    {!col.jobs.length && <div className="text-[11px] text-slate-500 rounded border border-slate-800 bg-slate-950/40 p-2">No jobs indexed in this lane yet.</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -276,6 +309,32 @@ export default function App() {
                 onClick={() => handleSelectJob(j)}
               />
             ))}
+          </div>
+        )}
+        {tab === 'prime-v2' && (
+          <div className="space-y-2">
+            <div className="text-xs text-slate-500 uppercase tracking-wider">AGIJobManagerPrime / Prime-v2 lane</div>
+            <div className="rounded border border-amber-900/60 bg-amber-950/20 p-3 text-xs text-slate-300 space-y-2">
+              <div className="font-semibold text-amber-300">Prime-v2 lane is monitored/operator-assisted in current Mission Control.</div>
+              <div className="text-slate-400">Settlement lifecycle visibility is available via Ops + review manifests. Native list indexing for Prime-v2 jobs is not fully wired in this tab yet.</div>
+              <div className="rounded border border-amber-800/60 bg-slate-950/50 p-2">
+                <div className="text-[11px] uppercase tracking-wider text-amber-300 mb-1">Prime-v2 implementation plan</div>
+                <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                  <li>Index PremiumJobCreated + downstream settlement events into `/api/jobs` as `agijobmanagerprime` rows.</li>
+                  <li>Attach settlement stage state from proc/job artifacts for assignment/acceptance/finalization visibility.</li>
+                  <li>Add dedicated Prime-v2 operator actions so unsigned settlement tx + review manifests are first-class in queue.</li>
+                </ul>
+              </div>
+            </div>
+            {jobsPrimeV2.map(j => (
+              <JobCard
+                key={`${j.source || 'agijobmanagerprime'}-${j.jobId}`}
+                job={j}
+                selected={selected?.jobId === j.jobId && selected?.source === j.source}
+                onClick={() => handleSelectJob(j)}
+              />
+            ))}
+            {!jobsPrimeV2.length && <div className="text-slate-600 text-xs py-8 text-center">No prime-v2 jobs indexed yet.</div>}
           </div>
         )}
         {tab === 'detail' && (

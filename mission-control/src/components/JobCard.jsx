@@ -37,6 +37,39 @@ function derivePctFromAmounts(amount, payout) {
   return `${((a / p) * 100).toFixed(2).replace(/\.0+$/, '').replace(/\.$/, '')}%`
 }
 
+function normalizePct(raw) {
+  if (raw === null || raw === undefined || raw === '') return null
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return null
+  if (n > 0 && n <= 100) return `${n}%`
+  if (n > 100 && n <= 10000) return `${(n / 100).toFixed(2).replace(/\.0+$/, '').replace(/\.$/, '')}%`
+  if (n >= 0 && n <= 1) return `${(n * 100).toFixed(2).replace(/\.0+$/, '').replace(/\.$/, '')}%`
+  return `${n}%`
+}
+
+function deriveSpecMetrics(spec = {}) {
+  const p = spec?.properties || {}
+  const payout = p.payoutAGIALPHA ?? spec?.payoutAGIALPHA ?? null
+  const agentBondPct = normalizePct(
+    p.agentBondPct ?? p.agentBondBps ?? p.applicationStakeBps ?? p.agentBondPercent ?? p.agentBondPercentage,
+  )
+  const validatorBondPct = normalizePct(
+    p.validatorBondPct ?? p.validatorBondBps ?? p.validatorScoreBondBps ?? p.validatorBondPercent ?? p.validatorBondPercentage,
+  )
+  const payoutPerValidator = p.payoutPerValidator ?? p.validatorRewardPerReveal ?? spec?.validatorRewardPerReveal ?? null
+  const agentBondAmount = p.agentBond ?? p.applicationStake ?? p.finalistStakeTotal ?? null
+  const validatorBondAmount = p.validatorBond ?? p.validatorScoreBond ?? null
+
+  return {
+    payoutFromSpec: payout,
+    agentBondPct,
+    validatorBondPct,
+    payoutPerValidator,
+    agentBondAmount,
+    validatorBondAmount,
+  }
+}
+
 function AddrLabel({ address }) {
   const [ens, setEns] = useState(null)
   useEffect(() => { resolveEns(address).then(setEns) }, [address])
@@ -48,15 +81,50 @@ function AddrLabel({ address }) {
 }
 
 export function JobCard({ job, selected, onClick }) {
+  const [specMetrics, setSpecMetrics] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    const id = String(job?.jobId || '')
+    const hasNumericId = /^\d+$/.test(id)
+    const hasSpec = Boolean(job?.specURI)
+    if (!hasNumericId || !hasSpec) {
+      setSpecMetrics(null)
+      return () => {
+        active = false
+      }
+    }
+
+    const controller = new AbortController()
+    const qs = job?.source ? `?source=${encodeURIComponent(job.source)}` : ''
+
+    fetch(`/api/job-spec/${encodeURIComponent(id)}${qs}`, { signal: controller.signal })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!active || !data) return
+        setSpecMetrics(deriveSpecMetrics(data))
+      })
+      .catch(() => {
+        if (active) setSpecMetrics(null)
+      })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [job?.jobId, job?.source, job?.specURI])
+
   const approvals = Number(job.approvals || 0)
   const disapprovals = Number(job.disapprovals || 0)
-  const payout = getJobField(job, ['payoutAGIALPHA', 'payout', 'job.payout', 'proc.payout'])
-  const payoutPerValidator = getJobField(job, ['validatorRewardPerReveal', 'payoutPerValidator', 'proc.validatorRewardPerReveal'])
+  const payout = getJobField(job, ['payoutAGIALPHA', 'payout', 'job.payout', 'proc.payout']) ?? specMetrics?.payoutFromSpec
+  const payoutPerValidator = getJobField(job, ['validatorRewardPerReveal', 'payoutPerValidator', 'proc.validatorRewardPerReveal']) ?? specMetrics?.payoutPerValidator
 
   const agentBondPct = formatPercent(getJobField(job, ['agentBondPct', 'agentBondPercent', 'agentBondPercentage', 'agentBondBps', 'proc.applicationStakeBps']))
-    || derivePctFromAmounts(getJobField(job, ['agentBond', 'applicationStake', 'finalistStakeTotal', 'proc.applicationStake', 'proc.finalistStakeTotal']), payout)
+    || derivePctFromAmounts(getJobField(job, ['agentBond', 'applicationStake', 'finalistStakeTotal', 'proc.applicationStake', 'proc.finalistStakeTotal']) ?? specMetrics?.agentBondAmount, payout)
+    || specMetrics?.agentBondPct
   const validatorBondPct = formatPercent(getJobField(job, ['validatorBondPct', 'validatorBondPercent', 'validatorBondPercentage', 'validatorBondBps', 'proc.validatorScoreBondBps']))
-    || derivePctFromAmounts(getJobField(job, ['validatorBond', 'validatorScoreBond', 'proc.validatorScoreBond']), payout)
+    || derivePctFromAmounts(getJobField(job, ['validatorBond', 'validatorScoreBond', 'proc.validatorScoreBond']) ?? specMetrics?.validatorBondAmount, payout)
+    || specMetrics?.validatorBondPct
 
   const votes = approvals + disapprovals
 
@@ -82,12 +150,12 @@ export function JobCard({ job, selected, onClick }) {
           target="_blank"
           rel="noopener noreferrer"
           onClick={e => e.stopPropagation()}
-          className="block text-xs font-mono text-blue-500 hover:text-blue-400 mb-2 truncate"
+          className="block text-xs font-mono text-blue-500 hover:text-blue-400 mb-2 break-all"
         >
           {shortCid(job.specURI)}
         </a>
       ) : (
-        <div className="block text-xs font-mono text-slate-600 mb-2 truncate">no spec URI</div>
+        <div className="block text-xs font-mono text-slate-600 mb-2 break-all">no spec URI</div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs mb-3">
         <div className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5">
@@ -100,18 +168,18 @@ export function JobCard({ job, selected, onClick }) {
         </div>
         <div className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5">
           <div className="text-[10px] uppercase tracking-wider text-slate-500">Agent Bond</div>
-          <div className="text-slate-300">{agentBondPct || '—'}</div>
+          <div className="text-slate-300">{agentBondPct || 'n/a'}</div>
         </div>
         <div className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5">
           <div className="text-[10px] uppercase tracking-wider text-slate-500">Validator Bond</div>
-          <div className="text-slate-300">{validatorBondPct || '—'}</div>
+          <div className="text-slate-300">{validatorBondPct || 'n/a'}</div>
         </div>
         <div className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5">
           <div className="text-[10px] uppercase tracking-wider text-slate-500">Payout / Validator</div>
-          <div className="text-slate-300">{payoutPerValidator ?? '—'}</div>
+          <div className="text-slate-300">{payoutPerValidator ?? 'n/a'}</div>
         </div>
       </div>
-      <div className="flex items-center gap-3 text-xs text-slate-400 mb-2">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mb-2">
         <span>{approvals}✓ {disapprovals}✗ ({votes})</span>
         {job.createdAt && <span>created {job.createdAt}</span>}
       </div>

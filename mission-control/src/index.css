@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
-body { margin: 0; background: #0a0a0f; color: #e2e8f0; font-family: system-ui, sans-serif; }
+body { margin: 0; background: #0a0a0f; color: #e2e8f0; font-family: system-ui, sans-serif; overflow-x: hidden; }
+#root { min-width: 0; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
