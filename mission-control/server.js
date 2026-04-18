@@ -1561,18 +1561,51 @@ async function listPrimeJobsFromChain() {
     const abiRaw = readJsonSafe(abiPath, [])
     const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
     const iface = new ethers.Interface(abi)
-    const createdTopic = iface.getEvent('ProcurementCreated').topicHash
+    const procurementCreatedTopic = iface.getEvent('ProcurementCreated').topicHash
+    const premiumJobCreatedTopic = iface.getEvent('PremiumJobCreated').topicHash
 
-    const logs = await rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [createdTopic] })
+    const [procurementLogs, premiumLogs] = await Promise.all([
+      rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [procurementCreatedTopic] }),
+      rpcGetLogs({ address: AGI_PRIME_CONTRACT, topics: [premiumJobCreatedTopic] }),
+    ])
+
     const rows = []
+    const seenKeys = new Set()
 
-    for (const log of logs) {
+    function pushPrimeRow(next) {
+      const key = `${next.source}:${next.procurementId}:${next.jobId}`
+      if (seenKeys.has(key)) return
+      seenKeys.add(key)
+      rows.push(next)
+    }
+
+    function buildPrimeListRow({ parsed, source }) {
+      const procurementId = String(parsed?.args?.procurementId ?? '')
+      const jobIdRaw = String(parsed?.args?.jobId ?? '')
+      const employer = String(parsed?.args?.employer || '').toLowerCase()
+      if (!/^\d+$/.test(procurementId)) return null
+
+      return {
+        source,
+        procurementId,
+        jobId: /^\d+$/.test(jobIdRaw) ? jobIdRaw : `P-${procurementId}`,
+        status: 'Prime',
+        payout: '—',
+        duration: '—',
+        employer: employer || '0x0000000000000000000000000000000000000000',
+        assignedAgent: '',
+        approvals: 0,
+        disapprovals: 0,
+        specURI: '',
+      }
+    }
+
+    for (const log of procurementLogs) {
       try {
         const parsed = iface.parseLog(log)
-        const procurementId = String(parsed?.args?.procurementId ?? '')
-        const jobIdRaw = String(parsed?.args?.jobId ?? '')
-        const employer = String(parsed?.args?.employer || '').toLowerCase()
-        if (!/^\d+$/.test(procurementId)) continue
+        const baseRow = buildPrimeListRow({ parsed, source: 'agiprimediscovery' })
+        if (!baseRow) continue
+        const procurementId = baseRow.procurementId
 
         let deadlines = {
           commitDeadline: null,
@@ -1600,20 +1633,27 @@ async function listPrimeJobsFromChain() {
         const phase = decodePrimeActionPhase(localState?.nextActionCode || '')
         const windowStatus = inferPrimeWindowStatus(phase, deadlines)
 
-        rows.push({
-          source: 'agiprimediscovery',
-          procurementId,
-          jobId: /^\d+$/.test(jobIdRaw) ? jobIdRaw : `P-${procurementId}`,
+        pushPrimeRow({
+          ...baseRow,
           status: String(localState?.status || (windowStatus === 'open' ? 'PrimeWindowOpen' : 'Prime')),
-          payout: '—',
-          duration: '—',
-          employer: employer || '0x0000000000000000000000000000000000000000',
           assignedAgent: String(localState?.selectedFinalist || ''),
-          approvals: 0,
-          disapprovals: 0,
-          specURI: '',
           deadlines,
           nextActionCode: String(localState?.nextActionCode || ''),
+          links: {
+            contract: `https://etherscan.io/address/${AGI_PRIME_CONTRACT}`,
+          },
+        })
+      } catch {}
+    }
+
+    for (const log of premiumLogs) {
+      try {
+        const parsed = iface.parseLog(log)
+        const baseRow = buildPrimeListRow({ parsed, source: 'agijobmanagerprime' })
+        if (!baseRow) continue
+        pushPrimeRow({
+          ...baseRow,
+          status: 'PrimeSettlement',
           links: {
             contract: `https://etherscan.io/address/${AGI_PRIME_CONTRACT}`,
           },

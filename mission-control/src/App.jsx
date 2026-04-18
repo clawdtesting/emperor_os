@@ -53,7 +53,12 @@ export default function App() {
   const jobsV2 = jobsDesc.filter(j => j.source === 'agijobmanager-v2')
   const jobsPrime = jobsDesc.filter(j => j.source === 'agiprimediscovery')
   const jobsPrimeV2 = jobsDesc.filter(j => j.source === 'agijobmanagerprime' || j.source === 'agijobmanager-prime')
-  const jobsV1 = jobsDesc.filter(j => j.source !== 'agijobmanager-v2' && j.source !== 'agiprimediscovery')
+  const jobsV1 = jobsDesc.filter(j =>
+    j.source !== 'agijobmanager-v2'
+    && j.source !== 'agiprimediscovery'
+    && j.source !== 'agijobmanagerprime'
+    && j.source !== 'agijobmanager-prime',
+  )
   const jobsV2Display = jobsV2.length ? jobsV2 : [{
     source: 'agijobmanager-v2',
     jobId: 'V2-1',
@@ -312,6 +317,14 @@ export default function App() {
             <div className="rounded border border-amber-900/60 bg-amber-950/20 p-3 text-xs text-slate-300 space-y-2">
               <div className="font-semibold text-amber-300">Prime-v2 lane is monitored/operator-assisted in current Mission Control.</div>
               <div className="text-slate-400">Settlement lifecycle visibility is available via Ops + review manifests. Native list indexing for Prime-v2 jobs is not fully wired in this tab yet.</div>
+              <div className="rounded border border-amber-800/60 bg-slate-950/50 p-2">
+                <div className="text-[11px] uppercase tracking-wider text-amber-300 mb-1">Prime-v2 implementation plan</div>
+                <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                  <li>Index PremiumJobCreated + downstream settlement events into `/api/jobs` as `agijobmanagerprime` rows.</li>
+                  <li>Attach settlement stage state from proc/job artifacts for assignment/acceptance/finalization visibility.</li>
+                  <li>Add dedicated Prime-v2 operator actions so unsigned settlement tx + review manifests are first-class in queue.</li>
+                </ul>
+              </div>
             </div>
             {jobsPrimeV2.map(j => (
               <JobCard
