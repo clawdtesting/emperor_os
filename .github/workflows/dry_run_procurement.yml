@@ -2,6 +2,11 @@ name: Dry Run — Procurement Flow (Contract 2)
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_signing:
+        description: 'Set true to inject signer key for signer-backed dry-run paths'
+        required: true
+        default: 'false'
 
 jobs:
   dry-run:
@@ -9,13 +14,13 @@ jobs:
     timeout-minutes: 10
 
     env:
-      AGI_ALPHA_MCP:      ${{ secrets.AGI_ALPHA_MCP }}
-      ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
-      ANTHROPIC_MODEL:    ${{ secrets.ANTHROPIC_MODEL || 'claude-sonnet-4-6' }}
-      ETH_RPC_URL:        ${{ secrets.ETH_RPC_URL }}
-      AGENT_PRIVATE_KEY:  ${{ secrets.WALLET_PRIVATE_KEY }}
-      AGENT_SUBDOMAIN:    ${{ secrets.ENS_SUBDOMAIN }}
-      PINATA_JWT:         ${{ secrets.PINATA_JWT }}
+      AGI_ALPHA_MCP: ${{ secrets.AGI_ALPHA_MCP }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL || 'claude-sonnet-4-6' }}
+      ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+      AGENT_SIGNER_KEY: ${{ secrets.AGENT_SIGNER_KEY }}
+      AGENT_SUBDOMAIN: ${{ secrets.ENS_SUBDOMAIN }}
+      PINATA_JWT: ${{ secrets.PINATA_JWT }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +33,19 @@ jobs:
         run: npm install
         working-directory: AgiPrimeDiscovery
 
+      - name: Enforce signer gate
+        run: |
+          if [ "${{ github.event.inputs.enable_signing }}" != "true" ]; then
+            echo "Running without signer key injection (safe default)."
+            exit 0
+          fi
+          if [ -z "${AGENT_SIGNER_KEY:-}" ]; then
+            echo "AGENT_SIGNER_KEY is required when enable_signing=true"
+            exit 1
+          fi
+
       - name: Dry run procurement flow
         run: node dry_run_procurement.js
         working-directory: AgiPrimeDiscovery
+        env:
+          SIGNER_PRIVATE_KEY: ${{ github.event.inputs.enable_signing == 'true' && secrets.AGENT_SIGNER_KEY || '' }}
