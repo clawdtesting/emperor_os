@@ -2,14 +2,19 @@ name: Check ENS Resolver
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_signing:
+        description: 'Set true to allow signer-backed execution'
+        required: true
+        default: 'false'
 
 jobs:
   check:
     runs-on: ubuntu-latest
 
     env:
-      ETH_RPC_URL:       ${{ secrets.ETH_RPC_URL }}
-      AGENT_PRIVATE_KEY: ${{ secrets.WALLET_PRIVATE_KEY }}
+      ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+      AGENT_SIGNER_KEY: ${{ secrets.AGENT_SIGNER_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +27,20 @@ jobs:
         run: npm install ethers dotenv
         working-directory: AgiPrimeDiscovery
 
+      - name: Enforce signer gate
+        run: |
+          if [ "${{ github.event.inputs.enable_signing }}" != "true" ]; then
+            echo "Signing disabled by default. Re-run with enable_signing=true to execute signer-backed checks."
+            exit 0
+          fi
+          if [ -z "${AGENT_SIGNER_KEY:-}" ]; then
+            echo "AGENT_SIGNER_KEY is required when enable_signing=true"
+            exit 1
+          fi
+
       - name: Check ENS resolver
+        if: github.event.inputs.enable_signing == 'true'
         run: node check_ens_resolver.js
         working-directory: AgiPrimeDiscovery
+        env:
+          SIGNER_PRIVATE_KEY: ${{ secrets.AGENT_SIGNER_KEY }}
