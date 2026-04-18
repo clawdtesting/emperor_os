@@ -171,7 +171,7 @@ export function toLegacyJobRequestPayload(draft, input) {
     chainId: spec.properties.chainId,
     contract: spec.properties.contract,
     ...(spec.properties.createdBy ? { createdBy: spec.properties.createdBy } : {}),
-    brief: spec.properties.details,
+    brief: (spec.properties.summary || spec.properties.title || '').slice(0, 200),
     generatedAt,
     ipfsUri: input.ipfsUri,
     image: input.imageUri,
