@@ -9,7 +9,7 @@ import { tmpdir } from 'os'
 import { createHash } from 'crypto'
 import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
-import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage } from './lib/contract-first.js'
+import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage, buildUnsignedCreateJobV2TxPackage, buildUnsignedApplyJobV2TxPackage } from './lib/contract-first.js'
 import { buildV1OperatorViewModel } from './lib/v1-operator-view.js'
 import { buildAssignedJobRunner } from './lib/intake-runner.js'
 import { listProviders, getPreferredProvider, setPreferredProvider } from '../agent/llm-router.js'
@@ -1821,6 +1821,23 @@ async function getV1ContractInterface() {
   }
 }
 
+async function getV2ContractInterface() {
+  const { ethers } = await import('ethers')
+  const abiPath = join(WORKSPACE_ROOT, 'contracts', 'AGIJobManager-v2', 'AGIJobManager.v2.json')
+  const abiRaw = readJsonSafe(abiPath, [])
+  const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+  if (!Array.isArray(abi) || abi.length === 0) throw new Error(`Missing v2 ABI at ${abiPath}`)
+  return {
+    ethers,
+    iface: new ethers.Interface(abi),
+    abiPath,
+  }
+}
+
+function isKnownV2Contract(addr) {
+  return KNOWN_V2_CONTRACTS.includes(String(addr || '').toLowerCase())
+}
+
 async function fetchV1JobContext(jobId, contractAddr) {
   let core = null
   let validation = null
@@ -1850,6 +1867,52 @@ async function fetchV1JobContext(jobId, contractAddr) {
     completionURI = state.completionURI
   } catch (e) {
     rpcError = e.message || 'v1 on-chain lookup failed'
+  }
+
+  return {
+    jobId: String(jobId),
+    contract: String(contractAddr).toLowerCase(),
+    chainId,
+    core,
+    validation,
+    specURI,
+    completionURI,
+    iface,
+    hasValidateJob,
+    hasDisputeJob,
+    rpcError,
+  }
+}
+
+async function fetchV2JobContext(jobId, contractAddr) {
+  let core = null
+  let validation = null
+  let specURI = ''
+  let completionURI = ''
+  let chainId = ''
+  let iface = null
+  let hasValidateJob = false
+  let hasDisputeJob = false
+  let rpcError = ''
+
+  try {
+    const reachable = await rpcIsReachable()
+    if (!reachable) throw new Error('RPC unreachable')
+
+    const { iface: i } = await getV2ContractInterface()
+    iface = i
+    hasValidateJob = Boolean(iface.getFunction('validateJob(uint256,string,bytes32[])'))
+    hasDisputeJob = Boolean(iface.getFunction('disputeJob(uint256)'))
+
+    chainId = String(await rpcCall('eth_chainId', [], 5000) || '')
+
+    const state = await readV2JobOnchain(contractAddr, jobId, iface)
+    core = state.core
+    validation = state.validation
+    specURI = state.specURI
+    completionURI = state.completionURI
+  } catch (e) {
+    rpcError = e.message || 'v2 on-chain lookup failed'
   }
 
   return {
@@ -2013,6 +2076,102 @@ function summarizeV1ApplyState(state = {}, context = null) {
   }
 }
 
+function upsertV2ApplyTxPackage(jobId, pkg, patch = {}) {
+  mkdirSync(AGENT_STATE_DIR, { recursive: true })
+  const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
+  const state = readJsonSafe(statePath, null) || {
+    jobId: String(jobId),
+    source: 'agijobmanager-v2',
+    txPackages: [],
+    receipts: [],
+    createdAt: new Date().toISOString(),
+  }
+
+  const txPackages = Array.isArray(state.txPackages) ? [...state.txPackages] : []
+  const keep = txPackages.filter((entry) => !(String(entry?.action || '') === 'apply' && entry?.opControlPreparedApply))
+  keep.push({
+    action: 'apply',
+    file: pkg.unsignedTxPath,
+    unsignedTxPath: pkg.unsignedTxPath,
+    reviewManifestPath: pkg.reviewManifestPath,
+    createdAt: pkg.createdAt,
+    expiresAt: pkg.expiresAt,
+    fresh: Date.parse(pkg.expiresAt) > Date.now(),
+    expired: Date.parse(pkg.expiresAt) <= Date.now(),
+    signed: false,
+    opControlPreparedApply: true,
+    checklist: pkg.checklist,
+  })
+
+  const next = {
+    ...state,
+    ...patch,
+    jobId: String(jobId),
+    source: 'agijobmanager-v2',
+    status: 'application_pending_review',
+    txPackages: keep,
+    updatedAt: new Date().toISOString(),
+  }
+  atomicWriteJson(statePath, next)
+  return { statePath, state: next }
+}
+
+function summarizeV2ApplyState(state = {}, context = null) {
+  const applyPkg = Array.isArray(state?.txPackages)
+    ? state.txPackages.find((entry) => String(entry?.action || '') === 'apply') || null
+    : null
+  const applyReceipt = Array.isArray(state?.receipts)
+    ? state.receipts.find((entry) => String(entry?.action || '') === 'apply') || null
+    : null
+  const operatorTx = state?.operatorTx?.apply || null
+  const applicantWallet = normalizeWalletAddress(state?.applyPackage?.walletAddress)
+  const onchainAssignedAgent = normalizeWalletAddress(context?.core?.assignedAgent)
+  const assignedToApplicant = Boolean(applicantWallet && onchainAssignedAgent && applicantWallet === onchainAssignedAgent)
+  const onchainStatus = context?.core ? deriveJobStatus(context.core, context.validation) : ''
+
+  return {
+    jobId: String(state?.jobId || ''),
+    status: String(state?.status || ''),
+    applicantWallet: applicantWallet || null,
+    agentSubdomain: String(state?.applyPackage?.agentSubdomain || ''),
+    bondAmountRaw: String(state?.applyPackage?.bondAmountRaw || ''),
+    operatorTx: operatorTx
+      ? {
+          txHash: String(operatorTx.txHash || ''),
+          broadcastAt: operatorTx.broadcastAt || null,
+          finalizedAt: operatorTx.finalizedAt || null,
+        }
+      : null,
+    txPackage: applyPkg
+      ? {
+          unsignedTxPath: applyPkg.unsignedTxPath || null,
+          reviewManifestPath: applyPkg.reviewManifestPath || null,
+          signed: Boolean(applyPkg.signed),
+          broadcastTxHash: applyPkg.broadcastTxHash || null,
+          finalizedAt: applyPkg.finalizedAt || null,
+        }
+      : null,
+    receipt: applyReceipt
+      ? {
+          txHash: applyReceipt.txHash || null,
+          status: applyReceipt.status || null,
+          broadcastAt: applyReceipt.broadcastAt || null,
+          finalizedAt: applyReceipt.finalizedAt || null,
+        }
+      : null,
+    onchain: {
+      status: onchainStatus || null,
+      assignedAgent: onchainAssignedAgent || null,
+      approvals: Number(context?.validation?.approvals || 0),
+      disapprovals: Number(context?.validation?.disapprovals || 0),
+    },
+    assignment: {
+      assignedToApplicant,
+      assignedToOther: Boolean(onchainAssignedAgent && applicantWallet && onchainAssignedAgent !== applicantWallet),
+    },
+  }
+}
+
 async function reconcileV1ApplyState(jobId, contractHint = '') {
   const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
   const state = readJsonSafe(statePath, null)
@@ -2058,6 +2217,54 @@ async function reconcileV1ApplyState(jobId, contractHint = '') {
     statePath,
     state: next,
     summary: summarizeV1ApplyState(next, context),
+  }
+}
+
+async function reconcileV2ApplyState(jobId, contractHint = '') {
+  const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
+  const state = readJsonSafe(statePath, null)
+  if (!state) {
+    const err = new Error('apply state not found')
+    err.status = 404
+    throw err
+  }
+  const applyPkg = Array.isArray(state.txPackages)
+    ? state.txPackages.find((entry) => String(entry?.action || '') === 'apply') || null
+    : null
+  if (!applyPkg) {
+    const err = new Error('apply package not found in state')
+    err.status = 404
+    throw err
+  }
+
+  const contract = isKnownV2Contract(contractHint)
+    ? String(contractHint).toLowerCase()
+    : AGI_JOB_MANAGER_V2.toLowerCase()
+  const context = await fetchV2JobContext(jobId, contract)
+  const summaryBefore = summarizeV2ApplyState(state, context)
+  const now = new Date().toISOString()
+  const next = {
+    ...state,
+    source: 'agijobmanager-v2',
+    applyReconciledAt: now,
+    applyReconciliation: summaryBefore,
+    updatedAt: now,
+  }
+
+  const hasFinalizedApply = Boolean(summaryBefore.operatorTx?.finalizedAt || summaryBefore.receipt?.status === 'finalized' || applyPkg?.finalizedAt)
+  if (summaryBefore.assignment.assignedToApplicant) {
+    next.status = 'assigned'
+    next.assignedAt = now
+    next.assignedAgent = summaryBefore.onchain.assignedAgent || state.assignedAgent || ''
+  } else if (hasFinalizedApply && ['application_pending_review', 'applied', 'assignment_pending', 'queued', 'scored'].includes(String(state.status || '').toLowerCase())) {
+    next.status = 'applied'
+  }
+
+  atomicWriteJson(statePath, next)
+  return {
+    statePath,
+    state: next,
+    summary: summarizeV2ApplyState(next, context),
   }
 }
 
@@ -2154,6 +2361,36 @@ function buildV1PrepareSummary(context, completionPayload, completionFetchOk) {
   }
 }
 
+function buildV2PrepareSummary(context, completionPayload, completionFetchOk) {
+  const zero = '0x0000000000000000000000000000000000000000'
+  const checks = []
+  const add = (name, passed, detail = '') => checks.push({ name, passed, detail })
+
+  add('job_id_numeric', /^\d+$/.test(String(context.jobId)), String(context.jobId))
+  add('v2_contract_present', /^0x[a-f0-9]{40}$/.test(String(context.contract).toLowerCase()), context.contract)
+  add('rpc_reachable', !context.rpcError, context.rpcError || 'ok')
+  add('v2_validateJob_abi', context.hasValidateJob, 'validateJob(uint256,string,bytes32[])')
+  add('v2_disputeJob_abi', context.hasDisputeJob, 'disputeJob(uint256)')
+  add('job_exists_onchain', String(context.core?.employer || '').toLowerCase() !== zero, context.core?.employer || '(unknown)')
+  add('completion_uri_present', Boolean(context.completionURI), context.completionURI || '(missing)')
+  add('completion_payload_fetched', Boolean(completionFetchOk), completionFetchOk ? 'ok' : 'not fetched')
+  add('completion_payload_json', Boolean(completionPayload && typeof completionPayload === 'object'), typeof completionPayload)
+  add('completion_text_present', extractScoringTextFromPayload(completionPayload || '').trim().length > 0, 'validator-scoring text extraction')
+
+  const passed = checks.filter((c) => c.passed).length
+  const failed = checks.length - passed
+  return {
+    verdict: failed === 0 ? 'READY' : 'NEEDS_REVIEW',
+    passed,
+    failed,
+    total: checks.length,
+    checks,
+    recommendation: failed === 0
+      ? 'v2 Validation package ready for operator review and signing.'
+      : `Resolve ${failed} check(s) before signing v2 validator tx.`,
+  }
+}
+
 function buildUnsignedValidatePackage({ jobId, completionURI, contract, chainId, proof = [] }) {
   return {
     schema: 'op-control/unsigned-tx/v1',
@@ -2245,6 +2482,47 @@ function upsertExternalValidatorState(jobId, context, packages) {
     ...existing,
     jobId: String(jobId),
     source: 'agijobmanager',
+    status: existing.status || 'completion_pending_review',
+    completionURI: context.completionURI || existing.completionURI || '',
+    employer: context.core?.employer || existing.employer || '',
+    assignedAgent: context.core?.assignedAgent || existing.assignedAgent || '',
+    txPackages: [...keep, ...mapped],
+    updatedAt: new Date().toISOString(),
+  }
+
+  atomicWriteJson(statePath, next)
+  return statePath
+}
+
+function upsertExternalV2ValidatorState(jobId, context, packages) {
+  const statePath = join(AGENT_STATE_DIR, `${jobId}.json`)
+  const existing = readJsonSafe(statePath, null) || {
+    jobId: String(jobId),
+    source: 'agijobmanager-v2',
+    createdAt: new Date().toISOString(),
+    txPackages: [],
+    receipts: [],
+  }
+
+  const keep = (existing.txPackages || []).filter((p) => !p.externalValidator)
+  const mapped = packages.map((pkg) => ({
+    action: pkg.action,
+    file: pkg.unsignedTxPath,
+    unsignedTxPath: pkg.unsignedTxPath,
+    reviewManifestPath: pkg.reviewManifestPath,
+    createdAt: pkg.createdAt,
+    expiresAt: pkg.expiresAt,
+    fresh: Date.parse(pkg.expiresAt) > Date.now(),
+    expired: Date.parse(pkg.expiresAt) <= Date.now(),
+    signed: false,
+    externalValidator: true,
+    checklist: pkg.checklist,
+  }))
+
+  const next = {
+    ...existing,
+    jobId: String(jobId),
+    source: 'agijobmanager-v2',
     status: existing.status || 'completion_pending_review',
     completionURI: context.completionURI || existing.completionURI || '',
     employer: context.core?.employer || existing.employer || '',
@@ -2416,6 +2694,168 @@ app.post('/api/validator/v1/prepare', async (req, res) => {
   } catch (e) {
     console.error('[validator-v1-prepare] failed:', e.message)
     res.status(500).json({ error: e.message || 'Failed to prepare external validator package' })
+  }
+})
+
+app.post('/api/validator/v2/prepare', async (req, res) => {
+  try {
+    const rawJobId = String(req.body?.jobId || '').trim()
+    const numericJobId = extractNumericJobId(rawJobId)
+    if (!numericJobId) return res.status(400).json({ error: 'jobId must include a numeric id' })
+
+    const contractHint = String(req.body?.contractHint || AGI_JOB_MANAGER_V2 || '').toLowerCase()
+    if (!/^0x[a-f0-9]{40}$/.test(contractHint)) {
+      return res.status(400).json({ error: 'contract hint invalid; expected 0x-prefixed address' })
+    }
+
+    const context = await fetchV2JobContext(numericJobId, contractHint)
+    if (!context.completionURI) {
+      return res.status(422).json({ error: 'No completion URI found for this v2 job' })
+    }
+
+    const completionPayload = await fetchIpfsPayload(context.completionURI)
+    const completionBrief = normalizeCompletionBriefPayload(completionPayload.json || {}, context.completionURI)
+    const dryRunSummary = buildV2PrepareSummary(context, completionPayload.json, completionPayload.ok)
+    const adjudication = await buildV1AdjudicationPayload(context, completionPayload.json || completionPayload.text || '')
+
+    const baseDir = buildExternalValidationDir(numericJobId)
+    const evidencePath = join(baseDir, 'v2_evidence_snapshot.json')
+    const adjudicationPath = join(baseDir, 'v2_adjudication_output.json')
+
+    const validatePkg = attachCalldata(buildUnsignedValidatePackage({
+      jobId: numericJobId,
+      completionURI: context.completionURI,
+      contract: context.contract,
+      chainId: context.chainId,
+      proof: Array.isArray(req.body?.validatorProof) ? req.body.validatorProof : [],
+    }), context.iface)
+
+    const disputePkg = attachCalldata(buildUnsignedDisputePackage({
+      jobId: numericJobId,
+      contract: context.contract,
+      chainId: context.chainId,
+    }), context.iface)
+
+    const validateTxPath = join(baseDir, 'v2_unsigned_validate_tx.json')
+    const disputeTxPath = join(baseDir, 'v2_unsigned_dispute_tx.json')
+    const validateReviewPath = join(baseDir, 'v2_review_manifest_validate.json')
+    const disputeReviewPath = join(baseDir, 'v2_review_manifest_dispute.json')
+
+    const guardrails = {
+      expectedContract: context.contract,
+      expectedChainId: context.chainId || '(unknown)',
+      rpc: ETH_RPC_URL,
+      validateMethod: 'validateJob(uint256,string,bytes32[])',
+      disputeMethod: 'disputeJob(uint256)',
+    }
+
+    const validateChecklist = [
+      'Confirm completion brief is acceptable and v2 checks pass.',
+      'Open review manifest and verify contract + chain guardrails (AGIJobManager v2).',
+      'Sign unsigned validate tx with operator wallet only.',
+    ]
+    const disputeChecklist = [
+      'Confirm dispute rationale from evidence + adjudication output.',
+      'Open review manifest and verify contract + chain guardrails (AGIJobManager v2).',
+      'Sign unsigned dispute tx with operator wallet only.',
+    ]
+
+    writeJsonFile(evidencePath, {
+      schema: 'op-control/validator-evidence-snapshot/v2',
+      generatedAt: new Date().toISOString(),
+      context,
+      completionPayload: {
+        ok: completionPayload.ok,
+        source: completionPayload.source,
+        completionURI: context.completionURI,
+        payload: completionPayload.json || null,
+        payloadText: completionPayload.json ? null : completionPayload.text,
+      },
+      dryRunSummary,
+    })
+    writeJsonFile(adjudicationPath, adjudication)
+    writeJsonFile(validateTxPath, validatePkg)
+    writeJsonFile(disputeTxPath, disputePkg)
+
+    writeJsonFile(validateReviewPath, {
+      schema: 'op-control/review-manifest/v2',
+      generatedAt: new Date().toISOString(),
+      lane: 'v2',
+      action: 'validate',
+      jobId: String(numericJobId),
+      checklist: validateChecklist,
+      guardrails,
+      attachments: [
+        { role: 'evidence snapshot', file: evidencePath },
+        { role: 'adjudication', file: adjudicationPath },
+        { role: 'unsigned tx', file: validateTxPath },
+      ],
+    })
+
+    writeJsonFile(disputeReviewPath, {
+      schema: 'op-control/review-manifest/v2',
+      generatedAt: new Date().toISOString(),
+      lane: 'v2',
+      action: 'dispute',
+      jobId: String(numericJobId),
+      checklist: disputeChecklist,
+      guardrails,
+      attachments: [
+        { role: 'evidence snapshot', file: evidencePath },
+        { role: 'adjudication', file: adjudicationPath },
+        { role: 'unsigned tx', file: disputeTxPath },
+      ],
+    })
+
+    const validateCandidate = {
+      action: 'validate',
+      unsignedTxPath: validateTxPath,
+      reviewManifestPath: validateReviewPath,
+      checklist: validateChecklist,
+      createdAt: validatePkg.createdAt,
+      expiresAt: validatePkg.expiresAt,
+    }
+    const disputeCandidate = {
+      action: 'dispute',
+      unsignedTxPath: disputeTxPath,
+      reviewManifestPath: disputeReviewPath,
+      checklist: disputeChecklist,
+      createdAt: disputePkg.createdAt,
+      expiresAt: disputePkg.expiresAt,
+    }
+
+    const stateFile = upsertExternalV2ValidatorState(numericJobId, context, [validateCandidate, disputeCandidate])
+
+    const result = {
+      ok: true,
+      schema: 'op-control/validator-v2-prepare/v1',
+      jobId: String(numericJobId),
+      contract: context.contract,
+      chainId: context.chainId,
+      completionURI: context.completionURI,
+      completionBrief,
+      dryRunSummary,
+      guardrails,
+      artifacts: {
+        dir: baseDir,
+        evidenceSnapshotPath: evidencePath,
+        adjudicationPath,
+      },
+      txCandidates: {
+        approve: validateCandidate,
+        dispute: disputeCandidate,
+      },
+      stateTracking: {
+        stateFile,
+        trackedActions: ['validate', 'dispute'],
+      },
+    }
+
+    writeJsonFile(join(baseDir, 'v2_prepare_result.json'), result)
+    res.json(result)
+  } catch (e) {
+    console.error('[validator-v2-prepare] failed:', e.message)
+    res.status(500).json({ error: e.message || 'Failed to prepare v2 external validator package' })
   }
 })
 
@@ -3226,7 +3666,8 @@ app.post('/api/job-applications/prepare', async (req, res) => {
       return res.status(422).json({ error: 'valid contract address is required' })
     }
 
-    const { ethers, iface } = await getV1ContractInterface()
+    const isV2 = isKnownV2Contract(contract)
+    const { ethers, iface } = isV2 ? await getV2ContractInterface() : await getV1ContractInterface()
     const chainIdNum = Number(req.body?.chainId || 1)
     const chainId = Number.isFinite(chainIdNum) && chainIdNum > 0 ? `0x${Math.floor(chainIdNum).toString(16)}` : '0x1'
 
@@ -3235,7 +3676,7 @@ app.post('/api/job-applications/prepare', async (req, res) => {
       tokenAddress = await readV1AgiTokenAddress(contract, iface)
     }
     if (!/^0x[a-f0-9]{40}$/.test(tokenAddress)) {
-      return res.status(502).json({ error: 'failed to resolve AGIALPHA token address for v1 apply package' })
+      return res.status(502).json({ error: `failed to resolve AGIALPHA token address for ${isV2 ? 'v2' : 'v1'} apply package` })
     }
 
     let bondAmountRaw = String(req.body?.bondAmountRaw || '').trim()
@@ -3243,7 +3684,7 @@ app.post('/api/job-applications/prepare', async (req, res) => {
       bondAmountRaw = await readV1AgentBondRaw(contract, iface)
     }
     if (!/^\d+$/.test(bondAmountRaw)) {
-      return res.status(502).json({ error: 'failed to resolve agent bond amount for v1 apply package' })
+      return res.status(502).json({ error: `failed to resolve agent bond amount for ${isV2 ? 'v2' : 'v1'} apply package` })
     }
 
     const walletAddress = normalizeWalletAddress(req.body?.walletAddress)
@@ -3262,7 +3703,9 @@ app.post('/api/job-applications/prepare', async (req, res) => {
       return res.status(409).json({ error: `job is not open for apply packaging (status=${requestedJobStatus})` })
     }
 
-    const context = await fetchV1JobContext(rawJobId, contract)
+    const context = isV2
+      ? await fetchV2JobContext(rawJobId, contract)
+      : await fetchV1JobContext(rawJobId, contract)
     if (context?.core) {
       const onchainStatus = deriveJobStatus(context.core, context.validation)
       if (onchainStatus !== 'Open') {
@@ -3273,20 +3716,13 @@ app.post('/api/job-applications/prepare', async (req, res) => {
     const erc20Iface = new ethers.Interface(['function approve(address spender, uint256 amount)'])
     const approveCalldata = erc20Iface.encodeFunctionData('approve', [contract, BigInt(bondAmountRaw)])
     const applyFn = iface.getFunction('applyForJob(uint256,string,bytes32[])')
-    if (!applyFn) return res.status(500).json({ error: 'applyForJob function missing in v1 ABI' })
+    if (!applyFn) return res.status(500).json({ error: `applyForJob function missing in ${isV2 ? 'v2' : 'v1'} ABI` })
     const applyCalldata = iface.encodeFunctionData(applyFn, [BigInt(rawJobId), agentSubdomain, merkleProof])
 
-    const txPkg = buildUnsignedApplyJobTxPackage({
-      contract,
-      tokenAddress,
-      chainId,
-      jobId: rawJobId,
-      bondAmountRaw,
-      agentSubdomain,
-      merkleProof,
-      approveCalldata,
-      applyCalldata,
-    })
+    const lane = isV2 ? 'v2' : 'v1'
+    const txPkg = isV2
+      ? buildUnsignedApplyJobV2TxPackage({ contract, tokenAddress, chainId, jobId: rawJobId, bondAmountRaw, agentSubdomain, merkleProof, approveCalldata, applyCalldata })
+      : buildUnsignedApplyJobTxPackage({ contract, tokenAddress, chainId, jobId: rawJobId, bondAmountRaw, agentSubdomain, merkleProof, approveCalldata, applyCalldata })
 
     const dir = join(ARTIFACTS_DIR, 'applications', `job_${rawJobId}`)
     mkdirSync(dir, { recursive: true })
@@ -3304,8 +3740,8 @@ app.post('/api/job-applications/prepare', async (req, res) => {
     ]
 
     writeJsonFile(reviewManifestPath, {
-      schema: 'op-control/review-manifest/v1',
-      lane: 'v1',
+      schema: `op-control/review-manifest/${lane}`,
+      lane,
       action: 'apply',
       generatedAt: new Date().toISOString(),
       guardrails: {
@@ -3336,7 +3772,8 @@ app.post('/api/job-applications/prepare', async (req, res) => {
       },
     })
 
-    const { statePath } = upsertV1ApplyTxPackage(rawJobId, {
+    const upsertApplyTxPackage = isV2 ? upsertV2ApplyTxPackage : upsertV1ApplyTxPackage
+    const { statePath } = upsertApplyTxPackage(rawJobId, {
       action: 'apply',
       unsignedTxPath,
       reviewManifestPath,
@@ -3383,7 +3820,8 @@ app.get('/api/job-applications/:jobId/status', async (req, res) => {
     const jobId = String(req.params.jobId || '').trim()
     if (!/^\d+$/.test(jobId)) return res.status(400).json({ error: 'jobId must be numeric' })
     const contractHint = String(req.query.contract || '').trim().toLowerCase()
-    const result = await reconcileV1ApplyState(jobId, contractHint)
+    const reconcile = isKnownV2Contract(contractHint) ? reconcileV2ApplyState : reconcileV1ApplyState
+    const result = await reconcile(jobId, contractHint)
     return res.json({ ok: true, state: result.state, summary: result.summary, statePath: result.statePath })
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message || 'Failed to load apply status' })
@@ -3395,7 +3833,8 @@ app.post('/api/job-applications/:jobId/reconcile', async (req, res) => {
     const jobId = String(req.params.jobId || '').trim()
     if (!/^\d+$/.test(jobId)) return res.status(400).json({ error: 'jobId must be numeric' })
     const contractHint = String(req.body?.contract || req.body?.contractHint || '').trim().toLowerCase()
-    const result = await reconcileV1ApplyState(jobId, contractHint)
+    const reconcile = isKnownV2Contract(contractHint) ? reconcileV2ApplyState : reconcileV1ApplyState
+    const result = await reconcile(jobId, contractHint)
     return res.json({ ok: true, state: result.state, summary: result.summary, statePath: result.statePath })
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message || 'Failed to reconcile apply state' })
@@ -3429,20 +3868,15 @@ app.post('/api/job-requests', async (req, res) => {
 
     const details = String(req.body?.brief || req.body?.summary || req.body?.title || 'Op-control job request').trim()
 
-    const { iface } = await getV1ContractInterface()
+    const isV2 = isKnownV2Contract(contract)
+    const { iface } = isV2 ? await getV2ContractInterface() : await getV1ContractInterface()
     const fn = iface.getFunction('createJob(string,uint256,uint256,string)')
-    if (!fn) return res.status(500).json({ error: 'createJob function missing in v1 ABI' })
+    if (!fn) return res.status(500).json({ error: `createJob function missing in ${isV2 ? 'v2' : 'v1'} ABI` })
 
     const calldata = iface.encodeFunctionData(fn, [specURI, BigInt(payoutRaw), BigInt(Math.round(durationSec)), details])
-    const txPkg = buildUnsignedCreateJobTxPackage({
-      contract,
-      chainId,
-      specURI,
-      payoutRaw,
-      durationSec: Math.round(durationSec),
-      details,
-      calldata,
-    })
+    const txPkg = isV2
+      ? buildUnsignedCreateJobV2TxPackage({ contract, chainId, specURI, payoutRaw, durationSec: Math.round(durationSec), details, calldata })
+      : buildUnsignedCreateJobTxPackage({ contract, chainId, specURI, payoutRaw, durationSec: Math.round(durationSec), details, calldata })
 
     const requestId = `request_${Date.now()}`
     const dir = join(ARTIFACTS_DIR, 'job_requests', requestId)
@@ -3454,16 +3888,17 @@ app.post('/api/job-requests', async (req, res) => {
     writeJsonFile(unsignedTxPath, txPkg)
     writeJsonFile(payloadSnapshotPath, req.body || {})
 
+    const lane = isV2 ? 'v2' : 'v1'
     const checklist = [
-      'Confirm contract and chain are correct for AGIJobManager v1.',
+      `Confirm contract and chain are correct for AGIJobManager ${isV2 ? 'v2' : 'v1'}.`,
       'Confirm IPFS spec URI resolves and matches intended job request.',
       'Confirm payout and duration are correct before signing.',
       'Sign unsigned createJob transaction with operator wallet only.',
     ]
 
     writeJsonFile(reviewManifestPath, {
-      schema: 'op-control/review-manifest/v1',
-      lane: 'v1',
+      schema: `op-control/review-manifest/${lane}`,
+      lane,
       action: 'request',
       generatedAt: new Date().toISOString(),
       guardrails: {
