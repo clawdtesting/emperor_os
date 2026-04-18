@@ -37,6 +37,10 @@ junk/
 # Emperor OS runtime (CRITICAL)
 memory/
 artifacts/
+# Allow runtime/artifacts/ source files (not job artifact data)
+!runtime/artifacts/
+# Test temp files
+.tmp/
 audits/reports/history/
 audits/reports/latest/
 audit_result*.json
