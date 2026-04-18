@@ -76,6 +76,14 @@ export function buildUnsignedCreateJobTxPackage({
   const duration = Number(durationSec)
   if (!Number.isFinite(duration) || duration <= 0) throw new Error('durationSec must be > 0')
 
+  const cleanDetails = String(details || '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 200)
+
+  if (cleanDetails.startsWith('{') || cleanDetails.includes('"schema"')) {
+    throw new Error('details field must be human-readable, not JSON')
+  }
+
   const createdAt = new Date().toISOString()
   const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
 
@@ -91,7 +99,7 @@ export function buildUnsignedCreateJobTxPackage({
       jobSpecURI: uri,
       payout,
       duration: String(Math.round(duration)),
-      details: String(details || '').trim(),
+      details: cleanDetails,
     },
     data: String(calldata || ''),
     createdAt,
@@ -136,6 +144,14 @@ export function buildUnsignedApplyJobTxPackage({
   if (!proof.length) throw new Error('merkleProof is required')
   if (proof.some((item) => !/^0x[a-f0-9]{64}$/.test(item))) {
     throw new Error('merkleProof must be an array of bytes32 hex values')
+  }
+
+  const cleanDetails = String(details || '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 200)
+
+  if (cleanDetails.startsWith('{') || cleanDetails.includes('"schema"')) {
+    throw new Error('details field must be human-readable, not JSON')
   }
 
   const createdAt = new Date().toISOString()

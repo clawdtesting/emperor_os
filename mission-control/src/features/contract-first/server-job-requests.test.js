@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import process from 'node:process'
 import { spawn } from 'child_process'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
 const ROOT = process.cwd()
@@ -91,4 +91,11 @@ test('POST /api/job-requests returns unsigned package + review manifest on succe
   assert.equal(typeof data?.reviewManifestPath, 'string')
   assert.equal(existsSync(data.unsignedTxPath), true)
   assert.equal(existsSync(data.reviewManifestPath), true)
+
+  const unsignedTx = JSON.parse(readFileSync(data.unsignedTxPath, 'utf8'))
+  const details = String(unsignedTx?.args?.details || '')
+  assert.equal(details.length <= 200, true)
+  assert.equal(details.includes('{'), false)
+  assert.equal(details.includes('"'), false)
+  assert.equal(details.includes('"schema"'), false)
 })

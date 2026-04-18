@@ -70,3 +70,33 @@ test('buildUnsignedCreateJobTxPackage validates required inputs', () => {
   assert.equal(pkg.args.jobSpecURI, 'ipfs://bafybeispec')
   assert.equal(pkg.data, '0xdeadbeef')
 })
+
+test('buildUnsignedCreateJobTxPackage sanitizes details for on-chain usage', () => {
+  const pkg = buildUnsignedCreateJobTxPackage({
+    contract: '0xB3AAeb69b630f0299791679c063d68d6687481d1',
+    chainId: '0x1',
+    specURI: 'ipfs://bafybeispec',
+    payoutRaw: '1000000000000000000',
+    durationSec: 3600,
+    details: `Human summary   with   extra spacing ${'x'.repeat(240)}`,
+  })
+
+  assert.equal(pkg.args.details.length <= 200, true)
+  assert.equal(pkg.args.details.includes('{'), false)
+  assert.equal(pkg.args.details.includes('"'), false)
+  assert.equal(pkg.args.details.includes('"schema"'), false)
+  assert.equal(pkg.args.details.includes('  '), false)
+})
+
+test('buildUnsignedCreateJobTxPackage rejects JSON-like details payloads', () => {
+  assert.throws(() => {
+    buildUnsignedCreateJobTxPackage({
+      contract: '0xB3AAeb69b630f0299791679c063d68d6687481d1',
+      chainId: '0x1',
+      specURI: 'ipfs://bafybeispec',
+      payoutRaw: '1000000000000000000',
+      durationSec: 3600,
+      details: '{"schema":"agijobmanager/job-spec/v2"}',
+    })
+  }, /human-readable, not JSON/i)
+})

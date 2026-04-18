@@ -786,7 +786,7 @@ export function JobRequestTab({ wallet }) {
         ...createDefaultJobRequestDraft(),
         title: draft.title,
         summary: draft.summary,
-        details: JSON.stringify(publishPayload, null, 2),
+        details: (draft.summary || draft.title || '').slice(0, 200),
         category: draft.category,
         tags: resolvedTags,
         deliverables: draft.deliverables,
