@@ -96,8 +96,8 @@ export default function App() {
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">⬡</div>
           <div>
-            <div className="text-sm font-semibold leading-tight">AGI Alpha Mission Control</div>
-            <div className="text-xs text-slate-500 leading-tight">Operator console for job requests, applies, and validation</div>
+            <div className="text-sm font-semibold leading-tight">Emperor_OS Mission Control</div>
+            <div className="text-xs text-slate-500 leading-tight break-words">Operator console for contract lanes, manifests, and unsigned transaction review</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -168,7 +168,7 @@ export default function App() {
           ))}
         </div>
         </div>
-        <div>
+        <div className="min-w-0">
 
         {tab === 'mission' && (
           <MissionControlTab
@@ -176,6 +176,7 @@ export default function App() {
             jobsCount={jobsDesc.length}
             jobsV1Count={jobsV1.length}
             jobsV2Count={jobsV2Display.length}
+            jobsPrimeCount={jobsPrime.length}
             assignedCount={assigned.length}
             unreadCount={unreadCount}
             onOpenTab={setTab}

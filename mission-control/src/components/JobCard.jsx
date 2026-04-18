@@ -82,12 +82,12 @@ export function JobCard({ job, selected, onClick }) {
           target="_blank"
           rel="noopener noreferrer"
           onClick={e => e.stopPropagation()}
-          className="block text-xs font-mono text-blue-500 hover:text-blue-400 mb-2 truncate"
+          className="block text-xs font-mono text-blue-500 hover:text-blue-400 mb-2 break-all"
         >
           {shortCid(job.specURI)}
         </a>
       ) : (
-        <div className="block text-xs font-mono text-slate-600 mb-2 truncate">no spec URI</div>
+        <div className="block text-xs font-mono text-slate-600 mb-2 break-all">no spec URI</div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs mb-3">
         <div className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5">
@@ -111,7 +111,7 @@ export function JobCard({ job, selected, onClick }) {
           <div className="text-slate-300">{payoutPerValidator ?? '—'}</div>
         </div>
       </div>
-      <div className="flex items-center gap-3 text-xs text-slate-400 mb-2">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mb-2">
         <span>{approvals}✓ {disapprovals}✗ ({votes})</span>
         {job.createdAt && <span>created {job.createdAt}</span>}
       </div>
