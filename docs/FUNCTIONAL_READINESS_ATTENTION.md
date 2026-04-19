@@ -13,74 +13,30 @@ A lane is considered functional only when it has all of the following end-to-end
 
 ---
 
-## Job v1 (AGIJobManager v1)
+## Missing items by lane (what still blocks "fully functional")
 
-### Current status
-- Mostly live, but not yet uniformly hardened.
+### Job v1 (AGIJobManager v1)
+- Deterministic validation and reconciliation are still uneven across edge transitions and restart-time consistency paths.
+- Artifact schema output still diverges between some legacy/newer modules.
+- Retrieval-before-generation and terminal stepping-stone/archive extraction are not yet enforced as hard completion gates.
+- Mission Control checklist parity is incomplete, so operators still fall back to manual artifact inspection.
 
-### Attention needed
-- Close uneven deterministic validation and reconciliation coverage for edge cases and restart-time consistency checks.
-- Standardize artifact schemas where legacy/newer module outputs still diverge.
-- Enforce retrieval-before-generation and terminal stepping-stone/archive extraction as mandatory completion gates (not optional behavior).
-- Reduce operator dependence on manual local artifact inspection by surfacing checklist parity in Mission Control.
+### Job v2 (AGIJobManager v2)
+- Deterministic reconciliation under chain/runtime drift still needs deeper edge-case testing.
+- Assignment/validator recovery drills need to stay current as v2 contract revisions ship.
+- End-to-end no-fallback operator flow still requires hardening for apply→assignment→completion under restart/reorg conditions.
 
-### Exit criteria
-- All v1 edge-case transitions have deterministic validators and restart-safe checks.
-- Every terminal completion enforces archive extraction + index update before DONE.
-- Mission Control and local artifact/state views are reconciled without manual diffing.
+### Prime v1 (AGIJobDiscoveryPrime)
+- Runbook coverage for validator-scoring failures and deadline-window failures is incomplete.
+- Artifact bundles still vary across monitor/orchestrator/manual execution entrypoints.
+- READY handoff quality and phase artifact parity are not yet guaranteed path-independently.
+- Mission Control/runtime reconciliation still requires manual cross-checking in some operator decisions.
 
----
-
-## Job v2 (AGIJobManager v2)
-
-### Current status
-- Lifecycle-visible: v2 contract-first reads, `/api/jobs` indexing fields, and lane surfaces are wired with runtime/on-chain status parity.
-
-### Attention needed
-- Continue edge-case testing for v2 status reconciliation when local runtime state lags chain events.
-- Keep validator/assignment recovery drills current as new v2 contract revisions are introduced.
-
-### Exit criteria
-- v2 jobs remain fully indexed and lifecycle-visible in Mission Control and runtime state under restart/reorg scenarios.
-- Operator can run end-to-end v2 apply→assignment→completion flow without fallback/manual reconstruction.
-- v2 lane recovery documentation stays deterministic and signing-gate-specific as lane logic evolves.
-
----
-
-## Prime v1 (AGIJobDiscoveryPrime)
-
-### Current status
-- Live phase model and operator-gated readiness are in place.
-- Added deterministic reconciliation snapshots (`reconciliation_snapshot.json`) and expanded Prime operator failure playbooks, but full cross-entrypoint parity verification still requires continued validation.
-
-### Attention needed
-- Complete operator runbook coverage for validator scoring lifecycle failures and deadline edge windows.
-- Eliminate artifact generation inconsistency across monitor/orchestrator/manual paths.
-- Enforce consistent phase artifact bundles and READY handoff quality regardless of execution entrypoint.
-- Improve Mission Control/local runtime reconciliation so Prime operator decisions do not require manual cross-checking.
-
-### Exit criteria
-- All Prime v1 phases emit the same required artifact set independent of path.
-- Edge/deadline failure playbooks are explicit and operator-usable.
-- READY states always have complete, deterministic artifact + tx package bundles.
-
----
-
-## Prime v2 (AGIJobManagerPrime / Prime-v2 lane)
-
-### Current status
-- Monitored/operator-assisted only; not fully wired as a first-class indexed lane.
-
-### Attention needed
-- Add native Prime-v2 list indexing from `PremiumJobCreated` and downstream settlement events into `/api/jobs`.
-- Attach settlement-stage state from procurement/job artifacts for assignment/acceptance/finalization visibility.
-- Add dedicated Prime-v2 operator actions so unsigned settlement tx + review manifests are first-class queue items.
-- Promote Prime-v2 from "monitored" to complete lane with deterministic state machine + artifact parity.
-
-### Exit criteria
-- Prime-v2 jobs appear as first-class indexed entities with settlement lifecycle status.
-- Prime-v2 operator actions are available without ad hoc/manual workflows.
-- Prime-v2 completion path follows same deterministic artifact/state standards as Prime v1.
+### Prime v2 (AGIJobManagerPrime / Prime-v2 lane)
+- Native deterministic indexing from `PremiumJobCreated` through settlement events into `/api/jobs` is missing/incomplete.
+- Settlement-stage state binding from procurement/job artifacts is not yet first-class for assignment/acceptance/finalization visibility.
+- Dedicated Prime-v2 operator action queue items (unsigned tx + review manifests) are incomplete.
+- Lane is still monitored/operator-assisted, not yet fully promoted to deterministic state-machine + artifact parity.
 
 ---
 
@@ -109,3 +65,11 @@ A lane is considered functional only when it has all of the following end-to-end
 3. Prime-v1 artifact/runbook consistency hardening.
 4. Cross-lane deterministic validation + schema convergence.
 5. Cross-lane mandatory retrieval/archive extraction gates.
+
+---
+
+## Completion criteria to remove this attention file
+- All four lanes satisfy the six-point functional definition without manual reconstruction steps.
+- Mission Control and runtime artifacts/state are canonically reconciled for operator decisions.
+- Each lane has deterministic recovery runbooks for failure, deadline pressure, and restart scenarios.
+- Retrieval/archive extraction gates are enforced before terminal completion across lanes.
