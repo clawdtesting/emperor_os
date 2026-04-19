@@ -1,5 +1,3 @@
-import { useActions } from '../hooks/useActions'
-
 const URGENCY_STYLES = {
   urgent: { border: 'border-red-500/60', bg: 'bg-red-950/20', badge: 'bg-red-600', text: 'text-red-400' },
   warning: { border: 'border-amber-500/60', bg: 'bg-amber-950/20', badge: 'bg-amber-600', text: 'text-amber-400' },
@@ -58,6 +56,18 @@ function ActionItem({ action, onDismiss }) {
       </div>
 
       <p className="text-xs text-slate-400 mt-1.5">{action.summary}</p>
+      {Array.isArray(action.checklist) && action.checklist.length > 0 && (
+        <ul className="mt-2 list-disc list-inside text-xs text-slate-300 space-y-0.5">
+          {action.checklist.slice(0, 4).map((item, idx) => (
+            <li key={`${action.id}-check-${idx}`}>{typeof item === 'string' ? item : item?.label || item?.name || 'Checklist item'}</li>
+          ))}
+        </ul>
+      )}
+      {Array.isArray(action.missingRequiredArtifacts) && action.missingRequiredArtifacts.length > 0 && (
+        <div className="mt-2 text-xs text-amber-300">
+          Missing: {action.missingRequiredArtifacts.slice(0, 4).join(', ')}
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mt-2 text-xs">
         {deadlineText && (
@@ -68,14 +78,25 @@ function ActionItem({ action, onDismiss }) {
         {action.blockedReason && (
           <span className="text-amber-400">blocked: {action.blockedReason}</span>
         )}
+        {action.stateStatus && (
+          <span className="text-slate-500">state: {action.stateStatus}</span>
+        )}
         <span className="text-slate-600 ml-auto">{timeAgo(action.createdAt)}</span>
       </div>
     </div>
   )
 }
 
-export function ActionsPanel() {
-  const { actions, loading, error, filter, setFilter, unreadCount, dismiss, refetch } = useActions()
+export function ActionsPanel({
+  actions = [],
+  loading = false,
+  error = null,
+  filter = 'pending',
+  setFilter = () => {},
+  unreadCount = 0,
+  dismiss = () => {},
+  refetch = () => {},
+}) {
 
   const filters = [
     { key: 'pending', label: 'Pending' },

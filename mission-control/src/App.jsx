@@ -34,7 +34,8 @@ function compareJobIdDesc(a, b) {
 
 export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
-  const { unreadCount } = useActions()
+  const actionsModel = useActions()
+  const { unreadCount } = actionsModel
   const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('mission')
   const wallet = useWallet()
@@ -311,13 +312,28 @@ export default function App() {
 
         {tab === 'ops' && (
           <div className="bg-slate-900 rounded-lg border border-slate-800">
-            <OperationsLane onOpenEntity={handleOpenOperatorEntity} onActionUpdated={handleOperatorActionUpdated} />
+            <OperationsLane
+              onOpenEntity={handleOpenOperatorEntity}
+              onActionUpdated={handleOperatorActionUpdated}
+              operatorActions={actionsModel.actions}
+              actionsLoading={actionsModel.loading}
+              refreshActions={actionsModel.refetch}
+            />
           </div>
         )}
 
         {tab === 'actions' && (
           <div className="bg-slate-900 rounded-lg border border-slate-800">
-            <ActionsPanel />
+            <ActionsPanel
+              actions={actionsModel.actions}
+              loading={actionsModel.loading}
+              error={actionsModel.error}
+              filter={actionsModel.filter}
+              setFilter={actionsModel.setFilter}
+              unreadCount={actionsModel.unreadCount}
+              dismiss={actionsModel.dismiss}
+              refetch={actionsModel.refetch}
+            />
           </div>
         )}
 

@@ -214,6 +214,7 @@ function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }
         <div className="text-[10px] text-slate-500 mt-0.5">
           checklist: {Array.isArray(item.checklist) ? item.checklist.length : 0}
         </div>
+        {item.nextActionSummary && <div className="text-[10px] text-slate-400 mt-0.5 break-words">{item.nextActionSummary}</div>}
       </div>
       <div className="md:col-span-2 text-slate-400">{countdown(item.deadlineAt)}</div>
       <div className="md:col-span-2">
@@ -223,7 +224,7 @@ function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }
           disabled={!item.reviewManifestPath || busy}
           onClick={() => onOpenFile(item.reviewManifestPath)}
         >
-          Open review manifest
+          Inspect raw manifest
         </button>
       </div>
       <div className="md:col-span-2">
@@ -233,7 +234,7 @@ function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }
           disabled={!item.unsignedTxPath || busy}
           onClick={() => onOpenFile(item.unsignedTxPath)}
         >
-          Open unsigned tx
+          Inspect raw tx
         </button>
       </div>
       <div className="md:col-span-2 flex md:justify-end">
@@ -245,6 +246,23 @@ function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }
         >
           {transitionLabel}
         </button>
+      </div>
+      <div className="md:col-span-12 rounded border border-slate-800 bg-slate-950/60 p-2 space-y-1">
+        <div className="text-[11px] text-slate-300">
+          <span className="text-slate-500">State:</span> {item.stateStatus || item.lifecycleStage || '—'} · <span className="text-slate-500">Next:</span> {item.nextAction || item.action || '—'}
+        </div>
+        {item.blockedReason && <div className="text-[11px] text-amber-300">Blocked: {item.blockedReason}</div>}
+        {Array.isArray(item.missingRequiredArtifacts) && item.missingRequiredArtifacts.length > 0 && (
+          <div className="text-[11px] text-amber-300">Missing artifacts: {item.missingRequiredArtifacts.join(', ')}</div>
+        )}
+        {Array.isArray(item.checklist) && item.checklist.length > 0 && (
+          <ul className="list-disc list-inside text-[11px] text-slate-300 space-y-0.5">
+            {item.checklist.slice(0, 4).map((check, idx) => <li key={`${item.id || item.entityId}-chk-${idx}`}>{check}</li>)}
+          </ul>
+        )}
+        <div className="text-[11px] text-slate-400">
+          Handoff complete: {item.readyHandoffComplete ? 'yes' : 'no'} · manifest: {item.hasReviewManifest ? 'present' : 'missing'} · tx: {item.hasUnsignedTx ? 'present' : 'missing'}
+        </div>
       </div>
     </div>
   )
@@ -329,9 +347,36 @@ function LlmProviderPicker() {
   )
 }
 
-export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdated = () => {} }) {
+function toList(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).map(String)
+  if (!value) return []
+  return [String(value)]
+}
+
+function canonicalQueueItem(item = {}) {
+  return {
+    ...item,
+    stateStatus: item.stateStatus || item.lifecycleStage || 'unknown',
+    lifecycleStage: item.lifecycleStage || item.stateStatus || 'unknown',
+    nextAction: item.nextAction || item.action || '—',
+    nextActionSummary: item.nextActionSummary || item.summary || '',
+    blockedReason: item.blockedReason || '',
+    missingRequiredArtifacts: toList(item.missingRequiredArtifacts),
+    checklist: toList(item.checklist),
+    readyHandoffComplete: Boolean(item.readyHandoffComplete),
+    hasReviewManifest: Boolean(item.reviewManifestPath),
+    hasUnsignedTx: Boolean(item.unsignedTxPath),
+  }
+}
+
+export default function OperationsLane({
+  onOpenEntity = () => {},
+  onActionUpdated = () => {},
+  operatorActions = [],
+  actionsLoading = false,
+  refreshActions = () => {},
+}) {
   const [data, setData] = useState(null)
-  const [operatorActions, setOperatorActions] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [tab, setTab] = useState('prime')
@@ -344,15 +389,12 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
 
   const fetchLane = async () => {
     try {
-      const [laneRes, actionRes] = await Promise.all([
+      const [laneRes] = await Promise.all([
         fetch('/api/operations-lane'),
-        fetch('/api/operator-actions'),
       ])
       const laneJson = await laneRes.json()
-      const actionJson = await actionRes.json().catch(() => ({ actions: [] }))
       const llmJson = await fetchLlmProviders().catch(() => ({ providers: [], selectedProvider: null }))
       setData(laneJson)
-      setOperatorActions(Array.isArray(actionJson?.actions) ? actionJson.actions : [])
       setLlmProviders(Array.isArray(llmJson?.providers) ? llmJson.providers : [])
       setSelectedProvider(llmJson?.selectedProvider || '')
     } catch (err) {
@@ -395,6 +437,7 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
 
       setQueueMessage(`Updated: ${item.lane}/${item.entityId} ${item.action}`)
       await fetchLane()
+      await refreshActions()
       await onActionUpdated(item, transitionResult)
     } catch (err) {
       setQueueMessage(`Transition failed: ${err.message}`)
@@ -423,11 +466,12 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
     return acc
   }, {})
 
+  const canonicalActions = (Array.isArray(operatorActions) ? operatorActions : []).map(canonicalQueueItem)
   const queueCounts = OPERATOR_QUEUE_TABS.reduce((acc, q) => {
-    acc[q.key] = operatorActions.filter((a) => (a.queueStage || 'needs_signature') === q.key).length
+    acc[q.key] = canonicalActions.filter((a) => (a.queueStage || 'needs_signature') === q.key).length
     return acc
   }, {})
-  const queueRows = operatorActions.filter((a) => (a.queueStage || 'needs_signature') === queueTab)
+  const queueRows = canonicalActions.filter((a) => (a.queueStage || 'needs_signature') === queueTab)
   const enabledProviders = llmProviders.filter((p) => p.enabled)
   const manifestSummary = summarizeManifest(filePreview)
 
@@ -446,7 +490,7 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
       <div className="mb-5 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-slate-200">Operator Queue</h3>
-          <span className="text-xs text-slate-500">{operatorActions.length} total</span>
+          <span className="text-xs text-slate-500">{canonicalActions.length} total</span>
         </div>
 
         <div className="flex gap-2 mb-3 overflow-x-auto">
@@ -471,7 +515,9 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
           <div className="col-span-2 text-right">Update</div>
         </div>
 
-        {queueRows.length === 0 ? (
+        {(actionsLoading && queueRows.length === 0) ? (
+          <div className="text-xs text-slate-500 italic">Loading operator queue…</div>
+        ) : queueRows.length === 0 ? (
           <div className="text-xs text-slate-500 italic">No actions in “{queueStageLabel(queueTab)}”.</div>
         ) : (
           <div className="space-y-2">
@@ -492,7 +538,23 @@ export default function OperationsLane({ onOpenEntity = () => {}, onActionUpdate
           </div>
         )}
 
-        {queueMessage && <div className="mt-3 text-xs text-amber-300">{queueMessage}</div>}
+      {queueMessage && <div className="mt-3 text-xs text-amber-300">{queueMessage}</div>}
+        {queueRows.length > 0 && (
+          <div className="mt-3 rounded border border-slate-800 bg-slate-900/40 p-2 text-xs text-slate-300">
+            {queueRows.slice(0, 1).map((item) => (
+              <div key={`summary-${item.id || item.entityId}`} className="space-y-1">
+                <div><span className="text-slate-500">State:</span> {item.stateStatus}</div>
+                <div><span className="text-slate-500">Next action:</span> {item.nextAction}</div>
+                {item.nextActionSummary && <div><span className="text-slate-500">Summary:</span> {item.nextActionSummary}</div>}
+                {item.blockedReason && <div className="text-amber-300"><span className="text-slate-500">Blocked:</span> {item.blockedReason}</div>}
+                {item.missingRequiredArtifacts.length > 0 && (
+                  <div className="text-amber-300"><span className="text-slate-500">Missing artifacts:</span> {item.missingRequiredArtifacts.join(', ')}</div>
+                )}
+                <div><span className="text-slate-500">Handoff complete:</span> {item.readyHandoffComplete ? 'yes' : 'no'}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Summary bar */}

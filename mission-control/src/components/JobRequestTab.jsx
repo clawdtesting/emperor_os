@@ -195,8 +195,6 @@ export function JobRequestTab({ wallet }) {
   const [mdImported, setMdImported] = useState(false)
   const [importedCanonicalSpec, setImportedCanonicalSpec] = useState(null)
 
-  const [showUnsignedBrief, setShowUnsignedBrief] = useState(false)
-  const [showReviewBrief, setShowReviewBrief] = useState(false)
   const [pushPending, setPushPending] = useState(false)
   const [pushTxHash, setPushTxHash] = useState('')
   const [pushStatus, setPushStatus] = useState('')
@@ -1408,59 +1406,42 @@ Employer: you · Contract: 0x... · createdVia: Emperor_os`}
 
           <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2 text-xs space-y-2 min-w-0">
             <div className="text-emerald-300">Sign-ready request package generated.</div>
-
-            <div className="text-slate-300 break-all">
-              unsigned tx:{' '}
-              <a
-                className="text-blue-300 underline"
-                href={`/api/operator-actions/file?path=${encodeURIComponent(
-                  result.unsignedTxPath,
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                open
-              </a>
-              {' · '}
-              <button
-                type="button"
-                onClick={() => setShowUnsignedBrief((v) => !v)}
-                className="text-blue-300 underline"
-              >
-                brief
-              </button>
-            </div>
-
-            <div className="text-slate-300 break-all">
-              review manifest:{' '}
-              <a
-                className="text-blue-300 underline"
-                href={`/api/operator-actions/file?path=${encodeURIComponent(
-                  result.reviewManifestPath || '',
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                open
-              </a>
-              {' · '}
-              <button
-                type="button"
-                onClick={() => setShowReviewBrief((v) => !v)}
-                className="text-blue-300 underline"
-              >
-                brief
-              </button>
-            </div>
           </div>
 
-          {showUnsignedBrief && (
-            <BriefCard title="Unsigned tx brief" items={unsignedBriefItems} />
-          )}
+          <BriefCard title="Unsigned tx brief" items={unsignedBriefItems} />
+          <BriefCard title="Review manifest brief" items={reviewBriefItems} />
 
-          {showReviewBrief && (
-            <BriefCard title="Review manifest brief" items={reviewBriefItems} />
-          )}
+          <details className="rounded border border-slate-800 bg-slate-900/40 p-3">
+            <summary className="text-xs text-slate-300 cursor-pointer">Inspect raw files (secondary/debug)</summary>
+            <div className="mt-2 space-y-2 text-xs">
+              <div className="text-slate-300 break-all">
+                unsigned tx:{' '}
+                <a
+                  className="text-blue-300 underline"
+                  href={`/api/operator-actions/file?path=${encodeURIComponent(
+                    result.unsignedTxPath,
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  open raw
+                </a>
+              </div>
+              <div className="text-slate-300 break-all">
+                review manifest:{' '}
+                <a
+                  className="text-blue-300 underline"
+                  href={`/api/operator-actions/file?path=${encodeURIComponent(
+                    result.reviewManifestPath || '',
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  open raw
+                </a>
+              </div>
+            </div>
+          </details>
 
           <div className="rounded border border-slate-700 bg-slate-900/60 p-3 space-y-2 min-w-0">
             <div className="text-xs text-slate-300 font-semibold">
