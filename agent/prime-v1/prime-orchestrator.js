@@ -88,7 +88,7 @@ import { evaluateFit } from "./prime-evaluate.js";
 import { generateApplicationMarkdown, generateTrialMarkdown, publishAndVerify, draftWithLLM } from "./prime-content.js";
 import { runPrimePreSignChecks } from "../prime-presign-checks.js";
 import { ingestFinalizedOperatorReceipt } from "../prime-receipts.js";
-import { buildValidatorScoringPayloads, discoverValidatorAssignment } from "../prime-validator-engine.js";
+import { runValidatorScoreCommit, runValidatorScoreReveal } from "../prime-validator-scoring.js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -845,124 +845,38 @@ async function handleBuildCompletionTx(procurementId) {
   return true;
 }
 
-async function handleBuildValidatorScoreCommitTx(procurementId, procStruct) {
-  let state = await getProcState(procurementId);
-  assertStateIntegrity(state);
+async function handleBuildValidatorScoreCommitTx(procurementId) {
+  const state = await getProcState(procurementId);
   assertStateIntegrity(state);
 
-  // Gate check.
-  try {
-    await assertValidatorScoreCommitGate({ procurementId, procStruct });
-  } catch (err) {
-    log(`#${procurementId}: validator score commit gate failed — ${err.message}`);
+  const handoff = await runValidatorScoreCommit({ procurementId, validatorAddress: AGENT_ADDRESS });
+  if (!handoff?.path) {
+    log(`#${procurementId}: validator score commit remains blocked (no signable handoff)`);
     return false;
   }
 
-  const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
-  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
-  if (!assignment.assigned) {
-    log(`#${procurementId}: validator assignment not chain-confirmed; score commit remains locked`);
-    return false;
-  }
-
-  let payload = state?.validatorScoreCommitPayload;
-  if (!payload?.preparedTx || !payload?.scoreCommitment) {
-    const generated = await buildValidatorScoringPayloads({
-      procurementId,
-      linkedJobId: state?.linkedJobId,
-      validatorAddress: AGENT_ADDRESS,
-    });
-    await setProcState(procurementId, {
-      validatorAssignment: assignment,
-      validatorScoreCommitPayload: generated.scoreCommitPayload,
-      validatorScoreRevealPayload: generated.scoreRevealPayload,
-    });
-    state = await getProcState(procurementId);
-    payload = state?.validatorScoreCommitPayload;
-  }
-  await writeValidatorScoreCommitBundle(procurementId, payload);
-  const { path: txPath } = await buildValidatorScoreCommitTx({
-    procurementId,
-    linkedJobId: state.linkedJobId,
-    preparedTx: payload.preparedTx,
-    scoreCommitment: payload.scoreCommitment,
-  });
-  const didRun = await guardIdempotentStep(procurementId, "buildValidatorScoreCommitTx", String(txPath));
+  const didRun = await guardIdempotentStep(procurementId, "buildValidatorScoreCommitTx", String(handoff.path));
   if (!didRun) return false;
-  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
-  await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY, {
-    txHandoffs: { ...(state.txHandoffs ?? {}), scoreCommit: txPath },
-  });
-  await writeReadyPacket(procurementId, "scoreCommit", txPath);
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: handoff.path, fromAddress: AGENT_ADDRESS });
+  await writeReadyPacket(procurementId, "scoreCommit", handoff.path);
   log(`#${procurementId}: → VALIDATOR_SCORE_COMMIT_READY`);
   return true;
 }
 
-async function handleBuildValidatorScoreRevealTx(procurementId, procStruct) {
-  let state = await getProcState(procurementId);
+async function handleBuildValidatorScoreRevealTx(procurementId) {
+  const state = await getProcState(procurementId);
   assertStateIntegrity(state);
 
-  // Gate check.
-  try {
-    await assertValidatorScoreRevealGate({ procurementId, procStruct });
-  } catch (err) {
-    log(`#${procurementId}: validator score reveal gate failed — ${err.message}`);
+  const handoff = await runValidatorScoreReveal({ procurementId, validatorAddress: AGENT_ADDRESS });
+  if (!handoff?.path) {
+    log(`#${procurementId}: validator score reveal remains blocked (no signable handoff)`);
     return false;
   }
 
-  const assignment = await discoverValidatorAssignment(procurementId, AGENT_ADDRESS);
-  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
-  if (!assignment.assigned) {
-    log(`#${procurementId}: validator assignment not chain-confirmed; score reveal remains locked`);
-    return false;
-  }
-
-  let payload = state?.validatorScoreRevealPayload;
-  if (!payload?.preparedTx && state?.validatorScoreCommitPayload) {
-    const generated = await buildValidatorScoringPayloads({
-      procurementId,
-      linkedJobId: state?.linkedJobId,
-      validatorAddress: AGENT_ADDRESS,
-    });
-    await setProcState(procurementId, {
-      validatorScoreCommitPayload: generated.scoreCommitPayload,
-      validatorScoreRevealPayload: generated.scoreRevealPayload,
-    });
-    state = await getProcState(procurementId);
-    payload = state?.validatorScoreRevealPayload;
-  }
-  if (!payload?.preparedTx) {
-    log(`#${procurementId}: validator score reveal payload missing in state.validatorScoreRevealPayload`);
-    return false;
-  }
-
-  const committedPayload = state?.validatorScoreCommitPayload ?? await readJson(path.join(procSubdir(procurementId, "scoring"), "score_commit_payload.json"), null);
-  const expected = String(committedPayload?.scoreCommitment ?? "").toLowerCase();
-  const got = String(payload?.commitmentCheck?.recomputedCommitment ?? payload?.expectedCommitment ?? "").toLowerCase();
-  const continuityOk = Boolean(payload?.commitmentCheck?.verified) && expected !== "" && got === expected;
-  if (!continuityOk) {
-    await setProcState(procurementId, {
-      lastError: `Validator reveal continuity check failed: expected ${expected || "<missing>"}, got ${got || "<missing>"}`,
-    });
-    log(`#${procurementId}: validator reveal blocked — commitment continuity check failed`);
-    return false;
-  }
-
-  await writeValidatorScoreRevealBundle(procurementId, payload);
-  const { path: txPath } = await buildValidatorScoreRevealTx({
-    procurementId,
-    linkedJobId: state.linkedJobId,
-    preparedTx: payload.preparedTx,
-    scoreValue: payload.score,
-    salt: payload.salt,
-  });
-  const didRun = await guardIdempotentStep(procurementId, "buildValidatorScoreRevealTx", String(txPath));
+  const didRun = await guardIdempotentStep(procurementId, "buildValidatorScoreRevealTx", String(handoff.path));
   if (!didRun) return false;
-  await runPrimePreSignChecks({ procurementId, unsignedTxPath: txPath, fromAddress: AGENT_ADDRESS });
-  await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY, {
-    txHandoffs: { ...(state.txHandoffs ?? {}), scoreReveal: txPath },
-  });
-  await writeReadyPacket(procurementId, "scoreReveal", txPath);
+  await runPrimePreSignChecks({ procurementId, unsignedTxPath: handoff.path, fromAddress: AGENT_ADDRESS });
+  await writeReadyPacket(procurementId, "scoreReveal", handoff.path);
   log(`#${procurementId}: → VALIDATOR_SCORE_REVEAL_READY`);
   return true;
 }
@@ -1091,10 +1005,10 @@ export async function orchestrateProcurement(procurementId) {
         log(`#${procurementId}: WAITING_SCORE_PHASE — monitoring for winner designation`);
         break;
       case "BUILD_VALIDATOR_SCORE_COMMIT_TX":
-        await handleBuildValidatorScoreCommitTx(procurementId, procStruct);
+        await handleBuildValidatorScoreCommitTx(procurementId);
         break;
       case "BUILD_VALIDATOR_SCORE_REVEAL_TX":
-        await handleBuildValidatorScoreRevealTx(procurementId, procStruct);
+        await handleBuildValidatorScoreRevealTx(procurementId);
         break;
       case "EXECUTE_JOB":
         if (state.status === PROC_STATUS.SELECTED) {

@@ -1,3 +1,7 @@
+import os from 'os';
+import path from 'path';
+import { promises as fs } from 'fs';
+
 import { deriveChainPhase, didMissRequiredWindow, CHAIN_PHASE, PROC_STATUS } from '../../agent/prime-phase-model.js';
 
 const now = Math.floor(Date.now() / 1000);
@@ -43,6 +47,33 @@ if (!didMissRequiredWindow(PROC_STATUS.COMMIT_READY, deriveChainPhase(delayedPol
 }
 if (deriveChainPhase(partialStateRecoveryCase) !== CHAIN_PHASE.CLOSED) {
   throw new Error('partial-state recovery case should derive CLOSED chain phase');
+}
+
+const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'prime-chaos-'));
+process.env.WORKSPACE_ROOT = tmpRoot;
+const { getOrCreateProcState, procSubdir, writeJson, getProcState } = await import('../../agent/prime-state.js');
+const { runValidatorScoreCommit } = await import('../../agent/prime-validator-scoring.js');
+
+const procurementId = '92001';
+await getOrCreateProcState(procurementId, '601');
+await fs.mkdir(procSubdir(procurementId, 'trial'), { recursive: true });
+await writeJson(path.join(procSubdir(procurementId, ''), 'chain_snapshot.json'), {
+  procurement: partialStateRecoveryCase,
+  chainPhase: CHAIN_PHASE.CLOSED,
+});
+await writeJson(path.join(procSubdir(procurementId, 'trial'), 'trial_artifact_manifest.json'), { trialUri: 'ipfs://x' });
+
+const blocked = await runValidatorScoreCommit({
+  procurementId,
+  validatorAddress: '0xabc',
+  assignmentOverride: { procurementId, validatorAddress: '0xabc', assigned: true, checkedAt: new Date().toISOString() },
+  procStructOverride: partialStateRecoveryCase,
+});
+if (blocked !== null) throw new Error('expired score commit window must not produce signable handoff');
+
+const state = await getProcState(procurementId);
+if (state?.status !== PROC_STATUS.MISSED_WINDOW) {
+  throw new Error(`expected MISSED_WINDOW after expired score commit window, got ${state?.status}`);
 }
 
 console.log('chaos/restart deterministic recovery checks: PASS');
