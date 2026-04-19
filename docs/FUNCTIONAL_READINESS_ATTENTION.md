@@ -52,7 +52,8 @@ A lane is considered functional only when it has all of the following end-to-end
 ## Prime v1 (AGIJobDiscoveryPrime)
 
 ### Current status
-- Live phase model and operator-gated readiness, but consistency/runbook coverage still incomplete.
+- Live phase model and operator-gated readiness are in place.
+- Added deterministic reconciliation snapshots (`reconciliation_snapshot.json`) and expanded Prime operator failure playbooks, but full cross-entrypoint parity verification still requires continued validation.
 
 ### Attention needed
 - Complete operator runbook coverage for validator scoring lifecycle failures and deadline edge windows.
