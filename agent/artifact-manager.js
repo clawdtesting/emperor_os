@@ -58,3 +58,57 @@ export async function writeText(filePath, text) {
 export async function readText(filePath) {
   return fs.readFile(filePath, "utf8");
 }
+
+// ── Canonical artifact shape contracts ───────────────────────────────────────
+// Top-level required fields for each artifact type.
+// Dot-notation paths are supported (e.g. "properties.jobId").
+
+export const ARTIFACT_REQUIRED_FIELDS = {
+  jobCompletion:          ["name", "description", "properties", "properties.jobId", "properties.schema"],
+  executionValidation:    ["schema"],
+  publicationValidation:  ["schema"],
+  retrievalPacket:        ["schema"],
+  brief:                  ["schema"],
+  completionArchiveRecord:["schema", "jobId", "archiveId"],
+  signingManifest:        ["schema", "jobId", "kind", "artifacts"],
+  primeReviewManifest:    ["schema", "procurementId", "phase", "files", "checklist"],
+  trialArtifactManifest:  ["schema", "procurementId", "trialURI"],
+};
+
+/**
+ * Reads a JSON artifact from disk and asserts that all required fields are
+ * present and non-empty. Throws a descriptive error on any violation.
+ *
+ * @param {string}   filePath       - absolute path to the artifact file
+ * @param {string[]} requiredFields - dot-notation field paths that must be present
+ * @param {string}   label          - human-readable label for error messages
+ * @returns {Promise<object>}       - parsed artifact data
+ */
+export async function validateArtifactShape(filePath, requiredFields, label) {
+  let data;
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    data = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`${label}: cannot read/parse artifact at ${filePath}: ${err.message}`);
+  }
+
+  if (!data || typeof data !== "object") {
+    throw new Error(`${label}: artifact at ${filePath} is not a JSON object`);
+  }
+
+  const missing = requiredFields.filter((fieldPath) => {
+    const parts = fieldPath.split(".");
+    let cur = data;
+    for (const p of parts) cur = cur?.[p];
+    return cur == null || cur === "";
+  });
+
+  if (missing.length > 0) {
+    throw new Error(
+      `${label}: artifact at ${filePath} missing required fields: ${missing.join(", ")}`
+    );
+  }
+
+  return data;
+}
