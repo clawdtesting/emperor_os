@@ -15,8 +15,31 @@ export function inferJobLane(state = {}, jobId = '') {
   const source = String(state?.source || '').toLowerCase()
   const managerVersion = String(state?.managerVersion || '').toLowerCase()
   const id = String(jobId || state?.jobId || '')
+  if (source === 'agijobmanagerprime' || source === 'agijobmanager-prime' || source === 'agijobmanagerprime-v2' || source === 'prime-v2') return 'prime-v2'
   if (source === 'agijobmanager-v2' || managerVersion === 'v2' || /^v2[_-]/i.test(id)) return 'v2'
   return 'v1'
+}
+
+export function inferProcLane(state = {}, procurementId = '') {
+  const source = String(state?.source || '').toLowerCase()
+  const managerVersion = String(state?.managerVersion || '').toLowerCase()
+  const status = String(state?.status || '').toLowerCase()
+  const contract = String(state?.contractAddress || state?.contract || '').toLowerCase()
+  const id = String(procurementId || state?.procurementId || '')
+
+  if (
+    source.includes('agijobmanagerprime')
+    || source.includes('prime-v2')
+    || managerVersion === 'prime-v2'
+    || contract === '0xf8fc6572098ddcac4560e17ca4a683df30ea993e'
+    || /^pv2[_-]/i.test(id)
+    || status.includes('assignment')
+    || status.includes('finalization')
+  ) {
+    return 'prime-v2'
+  }
+
+  return 'prime'
 }
 
 export function normalizeActionName({ action = '', status = '', file = '' } = {}) {

@@ -29,6 +29,18 @@ test('resolveOperatorEntityCandidate returns refreshed prime procurement by proc
   assert.equal(result?.tab, 'detail')
 })
 
+test('resolveOperatorEntityCandidate supports prime-v2 lane entity lookup', () => {
+  const jobs = [
+    { source: 'agijobmanagerprime', procurementId: '9001', jobId: '321', status: 'PrimeV2Assigned' },
+  ]
+
+  const result = resolveOperatorEntityCandidate(jobs, { lane: 'prime-v2', entityId: '9001' })
+
+  assert.equal(result?.job?.source, 'agijobmanagerprime')
+  assert.equal(result?.job?.procurementId, '9001')
+  assert.equal(result?.tab, 'detail')
+})
+
 test('resolveOperatorEntityCandidate falls back to lane tab when refreshed entity is missing', () => {
   const jobs = [{ source: 'agijobmanager-v2', jobId: 'V2-1', status: 'Observed' }]
 

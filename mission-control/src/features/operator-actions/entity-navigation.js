@@ -18,16 +18,19 @@ export function resolveOperatorEntityCandidate(jobs, actionItem) {
 
   let candidate = null
 
-  if (lane === 'prime') {
+  if (lane === 'prime' || lane === 'prime-v2') {
+    const sourceAllow = lane === 'prime-v2'
+      ? new Set(['agijobmanagerprime', 'agijobmanager-prime'])
+      : new Set(['agiprimediscovery'])
     candidate = jobsDesc.find((j) => {
-      if (String(j?.source || '').toLowerCase() !== 'agiprimediscovery') return false
+      if (!sourceAllow.has(String(j?.source || '').toLowerCase())) return false
       const pId = String(j?.procurementId || '').trim()
       const jId = String(j?.jobId || '').trim()
       return pId === entityId || jId === entityId || jId === `P-${entityId}`
     }) || null
     return {
       job: candidate ? { ...candidate, __operatorFocus: focus } : null,
-      tab: candidate ? 'detail' : 'prime',
+      tab: candidate ? 'detail' : (lane === 'prime-v2' ? 'prime-v2' : 'prime'),
       focus,
     }
   }
