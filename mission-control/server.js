@@ -134,12 +134,15 @@ function buildFallbackValidationReport(jobId) {
 
   const artifactDir = join(ARTIFACTS_DIR, `job_${jobId}`)
   const briefPath = state?.briefPath || join(artifactDir, 'brief.json')
+  const retrievalPacketPath = state?.retrievalPacketPath || join(artifactDir, 'retrieval_packet.json')
   const deliverablePath = state?.artifactPath || join(artifactDir, 'deliverable.md')
+  const completionArchiveRecordPath = state?.completionArchive?.recordPath || join(artifactDir, 'completion_archive_record.json')
 
   const briefRaw = existsSync(briefPath) ? readFileSync(briefPath, 'utf8') : ''
   const deliverableRaw = existsSync(deliverablePath) ? readFileSync(deliverablePath, 'utf8') : ''
 
   addCheck('artifact_brief_exists', existsSync(briefPath), briefPath)
+  addCheck('artifact_retrieval_packet_exists', existsSync(retrievalPacketPath), retrievalPacketPath)
   addCheck('artifact_deliverable_exists', existsSync(deliverablePath), deliverablePath)
   addCheck('deliverable_nonempty', deliverableRaw.trim().length > 0, `${deliverableRaw.trim().length} chars`)
   addCheck('deliverable_has_headings', /##\s+/.test(deliverableRaw), 'Expected markdown section headings')
@@ -155,6 +158,10 @@ function buildFallbackValidationReport(jobId) {
   if (requiredSections.length > 0) {
     const missing = requiredSections.filter(section => !deliverableRaw.toLowerCase().includes(String(section).toLowerCase()))
     addCheck('deliverable_includes_required_sections', missing.length === 0, missing.length ? `Missing: ${missing.join(', ')}` : 'All present')
+  }
+
+  if (['completed', 'submitted'].includes(status)) {
+    addCheck('completion_archive_record_exists', existsSync(completionArchiveRecordPath), completionArchiveRecordPath)
   }
 
   const passed = checks.filter(c => c.passed).length

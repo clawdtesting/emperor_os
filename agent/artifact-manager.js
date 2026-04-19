@@ -25,13 +25,15 @@ export function getJobArtifactPaths(jobId) {
     normalizedSpec: path.join(dir, "normalized_spec.json"),
     strategy: path.join(dir, "strategy.json"),
     brief: path.join(dir, "brief.json"),
+    retrievalPacket: path.join(dir, "retrieval_packet.json"),
     deliverable: path.join(dir, "deliverable.md"),
     executionValidation: path.join(dir, "execution_validation.json"),
     publicationValidation: path.join(dir, "publication_validation.json"),
     publishManifest: path.join(dir, "publish_manifest.json"),
     jobCompletion: path.join(dir, "job_completion.json"),
     unsignedApply: path.join(dir, "unsigned_apply.json"),
-    unsignedCompletion: path.join(dir, "unsigned_completion.json")
+    unsignedCompletion: path.join(dir, "unsigned_completion.json"),
+    completionArchiveRecord: path.join(dir, "completion_archive_record.json")
   };
 }
 

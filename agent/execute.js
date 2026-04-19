@@ -6,6 +6,25 @@ import { validateOutput } from "./validate.js";
 import { claimJobStageIdempotency, listAllJobStates, setJobState } from "./state.js";
 import { ensureJobArtifactDir, getJobArtifactPaths, writeJson, writeText } from "./artifact-manager.js";
 import { llmCall } from "../config/llm_router.js";
+import { searchArchive } from "./prime-retrieval.js";
+
+function buildRetrievalKeywords(job, brief) {
+  const out = new Set();
+  const pushWords = (value) => {
+    const raw = String(value ?? "").toLowerCase();
+    for (const token of raw.split(/[^a-z0-9_]+/)) {
+      if (token && token.length >= 4) out.add(token);
+    }
+  };
+
+  pushWords(job?.title);
+  pushWords(job?.category);
+  pushWords(brief?.title);
+  pushWords(brief?.goal);
+  for (const section of brief?.required_sections ?? []) pushWords(section);
+
+  return Array.from(out).slice(0, 20);
+}
 
 export async function execute() {
   const jobs = await listAllJobStates();
@@ -47,7 +66,35 @@ export async function execute() {
 
       await writeJson(artifactPaths.normalizedSpec, normalizedSpec);
 
-      const prompt = await buildPrompt(brief);
+      const retrievalKeywords = buildRetrievalKeywords(job, brief);
+      const archiveHits = await searchArchive({
+        phase: "completion",
+        keywords: retrievalKeywords,
+        maxResults: 5,
+      });
+      const retrievalPacket = {
+        schema: "emperor-os/v1-retrieval-packet/v1",
+        jobId: String(job.jobId),
+        phase: "execution",
+        searchedAt: new Date().toISOString(),
+        keywords: retrievalKeywords,
+        resultsFound: archiveHits.length,
+        items: archiveHits.map((hit) => ({
+          archiveId: hit.id,
+          title: hit.title,
+          summary: hit.summary,
+          phase: hit.phase,
+          tags: Array.isArray(hit.tags) ? hit.tags : [],
+          relevanceScore: hit._score,
+          sourceArtifactPath: hit.sourceArtifactPath ?? null,
+          artifactPath: hit.artifactPath ?? null,
+          wasAccepted: hit.wasAccepted ?? null,
+          qualityScore: hit.qualityScore ?? hit.outcomeScore ?? null,
+        })),
+      };
+      await writeJson(artifactPaths.retrievalPacket, retrievalPacket);
+
+      const prompt = await buildPrompt(brief, retrievalPacket);
       const { content: markdown } = await llmCall(
         [{ role: "user", content: prompt }],
         { max_tokens: 8192 }
@@ -74,6 +121,7 @@ export async function execute() {
         artifactDir: artifactPaths.dir,
         artifactPath: artifactPaths.deliverable,
         briefPath: artifactPaths.brief,
+        retrievalPacketPath: artifactPaths.retrievalPacket,
         executionValidationPath: artifactPaths.executionValidation,
         executedAt: new Date().toISOString(),
         attempts: {
