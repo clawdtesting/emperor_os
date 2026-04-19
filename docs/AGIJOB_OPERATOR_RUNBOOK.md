@@ -22,6 +22,22 @@ Operational runbook for AGIJobManager-style flows in this repository.
 6. **Sign + broadcast completion externally**
    - Record tx hash and settlement progress in state.
 
+## AGIJobManager v2 lane specifics
+- v2 jobs are indexed in Mission Control from on-chain `JobCreated` + `getJobCore/getJobValidation/getJobSpecURI/getJobCompletionURI`.
+- `/api/jobs` rows for v2 include both `onchainStatus` and `runtimeStatus`; if they diverge, treat on-chain as execution truth and reconcile runtime state next.
+- v2 apply path requires `applyForJob(uint256,string,bytes32[])` with ENS subdomain + merkle proof and should always be prepared from unsigned package helpers.
+
+### v2 signing gates + deterministic recovery
+1. **Apply gate (`application_pending_review`)**
+   - Required artifacts: unsigned apply tx package + review manifest in local state `agent/state/jobs/<id>.json`.
+   - Recovery: run apply status reconciliation and confirm assignment + receipt before promoting runtime status.
+2. **Completion request gate (`completion_pending_review`)**
+   - Required artifacts: completion URI evidence, validation/adjudication outputs, unsigned completion/validator package.
+   - Recovery: rebuild operator view from chain (`/api/jobs/:jobId/operator-view?managerVersion=v2`) and re-materialize any missing artifacts before state changes.
+3. **Validation/dispute gate**
+   - Required artifacts: deterministic evidence snapshot, adjudication output, unsigned validate/dispute tx, review manifests.
+   - Recovery: regenerate validator prepare bundle, verify counters (`approvals/disapprovals`) on-chain, then continue from READY state only.
+
 ## Artifacts that matter before completion signing
 - Deliverable artifact (e.g., `deliverable.md` or lane equivalent)
 - Validation report

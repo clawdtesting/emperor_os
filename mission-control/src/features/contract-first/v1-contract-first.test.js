@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   normalizeV1JobForList,
+  normalizeV2JobForList,
   resolveV1MetadataUri,
   buildUnsignedCreateJobTxPackage,
 } from '../../../lib/contract-first.js'
@@ -31,6 +32,40 @@ test('normalizeV1JobForList builds stable list item from on-chain state', () => 
   assert.equal(item.disapprovals, 1)
   assert.equal(item.specURI, 'ipfs://bafybeispec')
   assert.equal(typeof item.links.contract, 'string')
+})
+
+test('normalizeV2JobForList includes v2 lifecycle + indexing parity fields', () => {
+  const item = normalizeV2JobForList({
+    jobId: 44,
+    contract: '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2',
+    core: {
+      employer: '0x1111111111111111111111111111111111111111',
+      assignedAgent: '0x0000000000000000000000000000000000000000',
+      payoutRaw: '7000000000000000000',
+      durationRaw: '86400',
+      createdAt: '1710000000',
+      completed: false,
+      disputed: false,
+      expired: false,
+    },
+    validation: { approvals: 3, disapprovals: 1, completionRequested: true },
+    specURI: 'ipfs://bafy-v2-spec',
+    completionURI: 'ipfs://bafy-v2-completion',
+    localState: { status: 'application_pending_review' },
+  })
+
+  assert.equal(item.source, 'agijobmanager-v2')
+  assert.equal(item.managerVersion, 'v2')
+  assert.equal(item.jobId, 'V2-44')
+  assert.equal(item.rawJobId, '44')
+  assert.equal(item.status, 'application_pending_review')
+  assert.equal(item.onchainStatus, 'CompletionRequested')
+  assert.equal(item.runtimeStatus, 'application_pending_review')
+  assert.equal(item.approvals, 3)
+  assert.equal(item.disapprovals, 1)
+  assert.equal(item.completionRequested, true)
+  assert.equal(item.specURI, 'ipfs://bafy-v2-spec')
+  assert.equal(item.completionURI, 'ipfs://bafy-v2-completion')
 })
 
 test('resolveV1MetadataUri picks correct URI by type', () => {

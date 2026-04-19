@@ -34,18 +34,16 @@ A lane is considered functional only when it has all of the following end-to-end
 ## Job v2 (AGIJobManager v2)
 
 ### Current status
-- Partially functional: contract-first reads and validator tooling exist, but lane indexing/lifecycle parity is incomplete.
+- Lifecycle-visible: v2 contract-first reads, `/api/jobs` indexing fields, and lane surfaces are wired with runtime/on-chain status parity.
 
 ### Attention needed
-- Implement full v2 job indexing parity (spec URI, payout, assignment, validation counters), not only bootstrap contract signals.
-- Ensure `/api/jobs` and UI lane views expose complete v2 lifecycle state equivalent to v1/Prime operational depth.
-- Harden v2 lifecycle surface beyond point-in-time validation tooling so operators can work from complete lane state.
-- Validate runbook/operator docs explicitly cover v2-specific differences and recovery patterns at each signing gate.
+- Continue edge-case testing for v2 status reconciliation when local runtime state lags chain events.
+- Keep validator/assignment recovery drills current as new v2 contract revisions are introduced.
 
 ### Exit criteria
-- v2 jobs are fully indexed and lifecycle-visible in Mission Control and runtime state.
+- v2 jobs remain fully indexed and lifecycle-visible in Mission Control and runtime state under restart/reorg scenarios.
 - Operator can run end-to-end v2 apply→assignment→completion flow without fallback/manual reconstruction.
-- v2 lane has deterministic, documented recovery paths matching doctrine requirements.
+- v2 lane recovery documentation stays deterministic and signing-gate-specific as lane logic evolves.
 
 ---
 
