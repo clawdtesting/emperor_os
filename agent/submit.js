@@ -15,6 +15,7 @@ async function assertArtifactBundleReady(job) {
   const required = [
     { label: "executionValidation", path: job.executionValidationPath },
     { label: "publicationValidation", path: job.publicationValidationPath },
+    { label: "retrievalPacket", path: job.retrievalPacketPath },
     { label: "deliverable", path: job.artifactPath },
     { label: "brief", path: job.briefPath },
   ];

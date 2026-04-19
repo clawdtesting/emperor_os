@@ -15,5 +15,5 @@ This file is the present-tense gap tracker. No historical notes.
 - Some operator actions still rely on local/manual file inspection instead of fully surfaced UI checklists.
 
 ## Validation / retrieval / compounding gaps
-- Retrieval-before-generation is not yet uniformly enforced across all execution paths.
+- Retrieval-before-generation is now enforced as a v1 completion packaging gate (missing retrieval packet blocks `submit`), but remains non-uniform across all lanes/paths.
 - Stepping-stone extraction and archive indexing are not consistently required at terminal completion for every job/procurement.
