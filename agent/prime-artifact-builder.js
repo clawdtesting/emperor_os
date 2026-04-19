@@ -305,21 +305,38 @@ export async function writeFinalistBundle(procurementId, {
   });
   files.push(planPath);
 
+  // stake_preflight.json — operator must verify and update hasSufficientBalance
+  // and allowanceSufficient before the finalist gate will pass.
+  const preflightPath = path.join(dir, "stake_preflight.json");
+  await writeFile(preflightPath, {
+    schema: "emperor-os/stake-preflight/v1",
+    procurementId: String(procurementId),
+    hasSufficientBalance: false,
+    allowanceSufficient: false,
+    note: "OPERATOR ACTION REQUIRED: verify wallet balance and token allowance, then set both fields to true.",
+    generatedAt: new Date().toISOString(),
+  });
+  files.push(preflightPath);
+
   const manifest = buildReviewManifest({
     procurementId,
     phase: "finalist",
     files: ["finalist_acceptance_packet.json", "stake_requirements.json",
-            "trial_execution_plan.json", "unsigned_accept_finalist_tx.json", "review_manifest.json"],
+            "trial_execution_plan.json", "stake_preflight.json",
+            "unsigned_accept_finalist_tx.json", "review_manifest.json"],
     checklist: [
       "Review stake_requirements.json: confirm required stake amount is acceptable.",
       "Review trial_execution_plan.json: confirm trial approach is feasible.",
       "Verify we are on the ShortlistFinalized event's finalists list.",
       "Confirm finalist accept window is currently open.",
+      "Update stake_preflight.json: set hasSufficientBalance=true and allowanceSufficient=true after verifying.",
       "Review unsigned_accept_finalist_tx.json: target contract, args, chainId.",
       "Sign unsigned_accept_finalist_tx.json with MetaMask + Ledger.",
       "Record accept tx hash in procurement state after broadcast.",
     ],
-    warnings: [],
+    warnings: [
+      "stake_preflight.json defaults to false — gate will block until operator confirms balance and allowance.",
+    ],
   });
   await writeFile(path.join(dir, "review_manifest.json"), manifest);
 
@@ -349,7 +366,9 @@ export async function writeTrialBundle(procurementId, {
   const dir = await ensureProcSubdir(procurementId, "trial");
   const files = [];
 
+  // trial_artifact_manifest.json — canonical schema field required by gate
   const manifestData = {
+    schema: "emperor-os/prime-trial-artifact-manifest/v1",
     procurementId: String(procurementId),
     trialURI,
     generatedAt:   new Date().toISOString(),
@@ -466,6 +485,15 @@ export async function writeCompletionBundle(procurementId, {
   await writeFile(path.join(dir, "publication_record.json"), { procurementId: String(procurementId), ...publicationRecord });
   await writeFile(path.join(dir, "fetchback_verification.json"), { procurementId: String(procurementId), ...fetchbackVerification });
 
+  // completion_manifest.json — stable schema + required keys
+  await writeFile(path.join(dir, "completion_manifest.json"), {
+    schema: "emperor-os/prime-completion-manifest/v1",
+    procurementId: String(procurementId),
+    completionURI,
+    publicationHash: publicationRecord?.pinataHash ?? null,
+    generatedAt:   new Date().toISOString(),
+  });
+
   const manifest = buildReviewManifest({
     procurementId,
     phase: "completion",
@@ -484,12 +512,6 @@ export async function writeCompletionBundle(procurementId, {
     warnings: [],
   });
   await writeFile(path.join(dir, "review_manifest.json"), manifest);
-  await writeFile(path.join(dir, "completion_manifest.json"), {
-    procurementId: String(procurementId),
-    completionURI,
-    generatedAt:   new Date().toISOString(),
-    publicationHash: publicationRecord?.pinataHash ?? null,
-  });
 
   return { dir };
 }
@@ -499,17 +521,18 @@ export async function writeValidatorScoreCommitBundle(procurementId, {
   score,
   validatorAddress,
   scoringInputHash,
-  saltHash,
+  salt,              // canonical field name; callers previously used saltHash — use salt
   notes,
 }) {
   const dir = await ensureProcSubdir(procurementId, "scoring");
   await writeFile(path.join(dir, "score_commit_payload.json"), {
+    schema: "emperor-os/prime-score-commit-payload/v1",
     procurementId: String(procurementId),
     validatorAddress: validatorAddress ?? null,
     scoringInputHash: scoringInputHash ?? null,
     score: Number.isFinite(score) ? Number(score) : null,
     scoreCommitment,
-    saltHash: saltHash ?? null,
+    salt: salt ?? null,
     notes: notes ?? null,
     generatedAt: new Date().toISOString(),
   });
@@ -534,6 +557,7 @@ export async function writeValidatorScoreRevealBundle(procurementId, {
 }) {
   const dir = await ensureProcSubdir(procurementId, "scoring");
   await writeFile(path.join(dir, "score_reveal_payload.json"), {
+    schema: "emperor-os/prime-score-reveal-payload/v1",
     procurementId: String(procurementId),
     score,
     salt,

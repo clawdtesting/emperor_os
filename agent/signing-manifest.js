@@ -1,6 +1,11 @@
 // agent/signing-manifest.js
 // Builds a human-reviewable signing manifest with SHA-256 hashes of all
 // relevant artifacts so the operator can verify integrity before signing.
+//
+// Schema parity note: the top-level shape mirrors the prime-review-manifest/v1
+// produced by prime-artifact-builder.js so both lanes expose the same keys
+// (schema, generatedAt, jobId/procurementId, phase/kind, files, artifacts,
+// checklist, warnings, instruction).
 
 import { createHash } from "crypto";
 import { promises as fs } from "fs";
@@ -17,6 +22,21 @@ async function hashFile(filePath) {
 
 /**
  * Build a signing manifest that the operator reviews before signing.
+ *
+ * @param {object} opts
+ * @param {string|number} opts.jobId
+ * @param {string}        opts.kind
+ * @param {string}        opts.contract
+ * @param {number|string} opts.chainId
+ * @param {string}        [opts.deliverableUri]
+ * @param {string}        [opts.jobCompletionUri]
+ * @param {string}        [opts.unsignedPackagePath]
+ * @param {string}        [opts.deliverablePath]
+ * @param {string}        [opts.jobCompletionPath]
+ * @param {string}        [opts.publishManifestPath]
+ * @param {string}        [opts.outputPath]
+ * @param {string[]}      [opts.warnings]   - optional operator warnings
+ * @returns {Promise<object>}
  */
 export async function buildSigningManifest({
   jobId,
@@ -30,6 +50,7 @@ export async function buildSigningManifest({
   jobCompletionPath,
   publishManifestPath,
   outputPath,
+  warnings = [],
 }) {
   const hashes = {};
   const paths = {
@@ -39,9 +60,11 @@ export async function buildSigningManifest({
     publishManifest: publishManifestPath,
   };
 
+  const fileList = [];
   for (const [label, p] of Object.entries(paths)) {
     if (p) {
       hashes[label] = await hashFile(p);
+      fileList.push(path.basename(p));
     }
   }
 
@@ -54,6 +77,7 @@ export async function buildSigningManifest({
     chainId,
     deliverableUri: deliverableUri || null,
     jobCompletionUri: jobCompletionUri || null,
+    files: fileList,
     artifacts: hashes,
     checklist: [
       "Verify job ID matches the intended job",
@@ -63,6 +87,9 @@ export async function buildSigningManifest({
       "Verify unsigned tx data matches expected function selector",
       "Confirm artifact SHA-256 hashes match local files",
     ],
+    warnings,
+    instruction: "Complete every checklist item before signing the unsigned tx package. " +
+                 "Reject or defer if any item cannot be confirmed.",
   };
 
   if (outputPath) {

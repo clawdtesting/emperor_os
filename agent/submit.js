@@ -5,13 +5,14 @@ import { promises as fs } from "fs";
 import { uploadToIpfs, requestJobCompletion } from "./mcp.js";
 import { claimJobStageIdempotency, listAllJobStates, setJobState, getJobState, rawJobId } from "./state.js";
 import { CONFIG, requireEnv } from "./config.js";
-import { getJobArtifactPaths, writeJson } from "./artifact-manager.js";
+import { getJobArtifactPaths, writeJson, validateArtifactShape, ARTIFACT_REQUIRED_FIELDS } from "./artifact-manager.js";
 import { buildUnsignedTxPackage } from "./tx-builder.js";
 import { buildSigningManifest } from "./signing-manifest.js";
 import { runPreSignChecks, sha256FromJsonFile } from "./pre-sign-checks.js";
 import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
 
 async function assertArtifactBundleReady(job) {
+  // Phase 1: file existence
   const required = [
     { label: "executionValidation", path: job.executionValidationPath },
     { label: "publicationValidation", path: job.publicationValidationPath },
@@ -26,6 +27,19 @@ async function assertArtifactBundleReady(job) {
   }
   if (missing.length > 0) {
     throw new Error(`READY artifact bundle incomplete — missing: ${missing.join(", ")}`);
+  }
+
+  // Phase 2: schema field validation on JSON artifacts
+  const jsonChecks = [
+    { label: "executionValidation", path: job.executionValidationPath, fields: ARTIFACT_REQUIRED_FIELDS.executionValidation },
+    { label: "publicationValidation", path: job.publicationValidationPath, fields: ARTIFACT_REQUIRED_FIELDS.publicationValidation },
+    { label: "retrievalPacket", path: job.retrievalPacketPath, fields: ARTIFACT_REQUIRED_FIELDS.retrievalPacket },
+    { label: "brief", path: job.briefPath, fields: ARTIFACT_REQUIRED_FIELDS.brief },
+  ];
+  for (const { label, path: p, fields } of jsonChecks) {
+    if (p && p.endsWith(".json")) {
+      await validateArtifactShape(p, fields, label);
+    }
   }
 }
 
@@ -123,6 +137,13 @@ export async function submit() {
 
       const completionMetadata = buildCompletionMetadata(job, job.deliverableIpfs);
       await writeJson(artifactPaths.jobCompletion, completionMetadata);
+
+      // Validate the jobCompletion artifact we just wrote before proceeding to IPFS upload.
+      await validateArtifactShape(
+        artifactPaths.jobCompletion,
+        ARTIFACT_REQUIRED_FIELDS.jobCompletion,
+        "jobCompletion"
+      );
 
       const completionUpload = await uploadToIpfs(
         CONFIG.PINATA_JWT,

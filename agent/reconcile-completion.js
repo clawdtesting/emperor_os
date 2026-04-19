@@ -1,3 +1,4 @@
+import { promises as fs } from "fs";
 import { getJob } from "./mcp.js";
 import { claimJobStageIdempotency, listAllJobStates, setJobState, rawJobId } from "./state.js";
 import { normalizeJob } from "./job-normalize.js";
@@ -5,19 +6,66 @@ import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
 import { getJobArtifactPaths, writeJson } from "./artifact-manager.js";
 import { extractSteppingStone } from "./prime-retrieval.js";
 
+async function fileExists(p) {
+  if (!p) return false;
+  try { await fs.access(p); return true; } catch { return false; }
+}
+
+// Builds the canonical completionArchiveRecord shape. Both the "already
+// extracted" fast-path and the fresh-extraction path write the same top-level
+// keys so downstream readers never see a partial schema.
+function buildArchiveRecord({
+  jobId,
+  archiveId,
+  completionURI,
+  deliverableURI,
+  sourceArtifact,
+  skippedExtraction = false,
+  reason = null,
+  timestampKey,        // "recordedAt" when skipped, "extractedAt" when fresh
+  timestamp,
+}) {
+  return {
+    schema: "emperor-os/v1-completion-archive-record/v1",
+    jobId: String(jobId),
+    archiveId,
+    completionURI: completionURI ?? "",
+    deliverableURI: deliverableURI ?? "",
+    sourceArtifact: sourceArtifact ?? null,
+    skippedExtraction,
+    reason: reason ?? null,
+    [timestampKey]: timestamp,
+  };
+}
+
 async function ensureCompletionArchiveExtraction(job, remote) {
   const existingArchiveId = String(job?.completionArchive?.archiveId || "").trim();
   const artifactPaths = getJobArtifactPaths(job.jobId);
+
+  const completionURI = String(job?.completionMetadataIpfs?.ipfsUri || "");
+  const deliverableURI = String(job?.deliverableIpfs?.ipfsUri || "");
+
   if (existingArchiveId) {
-    await writeJson(artifactPaths.completionArchiveRecord, {
-      schema: "emperor-os/v1-completion-archive-record/v1",
-      jobId: String(job.jobId),
+    const record = buildArchiveRecord({
+      jobId: job.jobId,
       archiveId: existingArchiveId,
-      recordedAt: new Date().toISOString(),
+      completionURI,
+      deliverableURI,
+      sourceArtifact: artifactPaths.jobCompletion,
       skippedExtraction: true,
       reason: "already_extracted",
+      timestampKey: "recordedAt",
+      timestamp: new Date().toISOString(),
     });
+    await writeJson(artifactPaths.completionArchiveRecord, record);
     return { ok: true, archiveId: existingArchiveId, path: artifactPaths.completionArchiveRecord };
+  }
+
+  // Guard: jobCompletion artifact must be on disk before we attempt to archive it.
+  if (!(await fileExists(artifactPaths.jobCompletion))) {
+    throw new Error(
+      `ensureCompletionArchiveExtraction: jobCompletion artifact missing at ${artifactPaths.jobCompletion} — cannot extract`
+    );
   }
 
   const archiveId = await extractSteppingStone({
@@ -39,22 +87,24 @@ async function ensureCompletionArchiveExtraction(job, remote) {
     primitive: {
       jobId: String(job.jobId),
       status: "completed",
-      completionURI: String(job?.completionMetadataIpfs?.ipfsUri || ""),
-      deliverableURI: String(job?.deliverableIpfs?.ipfsUri || ""),
+      completionURI,
+      deliverableURI,
       operatorTx: job?.operatorTx?.requestJobCompletion ?? null,
       completionProvenanceBundleHash: job?.completionProvenanceBundleHash ?? null,
     },
   });
 
-  const record = {
-    schema: "emperor-os/v1-completion-archive-record/v1",
-    jobId: String(job.jobId),
+  const record = buildArchiveRecord({
+    jobId: job.jobId,
     archiveId,
-    completionURI: String(job?.completionMetadataIpfs?.ipfsUri || ""),
-    deliverableURI: String(job?.deliverableIpfs?.ipfsUri || ""),
-    extractedAt: new Date().toISOString(),
+    completionURI,
+    deliverableURI,
     sourceArtifact: artifactPaths.jobCompletion,
-  };
+    skippedExtraction: false,
+    reason: null,
+    timestampKey: "extractedAt",
+    timestamp: new Date().toISOString(),
+  });
   await writeJson(artifactPaths.completionArchiveRecord, record);
   return { ok: true, archiveId, path: artifactPaths.completionArchiveRecord };
 }
