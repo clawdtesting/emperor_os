@@ -1,12 +1,6 @@
 // agent/prime-validator-scoring.js
-// Orchestrates the validator scoring pipeline end-to-end:
-//   1. Gather evidence from procurement artifacts
-//   2. Run multi-dimensional adjudication
-//   3. Generate deterministic salt
-//   4. Build score commit and reveal handoff packages
-//   5. Assert review gates before state transitions
-//
-// SAFETY CONTRACT: No signing. No broadcasting. Produces unsigned tx files only.
+// Canonical validator scoring runtime for Prime monitor/orchestrator/manual flows.
+// SAFETY CONTRACT: unsigned-only handoff generation.
 
 import { createHash } from "crypto";
 import path from "path";
@@ -17,29 +11,28 @@ import {
   procSubdir,
   ensureProcSubdir,
   getProcState,
+  setProcState,
   transitionProcStatus,
 } from "./prime-state.js";
 import {
   discoverValidatorAssignment,
-  computeScoreCommitment,
   verifyScoreRevealAgainstCommit,
 } from "./prime-validator-engine.js";
 import { adjudicateScore } from "../validation/scoring-adjudicator.js";
 import {
   buildValidatorScoreCommitHandoff,
   buildValidatorScoreRevealHandoff,
+  validateValidatorScoreHandoff,
 } from "../validation/score-tx-handoff.js";
 import {
   assertValidatorScoreCommitGate,
   assertValidatorScoreRevealGate,
 } from "./prime-review-gates.js";
-import { PROC_STATUS } from "./prime-phase-model.js";
-import { CONFIG } from "./config.js";
+import { PROC_STATUS, CHAIN_PHASE, deriveChainPhase } from "./prime-phase-model.js";
+import { writeReconciliationSnapshot } from "./prime-reconciliation.js";
 
 function stableStringify(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
   }
@@ -84,7 +77,7 @@ async function gatherEvidence(procurementId) {
     gatheredAt: new Date().toISOString(),
   };
 
-  return { evidence, trialContent };
+  return { evidence, trialContent, procStruct: procurement };
 }
 
 async function readTrialContent(procurementId) {
@@ -94,119 +87,129 @@ async function readTrialContent(procurementId) {
     try {
       const { promises: fs } = await import("fs");
       return await fs.readFile(path.join(trialDir, name), "utf8");
-    } catch { /* next candidate */ }
+    } catch {}
   }
-  // Try loading from manifest
   const manifest = await readJson(path.join(trialDir, "trial_artifact_manifest.json"), null);
-  if (manifest?.content) return manifest.content;
-  return null;
+  return manifest?.content ?? null;
 }
 
-/**
- * Run the full validator score-commit pipeline for a procurement.
- * Produces: evidence_bundle.json, adjudication_result.json, score_commit_payload.json,
- *           unsigned_score_commit_tx.json
- */
-export async function runValidatorScoreCommit({ procurementId, validatorAddress }) {
-  const scoringDir = await ensureProcSubdir(procurementId, "scoring");
+function scoringWindowStatus(procStruct, targetPhase) {
+  const phase = deriveChainPhase(procStruct ?? {}, Math.floor(Date.now() / 1000));
+  if (phase === targetPhase) return { allowed: true, phase };
+  if (targetPhase === CHAIN_PHASE.SCORE_COMMIT && (phase === CHAIN_PHASE.SCORE_REVEAL || phase === CHAIN_PHASE.CLOSED)) {
+    return { allowed: false, phase, missed: true };
+  }
+  if (targetPhase === CHAIN_PHASE.SCORE_REVEAL && phase === CHAIN_PHASE.CLOSED) {
+    return { allowed: false, phase, missed: true };
+  }
+  return { allowed: false, phase, missed: false };
+}
 
-  // 1. Discover validator assignment
-  const assignment = await discoverValidatorAssignment(procurementId, validatorAddress);
-  if (!assignment.assigned) {
-    console.log(`[validator-scoring] not assigned as validator for procurement #${procurementId}`);
+async function failClosedWindow({ procurementId, reason, phase }) {
+  const state = await getProcState(procurementId);
+  if (state?.status !== PROC_STATUS.MISSED_WINDOW) {
+    await transitionProcStatus(procurementId, PROC_STATUS.MISSED_WINDOW, {
+      missedWindowAt: new Date().toISOString(),
+      missedWindowReason: reason,
+      scoringWindowPhase: phase,
+      recoveryNote: "No signable scoring package produced; window no longer valid.",
+    });
+  }
+}
+
+export async function runValidatorScoreCommit({ procurementId, validatorAddress, assignmentOverride = null, procStructOverride = null }) {
+  const scoringDir = await ensureProcSubdir(procurementId, "scoring");
+  const assignment = assignmentOverride ?? await discoverValidatorAssignment(procurementId, validatorAddress);
+  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
+  if (!assignment.assigned) return null;
+
+  const { evidence, trialContent, procStruct } = await gatherEvidence(procurementId);
+  const effectiveProcStruct = procStructOverride ?? procStruct;
+  const window = scoringWindowStatus(effectiveProcStruct, CHAIN_PHASE.SCORE_COMMIT);
+  if (!window.allowed) {
+    const reason = `score commit blocked: current phase ${window.phase}`;
+    if (window.missed) await failClosedWindow({ procurementId, reason, phase: window.phase });
+    await setProcState(procurementId, { validatorScoringBlockedReason: reason });
     return null;
   }
 
-  // 2. Gather evidence
-  const { evidence, trialContent } = await gatherEvidence(procurementId);
   await writeJson(path.join(scoringDir, "evidence_bundle.json"), evidence);
-
-  // 3. Run adjudication
   const adjudication = adjudicateScore(evidence, trialContent);
   await writeJson(path.join(scoringDir, "adjudication_result.json"), adjudication);
 
-  // 4. Generate deterministic salt
   const score = Math.round(adjudication.score);
-  const adjInput = {
+  const salt = deterministicSalt(procurementId, score, {
     procurementId: String(procurementId),
     validatorAddress: String(validatorAddress).toLowerCase(),
     evidence,
-  };
-  const salt = deterministicSalt(procurementId, score, adjInput);
-
-  // 5. Build handoff package
-  const handoff = await buildValidatorScoreCommitHandoff({
-    procurementId,
-    score,
-    salt,
-    adjudication,
   });
 
-  // 6. Assert gate
-  const state = await getProcState(procurementId);
-  await assertValidatorScoreCommitGate({ procurementId, procState: state });
+  const handoff = await buildValidatorScoreCommitHandoff({ procurementId, score, salt, adjudication });
+  await assertValidatorScoreCommitGate({ procurementId, procStruct: effectiveProcStruct });
 
-  // 7. Transition state
+  const completeness = await validateValidatorScoreHandoff({ procurementId, mode: "commit" });
+  const snapshot = await writeReconciliationSnapshot({
+    procurementId,
+    nextAction: { action: "NONE", summary: "Validator score commit tx ready for operator signature." },
+  });
+  if (!completeness.complete || snapshot.readyHandoffComplete !== true) {
+    await setProcState(procurementId, {
+      validatorScoringBlockedReason: `incomplete score commit bundle: ${completeness.missingRequiredArtifacts.join(",")}`,
+    });
+    return null;
+  }
+
   await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_COMMIT_READY, {
     validatorRole: true,
     validatorScore: score,
     validatorScoreCommitment: handoff.payload.scoreCommitment,
     scoringDir,
   });
-
-  console.log(`[validator-scoring] score commit ready for procurement #${procurementId} (score=${score})`);
   return handoff;
 }
 
-/**
- * Run the full validator score-reveal pipeline for a procurement.
- * Reads prior commit payload, verifies continuity, produces reveal handoff.
- */
-export async function runValidatorScoreReveal({ procurementId, validatorAddress }) {
+export async function runValidatorScoreReveal({ procurementId, validatorAddress, assignmentOverride = null, procStructOverride = null }) {
   const scoringDir = procSubdir(procurementId, "scoring");
+  const assignment = assignmentOverride ?? await discoverValidatorAssignment(procurementId, validatorAddress);
+  await setProcState(procurementId, { validatorAssignment: assignment, validatorRole: assignment.assigned === true });
+  if (!assignment.assigned) return null;
 
-  // 1. Load prior commit payload
   const commitPayload = await readJson(path.join(scoringDir, "score_commit_payload.json"), null);
-  if (!commitPayload) {
-    throw new Error(`No score_commit_payload.json found for procurement #${procurementId}`);
-  }
+  if (!commitPayload) throw new Error(`No score_commit_payload.json found for procurement #${procurementId}`);
 
   const { score, salt, scoreCommitment } = commitPayload;
+  const continuity = verifyScoreRevealAgainstCommit({ score, salt, expectedCommitment: scoreCommitment });
+  if (!continuity.verified) throw new Error(`Commitment continuity check FAILED for procurement #${procurementId}`);
 
-  // 2. Continuity guard: verify reveal matches commit
-  const continuity = verifyScoreRevealAgainstCommit({
-    score,
-    salt,
-    expectedCommitment: scoreCommitment,
-  });
-  if (!continuity.verified) {
-    throw new Error(
-      `Commitment continuity check FAILED for procurement #${procurementId}: ` +
-      `expected=${continuity.expectedCommitment} recomputed=${continuity.recomputedCommitment}`
-    );
+  const chainSnapshot = await readJson(path.join(procRootDir(procurementId), "chain_snapshot.json"), null);
+  const procStruct = procStructOverride ?? chainSnapshot?.procurement ?? null;
+  const window = scoringWindowStatus(procStruct, CHAIN_PHASE.SCORE_REVEAL);
+  if (!window.allowed) {
+    const reason = `score reveal blocked: current phase ${window.phase}`;
+    if (window.missed) await failClosedWindow({ procurementId, reason, phase: window.phase });
+    await setProcState(procurementId, { validatorScoringBlockedReason: reason });
+    return null;
   }
 
-  // 3. Load adjudication for metadata
   const adjudication = await readJson(path.join(scoringDir, "adjudication_result.json"), null);
+  const handoff = await buildValidatorScoreRevealHandoff({ procurementId, score, salt, adjudication });
+  await assertValidatorScoreRevealGate({ procurementId, procStruct });
 
-  // 4. Build reveal handoff
-  const handoff = await buildValidatorScoreRevealHandoff({
+  const completeness = await validateValidatorScoreHandoff({ procurementId, mode: "reveal", continuity });
+  const snapshot = await writeReconciliationSnapshot({
     procurementId,
-    score,
-    salt,
-    adjudication,
+    nextAction: { action: "NONE", summary: "Validator score reveal tx ready for operator signature." },
   });
+  if (!completeness.complete || snapshot.readyHandoffComplete !== true) {
+    await setProcState(procurementId, {
+      validatorScoringBlockedReason: `incomplete score reveal bundle: ${completeness.missingRequiredArtifacts.join(",")}`,
+    });
+    return null;
+  }
 
-  // 5. Assert gate
-  const state = await getProcState(procurementId);
-  await assertValidatorScoreRevealGate({ procurementId, procState: state });
-
-  // 6. Transition state
   await transitionProcStatus(procurementId, PROC_STATUS.VALIDATOR_SCORE_REVEAL_READY, {
     validatorRevealPrepared: true,
     validatorRevealContinuityCheck: continuity,
   });
-
-  console.log(`[validator-scoring] score reveal ready for procurement #${procurementId} (score=${score})`);
   return handoff;
 }
