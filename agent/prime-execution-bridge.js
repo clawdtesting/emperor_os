@@ -31,6 +31,7 @@ import {
 } from "./prime-state.js";
 import { PROC_STATUS } from "./prime-phase-model.js";
 import { fetchProcurement, fetchApplicationView } from "./prime-client.js";
+import { getJobArtifactPaths, validateArtifactShape, ARTIFACT_REQUIRED_FIELDS } from "./artifact-manager.js";
 
 // ── Bridge types ──────────────────────────────────────────────────────────────
 
@@ -282,6 +283,23 @@ export async function updateLinkedJobExecState(procurementId, patch) {
  */
 export async function recordLinkedJobCompletion({ procurementId, completionURI }) {
   const id = String(procurementId);
+  const state = await getProcState(id);
+  const linkedJobId = state?.linkedJobId;
+  if (!linkedJobId) {
+    throw new Error(`recordLinkedJobCompletion requires linkedJobId in state for procurement ${id}`);
+  }
+
+  const jobArtifacts = getJobArtifactPaths(linkedJobId);
+  await validateArtifactShape(
+    jobArtifacts.retrievalPacket,
+    ARTIFACT_REQUIRED_FIELDS.retrievalPacket,
+    "linkedJobRetrievalPacket"
+  );
+  await validateArtifactShape(
+    jobArtifacts.completionArchiveRecord,
+    ARTIFACT_REQUIRED_FIELDS.completionArchiveRecord,
+    "linkedJobCompletionArchiveRecord"
+  );
 
   await updateLinkedJobExecState(id, {
     phase:            "COMPLETION_READY",
@@ -291,7 +309,7 @@ export async function recordLinkedJobCompletion({ procurementId, completionURI }
 
   await setProcState(id, { completionURI });
 
-  if ((await getProcState(id))?.status === PROC_STATUS.JOB_EXECUTION_IN_PROGRESS) {
+  if (state?.status === PROC_STATUS.JOB_EXECUTION_IN_PROGRESS) {
     await transitionProcStatus(id, PROC_STATUS.COMPLETION_READY, { completionURI });
   }
 

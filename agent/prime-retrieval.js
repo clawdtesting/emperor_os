@@ -10,6 +10,8 @@ import { ensureProcSubdir, writeJson, readJson } from "./prime-state.js";
 export const ARCHIVE_ROOT = path.join(CONFIG.WORKSPACE_ROOT, "archive");
 export const ARCHIVE_INDEX = path.join(ARCHIVE_ROOT, "index.json");
 export const ARCHIVE_ITEMS = path.join(ARCHIVE_ROOT, "items");
+export const RETRIEVAL_PACKET_FILENAME = "retrieval_packet.json";
+export const COMPLETION_ARCHIVE_RECORD_FILENAME = "completion_archive_record.json";
 
 async function ensureArchive() {
   await fs.mkdir(ARCHIVE_ROOT, { recursive: true });
@@ -92,11 +94,15 @@ export async function createRetrievalPacket({ procurementId, phase, keywords }) 
 
   const packet = {
     schema: "emperor-os/retrieval-packet/v2",
+    entityType: "procurement",
+    entityId: String(procurementId),
     procurementId: String(procurementId),
     phase,
     keywords: cleanedKeywords,
     searchedAt: new Date().toISOString(),
     resultsFound: items.length,
+    retrievalStatus: items.length > 0 ? "found" : "empty",
+    noResultsReason: items.length > 0 ? null : "no_archive_matches",
     items,
     results: items,
     useDecision: null,
@@ -104,8 +110,24 @@ export async function createRetrievalPacket({ procurementId, phase, keywords }) 
     decisionAt: null,
   };
 
+  await writeJson(path.join(dir, RETRIEVAL_PACKET_FILENAME), packet);
   await writeJson(path.join(dir, `retrieval_packet_${phase}.json`), packet);
   return packet;
+}
+
+export async function ensureRetrievalPacketForProc({ procurementId, phase, keywords, noResultsReason = null }) {
+  const packet = await createRetrievalPacket({ procurementId, phase, keywords });
+  if (packet.resultsFound > 0) return packet;
+
+  const dir = await ensureProcSubdir(procurementId, "retrieval");
+  const canonical = {
+    ...packet,
+    retrievalStatus: "empty",
+    noResultsReason: noResultsReason ?? packet.noResultsReason ?? "no_archive_matches",
+  };
+  await writeJson(path.join(dir, RETRIEVAL_PACKET_FILENAME), canonical);
+  await writeJson(path.join(dir, `retrieval_packet_${phase}.json`), canonical);
+  return canonical;
 }
 
 export async function writeRetrievalDecision({ procurementId, phase, decision, selectedArchiveId, note }) {
@@ -215,6 +237,66 @@ export async function extractSteppingStone({
 
   log(`Stepping stone extracted: ${id} — "${payload.title}"`);
   return id;
+}
+
+export async function ensureTerminalCompoundingArtifacts({
+  source,
+  procurementId,
+  jobId,
+  phase,
+  artifactPath,
+  completionRecordPath,
+  completionURI = "",
+  deliverableURI = "",
+  title,
+  summary,
+  tags,
+  metadata,
+  primitive,
+}) {
+  const recordPath = completionRecordPath
+    ?? (source === "v1" && jobId
+      ? path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `job_${jobId}`, COMPLETION_ARCHIVE_RECORD_FILENAME)
+      : path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "completion", COMPLETION_ARCHIVE_RECORD_FILENAME));
+
+  const existing = await readJson(recordPath, null);
+  if (existing?.archiveId) return existing;
+
+  const archiveId = await extractSteppingStone({
+    source,
+    procurementId,
+    jobId,
+    phase,
+    artifactPath,
+    metadata,
+    primitive,
+    title,
+    summary,
+    tags,
+  });
+
+  const index = await loadArchiveIndex();
+  const inIndex = (index.entries ?? []).some((entry) => entry.id === archiveId);
+  if (!inIndex) {
+    throw new Error(`archive index missing extracted id ${archiveId}`);
+  }
+
+  const record = {
+    schema: "emperor-os/completion-archive-record/v2",
+    source: source ?? null,
+    procurementId: procurementId ? String(procurementId) : null,
+    jobId: jobId ? String(jobId) : null,
+    phase: String(phase ?? "completion"),
+    archiveId,
+    completionURI,
+    deliverableURI,
+    sourceArtifact: artifactPath ?? null,
+    recordedAt: new Date().toISOString(),
+  };
+
+  await fs.mkdir(path.dirname(recordPath), { recursive: true });
+  await writeJson(recordPath, record);
+  return record;
 }
 
 export async function updateArchiveOutcome({ archiveId, qualityScore, wasAccepted, outcomeStatus }) {
