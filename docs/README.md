@@ -34,6 +34,7 @@ If any document conflicts with this hierarchy, trust the higher item.
 
 ### Cross-cutting references
 - [state-machines.md](./state-machines.md)
+- [FUNCTIONAL_READINESS_ATTENTION.md](./FUNCTIONAL_READINESS_ATTENTION.md)
 - [PRODUCTION_FAILURE_SCENARIOS.md](./PRODUCTION_FAILURE_SCENARIOS.md)
 - [1-line-expl.md](./1-line-expl.md)
 - [refactor-protocol-runtime-migration.md](./refactor-protocol-runtime-migration.md)
