@@ -51,6 +51,46 @@ export function normalizeV1JobForList({ jobId, contract, core = null, validation
   }
 }
 
+export function normalizeV2JobForList({
+  jobId,
+  contract,
+  core = null,
+  validation = null,
+  specURI = '',
+  completionURI = '',
+  localState = null,
+} = {}) {
+  const stateStatus = String(localState?.status || '').trim()
+  const onchainStatus = deriveJobStatus(core, validation)
+  const lifecycleStatus = stateStatus || onchainStatus
+  return {
+    source: 'agijobmanager-v2',
+    managerVersion: 'v2',
+    jobId: `V2-${String(jobId)}`,
+    rawJobId: String(jobId),
+    sortId: Number(jobId),
+    status: lifecycleStatus,
+    onchainStatus,
+    runtimeStatus: stateStatus || null,
+    payout: formatAgialpha(core?.payoutRaw || '0'),
+    payoutRaw: String(core?.payoutRaw || '0'),
+    duration: formatDurationDays(core?.durationRaw || '0'),
+    employer: String(core?.employer || ZERO_ADDRESS),
+    assignedAgent: String(core?.assignedAgent || ZERO_ADDRESS),
+    specURI: String(specURI || ''),
+    completionURI: String(completionURI || ''),
+    approvals: Number(validation?.approvals || 0),
+    disapprovals: Number(validation?.disapprovals || 0),
+    completionRequested: Boolean(validation?.completionRequested),
+    createdAt: core?.createdAt ? `ts ${String(core.createdAt)}` : '—',
+    links: {
+      contract: /^0x[a-fA-F0-9]{40}$/.test(String(contract || ''))
+        ? `https://etherscan.io/address/${String(contract).toLowerCase()}`
+        : '',
+    },
+  }
+}
+
 export function resolveV1MetadataUri(context = {}, type = 'completion') {
   if (String(type || '').toLowerCase() === 'spec') return String(context?.specURI || '')
   return String(context?.completionURI || '')

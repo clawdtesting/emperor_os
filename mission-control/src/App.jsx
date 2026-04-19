@@ -32,12 +32,6 @@ function compareJobIdDesc(a, b) {
   }
 }
 
-const V2_CONTRACT = '0xbf6699c1f24bebbfabb515583e88a055bf2f9ec2'
-const V2_BOOTSTRAP_TXS = [
-  '0x56e959fe23d294542ea7b5651c8e303adf13b029a08af50665f2feb986a3f12e',
-  '0xbcc099124923dc1ecf796d594fa4d16d271dd001edfef3a38b5675eb9cbfdc91',
-]
-
 export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
   const { unreadCount } = useActions()
@@ -59,18 +53,7 @@ export default function App() {
     && j.source !== 'agijobmanagerprime'
     && j.source !== 'agijobmanager-prime',
   )
-  const jobsV2Display = jobsV2.length ? jobsV2 : [{
-    source: 'agijobmanager-v2',
-    jobId: 'V2-1',
-    status: 'Observed',
-    payout: '—',
-    duration: '—',
-    approvals: 0,
-    disapprovals: 0,
-    employer: V2_CONTRACT,
-    assignedAgent: null,
-    createdAt: 'on-chain bootstrap',
-  }]
+  const jobsV2Display = jobsV2
 
   function handleSelectJob(job) {
     setSelected(job)
@@ -275,29 +258,10 @@ export default function App() {
             <div className="text-xs text-slate-500 uppercase tracking-wider">AGIJobManager v2 lane</div>
             {!jobsV2.length && (
               <div className="rounded border border-fuchsia-900/60 bg-fuchsia-950/20 p-3 text-xs text-slate-300 space-y-2">
-                <div className="font-semibold text-fuchsia-300">AGIJobManager v2 discovered, but not indexed yet</div>
+                <div className="font-semibold text-fuchsia-300">No v2 jobs discovered on-chain yet</div>
                 <div className="text-slate-400">
-                  This lane currently has contract-level bootstrap signals only. It does not yet have full v2 job indexing
-                  (spec URI, payout, assignment, validation counters) like v1/Prime.
-                </div>
-                <div className="text-slate-400 break-all">
-                  Contract:{' '}
-                  <a className="text-blue-400 hover:text-blue-300" target="_blank" rel="noreferrer" href={`https://etherscan.io/address/${V2_CONTRACT}`}>
-                    {V2_CONTRACT}
-                  </a>
-                </div>
-                <div className="text-slate-500">Bootstrap tx:</div>
-                <ul className="space-y-1">
-                  {V2_BOOTSTRAP_TXS.map(tx => (
-                    <li key={tx}>
-                      <a className="text-blue-400 hover:text-blue-300 break-all" target="_blank" rel="noreferrer" href={`https://etherscan.io/tx/${tx}`}>
-                        {tx}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-                <div className="rounded border border-fuchsia-800/60 bg-slate-950/40 p-2 text-slate-400">
-                  Immediate action: open a v2 job card and run “Validate this job” to get deterministic checks and mismatch diagnostics.
+                  v2 indexing is live for spec URI, payout, assignment, completion request, and validation counters.
+                  When no rows appear here, no JobCreated events were detected for known v2 contracts.
                 </div>
               </div>
             )}

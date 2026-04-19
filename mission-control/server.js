@@ -9,7 +9,7 @@ import { tmpdir } from 'os'
 import { createHash } from 'crypto'
 import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
-import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage, buildUnsignedCreateJobV2TxPackage, buildUnsignedApplyJobV2TxPackage } from './lib/contract-first.js'
+import { normalizeV1JobForList, normalizeV2JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage, buildUnsignedCreateJobV2TxPackage, buildUnsignedApplyJobV2TxPackage } from './lib/contract-first.js'
 import { buildV1OperatorViewModel } from './lib/v1-operator-view.js'
 import { buildAssignedJobRunner } from './lib/intake-runner.js'
 import { listProviders, getPreferredProvider, setPreferredProvider } from '../agent/llm-router.js'
@@ -956,25 +956,16 @@ async function listV2JobsFromChain() {
       const core = state.core
       if (!core) continue
       if (String(core.employer || '').toLowerCase() === '0x0000000000000000000000000000000000000000') continue
-
-      out.push({
-        source: 'agijobmanager-v2',
-        jobId: `V2-${row.jobId}`,
-        sortId: Number(row.jobId),
-        status: deriveJobStatus(core, state.validation),
-        payout: formatAgialpha(core.payoutRaw),
-        payoutRaw: String(core.payoutRaw || '0'),
-        duration: formatDurationDays(core.durationRaw),
-        employer: String(core.employer || '0x0000000000000000000000000000000000000000'),
-        assignedAgent: String(core.assignedAgent || '0x0000000000000000000000000000000000000000'),
-        specURI: String(state.specURI || ''),
-        approvals: Number(state.validation?.approvals || 0),
-        disapprovals: Number(state.validation?.disapprovals || 0),
-        createdAt: core.createdAt ? `ts ${core.createdAt}` : '—',
-        links: {
-          contract: `https://etherscan.io/address/${row.contract}`,
-        },
-      })
+      const localState = readJsonSafe(join(AGENT_STATE_DIR, `${row.jobId}.json`), null)
+      out.push(normalizeV2JobForList({
+        jobId: row.jobId,
+        contract: row.contract,
+        core,
+        validation: state.validation,
+        specURI: state.specURI,
+        completionURI: state.completionURI,
+        localState,
+      }))
     }
 
     out.sort((a, b) => Number(b.sortId || 0) - Number(a.sortId || 0))
