@@ -40,7 +40,7 @@ import {
   generateSalt,
 } from "./prime-client.js";
 import { inspectProcurement } from "./prime-inspector.js";
-import { writeInspectionExtras, writeApplicationBundle, writeRevealBundle, writeFinalistBundle, writeTrialBundle } from "./prime-artifact-builder.js";
+import { writeInspectionExtras, writeApplicationBundle, writeRevealBundle, writeFinalistBundle, writeTrialBundle, writeCompletionBundle } from "./prime-artifact-builder.js";
 import { writeReconciliationSnapshot } from "./prime-reconciliation.js";
 import {
   buildCommitApplicationTx,
@@ -329,6 +329,19 @@ async function handleDraftApplication(procurementId, agentAddress, procStruct) {
   if (!addr) return result(procurementId, "BLOCKED", "AGENT_ADDRESS not set.");
   if (!subdomain) return result(procurementId, "BLOCKED", "AGENT_SUBDOMAIN not set.");
 
+  // Explicit retrieval enforcement at handler boundary — makes the invariant
+  // legible here regardless of what generateApplicationContent does internally.
+  const _appSpec = await readJson(
+    path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "inspection", "normalized_job_spec.json"),
+    {}
+  );
+  await ensureRetrievalPacketForProc({
+    procurementId,
+    phase: "application",
+    keywords: extractSearchKeywords(_appSpec),
+    noResultsReason: "no_application_archive_matches",
+  });
+
   // 1. Generate application content
   const { markdown } = await generateApplicationContent({ procurementId });
 
@@ -613,6 +626,33 @@ async function handleBuildCompletionTx(procurementId, state) {
     },
   });
 
+  // Write completion bundle artifacts required by assertCompletionGate.
+  // Verifies the completionURI is reachable; gate fails if fetchback fails.
+  const _completionCid = (state.completionURI ?? "").replace("ipfs://", "");
+  const _fetchbackResult = await verifyFetchback(state.completionURI);
+  await writeCompletionBundle(procurementId, {
+    jobExecutionPlan: {
+      schema: "emperor-os/prime-job-execution-plan/v1",
+      procurementId: String(procurementId),
+      linkedJobId: state.linkedJobId ? String(state.linkedJobId) : null,
+    },
+    jobCompletion: {
+      schema: "emperor-os/prime-job-completion/v1",
+      procurementId: String(procurementId),
+      linkedJobId: state.linkedJobId ? String(state.linkedJobId) : null,
+    },
+    completionURI: state.completionURI ?? "",
+    publicationRecord: {
+      pinataHash: _completionCid || null,
+      gatewayURL: _completionCid ? `https://gateway.pinata.cloud/ipfs/${_completionCid}` : null,
+      pinnedAt: new Date().toISOString(),
+    },
+    fetchbackVerification: _fetchbackResult,
+  });
+
+  const _retrievalPacketPath = path.join(
+    CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "retrieval", "retrieval_packet.json"
+  );
   await ensureTerminalCompoundingArtifacts({
     source: "prime",
     procurementId,
@@ -638,6 +678,7 @@ async function handleBuildCompletionTx(procurementId, state) {
       outcomeScore: 1,
       completionURI: state.completionURI ?? "",
     },
+    retrievalPacketPath: _retrievalPacketPath,
   });
 
   // Gate check
