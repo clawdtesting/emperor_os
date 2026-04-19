@@ -41,6 +41,7 @@ import {
 } from "./prime-client.js";
 import { inspectProcurement } from "./prime-inspector.js";
 import { writeInspectionExtras, writeApplicationBundle, writeRevealBundle, writeFinalistBundle, writeTrialBundle } from "./prime-artifact-builder.js";
+import { writeReconciliationSnapshot } from "./prime-reconciliation.js";
 import {
   buildCommitApplicationTx,
   buildRevealApplicationTx,
@@ -113,6 +114,7 @@ export async function advanceProcurement({ procurementId, agentAddress, dryRun =
   // 3. Compute next action
   const nextAction = computeNextAction({ procState: state, procStruct, appView, nowSecs: now });
   await writeProcCheckpoint(id, "next_action.json", nextAction);
+  await writeReconciliationSnapshot({ procurementId: id, nextAction });
 
   log(`  #${id} status=${state.status} action=${nextAction.action}` +
     (nextAction.blockedReason ? ` BLOCKED: ${nextAction.blockedReason}` : ""));

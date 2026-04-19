@@ -48,6 +48,7 @@ import {
   runValidatorScoreCommit,
   runValidatorScoreReveal,
 } from "./prime-validator-scoring.js";
+import { writeReconciliationSnapshot } from "./prime-reconciliation.js";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -450,6 +451,7 @@ async function refreshActiveProcurements(agentAddress) {
       });
 
       await writeProcCheckpoint(procurementId, "next_action.json", nextAction);
+      await writeReconciliationSnapshot({ procurementId, nextAction });
 
       // Dispatch validator scoring actions when applicable
       if (nextAction.action === "BUILD_VALIDATOR_SCORE_COMMIT_TX" && agentAddress) {
