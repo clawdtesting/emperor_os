@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url'
 import { createServer } from 'http'
 import { tmpdir } from 'os'
 import { createHash } from 'crypto'
-import { inferJobLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
+import { inferJobLane, inferProcLane, buildOperatorAction, resolvePathMaybe } from './lib/operator-actions.js'
 import { buildPrimeValidatorPrechecks, buildPrimeValidatorTimeline, verifyRevealSafety } from './lib/prime-validator.js'
 import { normalizeV1JobForList, resolveV1MetadataUri, buildUnsignedCreateJobTxPackage, buildUnsignedApplyJobTxPackage, buildUnsignedCreateJobV2TxPackage, buildUnsignedApplyJobV2TxPackage } from './lib/contract-first.js'
 import { buildV1OperatorViewModel } from './lib/v1-operator-view.js'
@@ -1558,9 +1558,13 @@ async function listPrimeJobsFromChain() {
 
     const { ethers } = await import('ethers')
     const abiPath = join(WORKSPACE_ROOT, 'agent', 'abi', 'AGIJobDiscoveryPrime.json')
+    const abiV2Path = join(WORKSPACE_ROOT, 'agent', 'abi', 'AGIJobDiscoveryPrime-v2.json')
     const abiRaw = readJsonSafe(abiPath, [])
+    const abiV2Raw = readJsonSafe(abiV2Path, [])
     const abi = Array.isArray(abiRaw) ? abiRaw : (abiRaw?.abi || [])
+    const abiV2 = Array.isArray(abiV2Raw) ? abiV2Raw : (abiV2Raw?.abi || [])
     const iface = new ethers.Interface(abi)
+    const ifaceV2 = new ethers.Interface(abiV2)
     const PROCUREMENT_CREATED_TOPIC = '0xd88f0bdc06a889b3707026296f02b1cb95e0b68fc3b0cf11cb82bb0ecc805d53'
     const PREMIUM_JOB_CREATED_TOPIC = '0xcd958add2ab89c161b8e05f40140e87d03e664bd32eea370e4aec86096bcb3f6'
 
@@ -1584,6 +1588,58 @@ async function listPrimeJobsFromChain() {
 
     const rows = []
     const seenKeys = new Set()
+    const localProcStateById = new Map()
+
+    if (existsSync(PROC_ARTIFACTS_DIR)) {
+      const dirs = readdirSync(PROC_ARTIFACTS_DIR).filter((d) => d.startsWith('proc_') && statSync(join(PROC_ARTIFACTS_DIR, d)).isDirectory())
+      for (const dir of dirs) {
+        const state = readJsonSafe(join(PROC_ARTIFACTS_DIR, dir, 'state.json'), null)
+        if (!state) continue
+        const pid = String(state.procurementId || dir.replace('proc_', ''))
+        if (pid) localProcStateById.set(pid, state)
+      }
+    }
+
+    const settlementByJobId = new Map()
+    const settlementByProcId = new Map()
+
+    function updateSettlementSnapshot(jobId, procurementId, candidate) {
+      const next = { ...candidate, jobId: String(jobId || ''), procurementId: String(procurementId || '') }
+      if (next.jobId) {
+        const prev = settlementByJobId.get(next.jobId)
+        if (!prev || Number(next.rank || 0) > Number(prev.rank || 0) || (Number(next.rank || 0) === Number(prev.rank || 0) && Number(next.blockNumber || 0) > Number(prev.blockNumber || 0))) {
+          settlementByJobId.set(next.jobId, next)
+        }
+      }
+      if (next.procurementId) {
+        const prev = settlementByProcId.get(next.procurementId)
+        if (!prev || Number(next.rank || 0) > Number(prev.rank || 0) || (Number(next.rank || 0) === Number(prev.rank || 0) && Number(next.blockNumber || 0) > Number(prev.blockNumber || 0))) {
+          settlementByProcId.set(next.procurementId, next)
+        }
+      }
+    }
+
+    function settlementStageFromState(state) {
+      const status = String(state?.status || '').toLowerCase()
+      if (!status) return null
+      if (status.includes('done') || status.includes('completion_submitted') || status.includes('selected')) return { stage: 'finalized', rank: 45 }
+      if (status.includes('completion_ready')) return { stage: 'completion_ready', rank: 35 }
+      if (status.includes('job_execution') || status.includes('trial_submitted') || status.includes('trial_ready')) return { stage: 'execution', rank: 20 }
+      if (status.includes('finalist_accept') || status.includes('selected')) return { stage: 'accepted', rank: 15 }
+      if (status.includes('shortlisted') || status.includes('assigned')) return { stage: 'assigned', rank: 10 }
+      return null
+    }
+
+    function derivePrimeV2Status(settlementStage, localState) {
+      if (settlementStage === 'finalized') return 'PrimeV2Finalized'
+      if (settlementStage === 'validated') return 'PrimeV2Validated'
+      if (settlementStage === 'completion_requested') return 'PrimeV2CompletionRequested'
+      if (settlementStage === 'disputed') return 'PrimeV2Disputed'
+      if (settlementStage === 'assigned' || settlementStage === 'accepted') return 'PrimeV2Assigned'
+      if (settlementStage === 'created') return 'PrimeV2Created'
+      if (localState?.status) return String(localState.status)
+      return 'PrimeV2Observed'
+    }
 
     function pushPrimeRow(next) {
       const key = `${next.source}:${next.procurementId}:${next.jobId}`
@@ -1678,14 +1734,88 @@ async function listPrimeJobsFromChain() {
         const baseRow = buildPrimeListRow({ parsed, source: 'agijobmanagerprime' })
         if (!baseRow) continue
         const premiumAddress = String(log?.address || AGI_PRIME_V2).toLowerCase()
+        const localState = localProcStateById.get(baseRow.procurementId) || null
+        const stageFromState = settlementStageFromState(localState)
+        if (stageFromState) {
+          updateSettlementSnapshot(baseRow.jobId, baseRow.procurementId, {
+            stage: stageFromState.stage,
+            rank: stageFromState.rank,
+            selectedAgent: String(localState?.selectedFinalist || ''),
+            blockNumber: 0,
+          })
+        }
         pushPrimeRow({
           ...baseRow,
-          status: 'PrimeSettlement',
+          status: derivePrimeV2Status(stageFromState?.stage || 'created', localState),
+          settlementStage: stageFromState?.stage || 'created',
+          nextActionCode: String(localState?.nextActionCode || ''),
+          assignedAgent: String(localState?.selectedFinalist || ''),
+          deadlines: localState?.deadlines || null,
           links: {
             contract: `https://etherscan.io/address/${premiumAddress}`,
           },
         })
       } catch {}
+    }
+
+    const v2EventRank = {
+      PremiumJobCreated: { stage: 'created', rank: 5 },
+      SelectedAgentDesignated: { stage: 'assigned', rank: 10 },
+      JobCompletionRequested: { stage: 'completion_requested', rank: 20 },
+      JobValidated: { stage: 'validated', rank: 30 },
+      JobCompleted: { stage: 'finalized', rank: 40 },
+      JobDisputed: { stage: 'disputed', rank: 50 },
+    }
+    const eventNames = Object.keys(v2EventRank)
+    const topicsByName = {}
+    for (const eventName of eventNames) {
+      try {
+        topicsByName[eventName] = ifaceV2.getEvent(eventName)?.topicHash || null
+      } catch {
+        topicsByName[eventName] = null
+      }
+    }
+
+    for (const eventName of eventNames) {
+      const topic = topicsByName[eventName]
+      if (!topic) continue
+      const logs = await rpcGetLogs({ address: AGI_PRIME_V2.toLowerCase(), topics: [topic] }).catch(() => [])
+      for (const log of logs) {
+        try {
+          const parsed = ifaceV2.parseLog(log)
+          const mapped = v2EventRank[eventName]
+          if (!mapped) continue
+          const args = parsed?.args || {}
+          const procurementId = String(args.procurementId ?? args[0] ?? '')
+          const jobId = String(args.jobId ?? args[0] ?? '')
+          const selectedAgent = String(args.agent ?? args.selectedAgent ?? args.winner ?? args[1] ?? '')
+          updateSettlementSnapshot(jobId, procurementId, {
+            stage: mapped.stage,
+            rank: mapped.rank,
+            selectedAgent,
+            blockNumber: Number(log?.blockNumber || 0),
+            txHash: String(log?.transactionHash || ''),
+          })
+        } catch {}
+      }
+    }
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]
+      if (String(row.source || '').toLowerCase() !== 'agijobmanagerprime') continue
+      const snapshot = settlementByJobId.get(String(row.jobId || '')) || settlementByProcId.get(String(row.procurementId || '')) || null
+      const localState = localProcStateById.get(String(row.procurementId || '')) || null
+      if (!snapshot && !localState) continue
+      const stage = snapshot?.stage || settlementStageFromState(localState)?.stage || null
+      rows[i] = {
+        ...row,
+        status: derivePrimeV2Status(stage, localState),
+        settlementStage: stage || row.settlementStage || 'created',
+        assignedAgent: snapshot?.selectedAgent || row.assignedAgent || String(localState?.selectedFinalist || ''),
+        nextActionCode: row.nextActionCode || String(localState?.nextActionCode || ''),
+        deadlines: row.deadlines || localState?.deadlines || null,
+        settlementTxHash: snapshot?.txHash || null,
+      }
     }
 
     rows.sort((a, b) => Number(b.procurementId || 0) - Number(a.procurementId || 0))
@@ -4342,11 +4472,12 @@ function collectOperatorActions({ includeRefs = false } = {}) {
       const nextAction = readJsonSafe(join(root, 'next_action.json'), null)
       const blockingReason = actionBlockingReason(state, nextAction)
       const procurementId = String(state.procurementId || dir.replace('proc_', ''))
+      const lane = inferProcLane(state, procurementId)
 
       for (let idx = 0; idx < (state.txPackages || []).length; idx += 1) {
         const pkg = state.txPackages[idx]
         const normalized = buildOperatorAction({
-          lane: 'prime',
+          lane,
           entityId: procurementId,
           status: state.status,
           pkg,
@@ -4358,9 +4489,9 @@ function collectOperatorActions({ includeRefs = false } = {}) {
         normalized.reviewManifestPath ||= findReviewManifestNearTx(normalized.unsignedTxPath)
         if (normalized.queueStage === 'needs_signature' && !normalized.unsignedTxPath) continue
         normalized.checklist = normalizeChecklist(extractChecklist(pkg, normalized.reviewManifestPath), normalized.action)
-        normalized.id = buildOperatorActionId({ lane: 'prime', entityId: procurementId, action: normalized.action, pkg, index: idx })
+        normalized.id = buildOperatorActionId({ lane, entityId: procurementId, action: normalized.action, pkg, index: idx })
         if (includeRefs) {
-          normalized._ref = { stateFile, txPackageIndex: idx, lane: 'prime', entityId: procurementId, action: normalized.action }
+          normalized._ref = { stateFile, txPackageIndex: idx, lane, entityId: procurementId, action: normalized.action }
         }
         actions.push(normalized)
       }

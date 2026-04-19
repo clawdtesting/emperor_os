@@ -183,6 +183,8 @@ function summarizeManifest(filePreview) {
 function OperatorQueueRow({ item, onOpenFile, onTransition, onOpenEntity, busy }) {
   const laneColor = item.lane === 'prime'
     ? 'text-cyan-300 bg-cyan-950/40 border-cyan-700'
+    : item.lane === 'prime-v2'
+      ? 'text-amber-300 bg-amber-950/40 border-amber-700'
     : item.lane === 'v2'
       ? 'text-violet-300 bg-violet-950/40 border-violet-700'
       : 'text-amber-300 bg-amber-950/40 border-amber-700'

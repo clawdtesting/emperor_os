@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   inferJobLane,
+  inferProcLane,
   normalizeActionName,
   phaseWindowStatusFromPkg,
   priorityForAction,
@@ -12,9 +13,17 @@ import {
 
 test('inferJobLane detects v2 from source and prefixed id', () => {
   assert.equal(inferJobLane({ source: 'agijobmanager-v2' }, '12'), 'v2')
+  assert.equal(inferJobLane({ source: 'agijobmanagerprime' }, '12'), 'prime-v2')
   assert.equal(inferJobLane({}, 'v2_44'), 'v2')
   assert.equal(inferJobLane({ managerVersion: 'v2' }, '44'), 'v2')
   assert.equal(inferJobLane({}, '44'), 'v1')
+})
+
+test('inferProcLane detects prime-v2 procurement states', () => {
+  assert.equal(inferProcLane({ source: 'agijobmanagerprime' }, '11'), 'prime-v2')
+  assert.equal(inferProcLane({ managerVersion: 'prime-v2' }, '11'), 'prime-v2')
+  assert.equal(inferProcLane({ contractAddress: '0xF8fc6572098DDcAc4560E17cA4A683DF30ea993e' }, '11'), 'prime-v2')
+  assert.equal(inferProcLane({ source: 'agiprimediscovery' }, '11'), 'prime')
 })
 
 test('normalizeActionName maps score commit/reveal and completion', () => {
