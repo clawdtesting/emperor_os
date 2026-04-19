@@ -10,6 +10,7 @@ import { buildUnsignedTxPackage } from "./tx-builder.js";
 import { buildSigningManifest } from "./signing-manifest.js";
 import { runPreSignChecks, sha256FromJsonFile } from "./pre-sign-checks.js";
 import { ingestFinalizedJobReceipt } from "./receipt-ingest.js";
+import { ensureTerminalCompoundingArtifacts } from "./prime-retrieval.js";
 
 async function assertArtifactBundleReady(job) {
   // Phase 1: file existence
@@ -220,11 +221,46 @@ export async function submit() {
         outputPath: signingManifestPath
       });
 
+      const completionArchiveRecord = await ensureTerminalCompoundingArtifacts({
+        source: "v1",
+        jobId: job.jobId,
+        phase: "completion",
+        artifactPath: artifactPaths.jobCompletion,
+        completionRecordPath: artifactPaths.completionArchiveRecord,
+        completionURI: completionUpload.ipfsUri,
+        deliverableURI: job.deliverableIpfs.ipfsUri,
+        title: `Job ${job.jobId} completion package`,
+        summary: `Completion package and deliverable for job ${job.jobId}.`,
+        tags: ["v1", "completion", String(job.category ?? "general").toLowerCase()],
+        metadata: {
+          domain: job.category ?? null,
+          deliverableType: "job_completion",
+          qualityScore: 1,
+          wasAccepted: true,
+          timestamp: new Date().toISOString(),
+        },
+        primitive: {
+          artifactPath: artifactPaths.jobCompletion,
+          outcomeStatus: "completion_pending_review",
+          outcomeScore: 1,
+          completionURI: completionUpload.ipfsUri,
+          deliverableURI: job.deliverableIpfs.ipfsUri,
+        },
+      });
+
+      await validateArtifactShape(
+        artifactPaths.completionArchiveRecord,
+        ARTIFACT_REQUIRED_FIELDS.completionArchiveRecord,
+        "completionArchiveRecord"
+      );
+
       await setJobState(job.jobId, {
         status: "completion_pending_review",
         completionMetadataIpfs: completionUpload,
         unsignedCompletionPath: artifactPaths.unsignedCompletion,
         signingManifestPath,
+        completionArchiveRecordPath: artifactPaths.completionArchiveRecord,
+        completionArchiveId: completionArchiveRecord.archiveId,
         completionProvenanceBundle: provenanceBundle,
         completionProvenanceBundleHash: provenanceBundleHash,
         submittedAt: new Date().toISOString(),

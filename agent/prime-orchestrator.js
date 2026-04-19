@@ -70,6 +70,9 @@ import {
 import {
   createRetrievalPacket,
   extractSearchKeywords,
+  ensureRetrievalPacketForProc,
+  ensureTerminalCompoundingArtifacts,
+  COMPLETION_ARCHIVE_RECORD_FILENAME,
 } from "./prime-retrieval.js";
 
 // ── Main single-procurement advance ──────────────────────────────────────────
@@ -490,6 +493,17 @@ async function handleBuildTrial(procurementId, procStruct, agentAddress) {
     await transitionProcStatus(procurementId, PROC_STATUS.TRIAL_IN_PROGRESS);
   }
 
+  const trialSpec = await readJson(
+    path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "inspection", "normalized_job_spec.json"),
+    {}
+  );
+  await ensureRetrievalPacketForProc({
+    procurementId,
+    phase: "trial",
+    keywords: extractSearchKeywords(trialSpec),
+    noResultsReason: "no_trial_archive_matches",
+  });
+
   // Generate trial content
   const { markdown } = await generateTrialContent({ procurementId });
 
@@ -524,6 +538,33 @@ async function handleBuildTrial(procurementId, procStruct, agentAddress) {
   });
 
   await setProcState(procurementId, { trialURI, trialFetchback: fetchbackVerification });
+
+  await ensureTerminalCompoundingArtifacts({
+    source: "prime",
+    procurementId,
+    phase: "trial",
+    artifactPath: path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "trial", "trial_deliverable.md"),
+    completionRecordPath: path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "trial", COMPLETION_ARCHIVE_RECORD_FILENAME),
+    completionURI: "",
+    deliverableURI: trialURI,
+    title: `Prime trial deliverable ${procurementId}`,
+    summary: `Trial deliverable for procurement ${procurementId}.`,
+    tags: ["prime", "trial"],
+    metadata: {
+      domain: "prime",
+      deliverableType: "trial",
+      qualityScore: fetchbackVerification?.verified ? 1 : 0,
+      wasAccepted: null,
+      timestamp: new Date().toISOString(),
+    },
+    primitive: {
+      artifactPath: path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "trial", "trial_deliverable.md"),
+      outcomeStatus: "trial_ready",
+      outcomeScore: fetchbackVerification?.verified ? 1 : 0,
+      trialURI,
+    },
+  });
+
   await transitionProcStatus(procurementId, PROC_STATUS.TRIAL_READY);
 
   return result(procurementId, "ADVANCED", `Unsigned submitTrial tx ready at ${txPath}. Operator must sign.`);
@@ -552,6 +593,53 @@ async function handleExecuteJob(procurementId, agentAddress) {
 }
 
 async function handleBuildCompletionTx(procurementId, state) {
+  const completionSpec =
+    await readJson(path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "completion", "linked_job_spec.json"), null)
+    ?? await readJson(path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "inspection", "normalized_job_spec.json"), {});
+  await ensureRetrievalPacketForProc({
+    procurementId,
+    phase: "completion",
+    keywords: extractSearchKeywords(completionSpec),
+    noResultsReason: "no_completion_archive_matches",
+  });
+
+  await generateCompletionSummary({
+    procurementId,
+    linkedJobId: state.linkedJobId,
+    jobSpec: completionSpec,
+    executionResult: {
+      summary: `Linked job ${state.linkedJobId} completion prepared for submission.`,
+      completionURI: state.completionURI,
+    },
+  });
+
+  await ensureTerminalCompoundingArtifacts({
+    source: "prime",
+    procurementId,
+    jobId: state.linkedJobId,
+    phase: "completion",
+    artifactPath: path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "completion", "completion_summary.md"),
+    completionRecordPath: path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "completion", COMPLETION_ARCHIVE_RECORD_FILENAME),
+    completionURI: state.completionURI ?? "",
+    deliverableURI: state.completionURI ?? "",
+    title: `Prime completion summary ${procurementId}`,
+    summary: `Completion summary and handoff for procurement ${procurementId}.`,
+    tags: ["prime", "completion"],
+    metadata: {
+      domain: "prime",
+      deliverableType: "completion_summary",
+      qualityScore: 1,
+      wasAccepted: null,
+      timestamp: new Date().toISOString(),
+    },
+    primitive: {
+      artifactPath: path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "completion", "completion_summary.md"),
+      outcomeStatus: "completion_ready",
+      outcomeScore: 1,
+      completionURI: state.completionURI ?? "",
+    },
+  });
+
   // Gate check
   const gate = await checkGate(assertCompletionGate, { procurementId });
   if (!gate.passed) {
