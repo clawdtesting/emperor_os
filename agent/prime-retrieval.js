@@ -239,6 +239,63 @@ export async function extractSteppingStone({
   return id;
 }
 
+function getCanonicalRetrievalPacketCandidates({ source, procurementId, jobId, retrievalPacketPath }) {
+  if (retrievalPacketPath) return [retrievalPacketPath];
+
+  const candidates = [];
+  if (procurementId) {
+    candidates.push(path.join(
+      CONFIG.WORKSPACE_ROOT,
+      "artifacts",
+      `proc_${String(procurementId)}`,
+      "retrieval",
+      RETRIEVAL_PACKET_FILENAME,
+    ));
+  }
+
+  if (jobId) {
+    candidates.push(path.join(
+      CONFIG.WORKSPACE_ROOT,
+      "artifacts",
+      `proc_job_${String(jobId)}`,
+      "retrieval",
+      RETRIEVAL_PACKET_FILENAME,
+    ));
+    if (String(source ?? "").toLowerCase() === "v1") {
+      candidates.push(path.join(
+        CONFIG.WORKSPACE_ROOT,
+        "artifacts",
+        `job_${String(jobId)}`,
+        "retrieval",
+        RETRIEVAL_PACKET_FILENAME,
+      ));
+    }
+  }
+
+  return [...new Set(candidates)];
+}
+
+async function resolveCanonicalRetrievalPacketPath(args) {
+  const candidates = getCanonicalRetrievalPacketCandidates(args);
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // Continue searching candidate paths.
+    }
+  }
+
+  const scopedEntity = args.procurementId
+    ? `procurement ${String(args.procurementId)}`
+    : (args.jobId ? `job ${String(args.jobId)}` : "terminal entity");
+  throw new Error(
+    `Terminal completion blocked: canonical retrieval packet missing for ${scopedEntity}. ` +
+    `Checked: ${candidates.length ? candidates.join(", ") : "<no-candidate-paths>"}. ` +
+    `Ensure retrieval runs before terminal compounding.`
+  );
+}
+
 export async function ensureTerminalCompoundingArtifacts({
   source,
   procurementId,
@@ -255,19 +312,8 @@ export async function ensureTerminalCompoundingArtifacts({
   primitive,
   retrievalPacketPath,
 }) {
-  // Enforce retrieval packet existence before any terminal completion.
-  // Callers pass retrievalPacketPath to opt into this gate; omitting it
-  // preserves backward compatibility for paths that manage retrieval separately.
-  if (retrievalPacketPath) {
-    try {
-      await fs.access(retrievalPacketPath);
-    } catch {
-      throw new Error(
-        `Terminal completion blocked: retrieval packet missing at ${retrievalPacketPath}. ` +
-        `Ensure retrieval runs before terminal completion.`
-      );
-    }
-  }
+  // Enforce canonical retrieval packet existence before any terminal completion.
+  await resolveCanonicalRetrievalPacketPath({ source, procurementId, jobId, retrievalPacketPath });
 
   const recordPath = completionRecordPath
     ?? (source === "v1" && jobId

@@ -841,7 +841,6 @@ async function handleBuildCompletionTx(procurementId) {
   });
 
   // Step 3: Terminal compounding — stepping stone + archive growth + completion record.
-  const _retrievalPacketPath = path.join(procSubdir(procurementId, "retrieval"), "retrieval_packet.json");
   await ensureTerminalCompoundingArtifacts({
     source: "prime",
     procurementId,
@@ -867,7 +866,6 @@ async function handleBuildCompletionTx(procurementId) {
       outcomeScore: 1,
       artifactPath: path.join(procSubdir(procurementId, "completion"), "job_completion.json"),
     },
-    retrievalPacketPath: _retrievalPacketPath,
   });
 
   // Step 4: Gate check.

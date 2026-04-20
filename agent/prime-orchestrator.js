@@ -650,9 +650,6 @@ async function handleBuildCompletionTx(procurementId, state) {
     fetchbackVerification: _fetchbackResult,
   });
 
-  const _retrievalPacketPath = path.join(
-    CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${procurementId}`, "retrieval", "retrieval_packet.json"
-  );
   await ensureTerminalCompoundingArtifacts({
     source: "prime",
     procurementId,
@@ -678,7 +675,6 @@ async function handleBuildCompletionTx(procurementId, state) {
       outcomeScore: 1,
       completionURI: state.completionURI ?? "",
     },
-    retrievalPacketPath: _retrievalPacketPath,
   });
 
   // Gate check
