@@ -83,7 +83,14 @@ import {
   assertValidatorScoreRevealGate,
 } from "../prime-review-gates.js";
 import { activateBridge } from "../prime-execution-bridge.js";
-import { createRetrievalPacket, extractSteppingStone, extractSearchKeywords } from "../prime-retrieval.js";
+import {
+  createRetrievalPacket,
+  extractSteppingStone,
+  extractSearchKeywords,
+  ensureRetrievalPacketForProc,
+  ensureTerminalCompoundingArtifacts,
+  COMPLETION_ARCHIVE_RECORD_FILENAME,
+} from "../prime-retrieval.js";
 import { evaluateFit } from "./prime-evaluate.js";
 import { generateApplicationMarkdown, generateTrialMarkdown, publishAndVerify, draftWithLLM } from "./prime-content.js";
 import { runPrimePreSignChecks } from "../prime-presign-checks.js";
@@ -206,17 +213,13 @@ async function handleInspect(procurementId) {
 async function handleEvaluateFit(procurementId, procStruct, jobSpec) {
   log(`#${procurementId}: evaluating fit`);
 
-  // Build retrieval packet for context.
-  let retrievalPacket = null;
-  try {
-    retrievalPacket = await createRetrievalPacket({
-      procurementId,
-      phase:          "application",
-      keywords:       extractSearchKeywords(jobSpec),
-    });
-  } catch (err) {
-    log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
-  }
+  // Retrieval packet required before fit evaluation (fail-closed).
+  await ensureRetrievalPacketForProc({
+    procurementId,
+    phase: "application",
+    keywords: extractSearchKeywords(jobSpec),
+    noResultsReason: "no_application_archive_matches",
+  });
 
   const fitEvaluation = evaluateFit({ procurementId, jobSpec, procStruct });
 
@@ -248,17 +251,13 @@ async function handleDraftApplication(procurementId, procStruct, jobSpec) {
 
   const state = await getProcState(procurementId);
 
-  // Build retrieval packet.
-  let retrievalPacket = null;
-  try {
-    retrievalPacket = await createRetrievalPacket({
-      procurementId,
-      phase:          "application",
-      keywords:       extractSearchKeywords(jobSpec),
-    });
-  } catch (err) {
-    log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
-  }
+  // Retrieval packet required before application generation (fail-closed).
+  const retrievalPacket = await ensureRetrievalPacketForProc({
+    procurementId,
+    phase: "application",
+    keywords: extractSearchKeywords(jobSpec),
+    noResultsReason: "no_application_archive_matches",
+  });
 
   // Generate application markdown — attempt LLM draft, fall back to template.
   const fitEvaluation = await readJson(
@@ -652,17 +651,13 @@ async function handleBuildTrial(procurementId, procStruct, jobSpec) {
     }
   }
 
-  // Build retrieval packet.
-  let retrievalPacket = null;
-  try {
-    retrievalPacket = await createRetrievalPacket({
-      procurementId,
-      phase:          "trial",
-      keywords:       extractSearchKeywords(jobSpec),
-    });
-  } catch (err) {
-    log(`#${procurementId}: retrieval packet failed (non-fatal): ${err.message}`);
-  }
+  // Retrieval packet required before trial generation (fail-closed).
+  const retrievalPacket = await ensureRetrievalPacketForProc({
+    procurementId,
+    phase: "trial",
+    keywords: extractSearchKeywords(jobSpec),
+    noResultsReason: "no_trial_archive_matches",
+  });
 
   // Generate trial content — attempt LLM draft, fall back to template.
   let llmTrialDraft = null;
@@ -814,6 +809,68 @@ async function handleBuildCompletionTx(procurementId) {
     return false;
   }
 
+  // Step 1: Retrieval packet required before completion (fail-closed).
+  await ensureRetrievalPacketForProc({
+    procurementId,
+    phase: "completion",
+    keywords: [],
+    noResultsReason: "no_completion_archive_matches",
+  });
+
+  // Step 2: Write completion bundle artifacts required by assertCompletionGate.
+  const _cid = state.completionURI.replace("ipfs://", "");
+  const _fetchback = await verifyFetchback(state.completionURI);
+  await writeCompletionBundle(procurementId, {
+    jobExecutionPlan: {
+      schema: "emperor-os/prime-job-execution-plan/v1",
+      procurementId: String(procurementId),
+      linkedJobId: String(state.linkedJobId),
+    },
+    jobCompletion: {
+      schema: "emperor-os/prime-job-completion/v1",
+      procurementId: String(procurementId),
+      linkedJobId: String(state.linkedJobId),
+    },
+    completionURI: state.completionURI,
+    publicationRecord: {
+      pinataHash: _cid,
+      gatewayURL: `https://gateway.pinata.cloud/ipfs/${_cid}`,
+      pinnedAt: new Date().toISOString(),
+    },
+    fetchbackVerification: _fetchback,
+  });
+
+  // Step 3: Terminal compounding — stepping stone + archive growth + completion record.
+  const _retrievalPacketPath = path.join(procSubdir(procurementId, "retrieval"), "retrieval_packet.json");
+  await ensureTerminalCompoundingArtifacts({
+    source: "prime",
+    procurementId,
+    jobId: state.linkedJobId,
+    phase: "completion",
+    artifactPath: path.join(procSubdir(procurementId, "completion"), "job_completion.json"),
+    completionRecordPath: path.join(procSubdir(procurementId, "completion"), COMPLETION_ARCHIVE_RECORD_FILENAME),
+    completionURI: state.completionURI,
+    deliverableURI: state.completionURI,
+    title: `Prime v1 completion ${procurementId}`,
+    summary: `Completion for procurement ${procurementId}, linked job ${state.linkedJobId}.`,
+    tags: ["prime", "v1", "completion"],
+    metadata: {
+      domain: "prime",
+      deliverableType: "completion",
+      qualityScore: 1,
+      wasAccepted: null,
+      timestamp: new Date().toISOString(),
+    },
+    primitive: {
+      completionURI: state.completionURI,
+      outcomeStatus: "completion_ready",
+      outcomeScore: 1,
+      artifactPath: path.join(procSubdir(procurementId, "completion"), "job_completion.json"),
+    },
+    retrievalPacketPath: _retrievalPacketPath,
+  });
+
+  // Step 4: Gate check.
   try {
     await assertCompletionGate({ procurementId });
   } catch (err) {
@@ -1172,6 +1229,20 @@ export async function startPrimeOrchestrator() {
       logError("orchestrator cycle", err);
     }
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+  }
+}
+
+async function verifyFetchback(uri) {
+  if (!uri) return { verified: false, error: "No URI provided" };
+  const cid = uri.replace("ipfs://", "");
+  const gatewayUrl = `https://gateway.pinata.cloud/ipfs/${cid}`;
+  try {
+    const res = await fetch(gatewayUrl, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) return { verified: false, uri, httpStatus: res.status, fetchedAt: new Date().toISOString() };
+    await res.text();
+    return { verified: true, uri, gatewayUrl, fetchedAt: new Date().toISOString() };
+  } catch (err) {
+    return { verified: false, uri, error: err.message, fetchedAt: new Date().toISOString() };
   }
 }
 

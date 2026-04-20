@@ -253,7 +253,22 @@ export async function ensureTerminalCompoundingArtifacts({
   tags,
   metadata,
   primitive,
+  retrievalPacketPath,
 }) {
+  // Enforce retrieval packet existence before any terminal completion.
+  // Callers pass retrievalPacketPath to opt into this gate; omitting it
+  // preserves backward compatibility for paths that manage retrieval separately.
+  if (retrievalPacketPath) {
+    try {
+      await fs.access(retrievalPacketPath);
+    } catch {
+      throw new Error(
+        `Terminal completion blocked: retrieval packet missing at ${retrievalPacketPath}. ` +
+        `Ensure retrieval runs before terminal completion.`
+      );
+    }
+  }
+
   const recordPath = completionRecordPath
     ?? (source === "v1" && jobId
       ? path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `job_${jobId}`, COMPLETION_ARCHIVE_RECORD_FILENAME)

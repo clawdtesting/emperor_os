@@ -165,8 +165,78 @@ async function main() {
     throw new Error("archive index was not updated deterministically for completion record");
   }
 
+  // ── Guard test 1: completion fails if retrievalPacketPath missing ─────────────
+  {
+    const missingRetrievalPath = path.join(
+      TMP_WORKSPACE, "artifacts", "proc_dryrun_guard", "retrieval", "retrieval_packet.json"
+    );
+    const guardCompletionPath = path.join(
+      TMP_WORKSPACE, "artifacts", "proc_dryrun_guard", "completion", "completion_archive_record.json"
+    );
+    let threw = false;
+    try {
+      await retrievalMod.ensureTerminalCompoundingArtifacts({
+        source: "prime",
+        procurementId: "dryrun_guard",
+        phase: "completion",
+        artifactPath,
+        completionRecordPath: guardCompletionPath,
+        completionURI: "ipfs://dryrun_guard",
+        deliverableURI: "ipfs://dryrun_guard",
+        title: "Guard test",
+        summary: "Guard test summary",
+        tags: ["test"],
+        metadata: { domain: "test", deliverableType: "test", qualityScore: 0, wasAccepted: false },
+        primitive: { outcomeStatus: "test", outcomeScore: 0 },
+        retrievalPacketPath: missingRetrievalPath,
+      });
+    } catch (err) {
+      threw = true;
+      if (!err.message.includes("retrieval packet")) {
+        throw new Error(`guard test: wrong error message — expected "retrieval packet", got: ${err.message}`);
+      }
+    }
+    if (!threw) throw new Error("ensureTerminalCompoundingArtifacts should throw when retrievalPacketPath is missing");
+    console.log("guard(missing retrieval packet): OK");
+  }
+
+  // ── Guard test 2: completion succeeds when retrievalPacketPath exists ─────────
+  {
+    const existingRetrievalPath = path.join(
+      TMP_WORKSPACE, "artifacts", "proc_dryrun_2", "retrieval", "retrieval_packet.json"
+    );
+    await fs.access(existingRetrievalPath);
+    const guardSuccessRecord = await retrievalMod.ensureTerminalCompoundingArtifacts({
+      source: "prime",
+      procurementId: "dryrun_2",
+      phase: "completion_guarded",
+      artifactPath,
+      completionRecordPath: path.join(
+        TMP_WORKSPACE, "artifacts", "proc_dryrun_2", "completion", "completion_archive_record_guarded.json"
+      ),
+      completionURI: "ipfs://dryrun_guarded",
+      deliverableURI: "ipfs://dryrun_guarded",
+      title: "Guard success test",
+      summary: "Guard success summary",
+      tags: ["test", "guard"],
+      metadata: { domain: "test", deliverableType: "test", qualityScore: 1, wasAccepted: true },
+      primitive: { outcomeStatus: "test_success", outcomeScore: 1 },
+      retrievalPacketPath: existingRetrievalPath,
+    });
+    if (!guardSuccessRecord.archiveId) {
+      throw new Error("guard success test: completion record missing archiveId");
+    }
+    console.log(`guard(retrieval packet present): OK — archiveId=${guardSuccessRecord.archiveId}`);
+  }
+
+  // ── Verify archive index grew with all entries ────────────────────────────────
+  const finalIndexAfterGuard = JSON.parse(await fs.readFile(archiveIndexPath, "utf8"));
+  if (finalIndexAfterGuard.entries.length < finalIndex.entries.length + 1) {
+    throw new Error("archive index did not grow after guard success test");
+  }
+
   console.log("dry-run OK");
-  console.log(`archive entries: ${finalIndex.entries.length}`);
+  console.log(`archive entries: ${finalIndexAfterGuard.entries.length}`);
   console.log(`retrieval results: ${retrievalPacket.results.length}`);
   console.log(`retrieval packet: ${retrievalPacketPath}`);
   console.log(`completion archive record: ${completionRecordPath}`);
