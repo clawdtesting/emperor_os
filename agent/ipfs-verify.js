@@ -38,3 +38,11 @@ export async function verifyIpfsTextHash(uri, expectedSha256) {
     actualSha256: actual
   };
 }
+export function verifyInventoryHashes(inventory = [], expectedByPath = {}) {
+  const mismatches = []
+  for (const item of inventory) {
+    const expected = expectedByPath[item.path]
+    if (expected && expected !== item.sha256) mismatches.push({ path: item.path, expected, actual: item.sha256 })
+  }
+  return { ok: mismatches.length === 0, mismatches }
+}

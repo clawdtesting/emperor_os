@@ -64,3 +64,13 @@ export function isAssignedToAddress(job, address) {
   if (!job?.assignedAgent || !address) return false;
   return String(job.assignedAgent).toLowerCase() === String(address).toLowerCase();
 }
+
+export function normalizeJobForLane(entry, lane = 'job-v1') {
+  const normalized = normalizeJob(entry)
+  if (!normalized) return null
+  return {
+    ...normalized,
+    lane,
+    managerVersion: lane === 'job-v2' ? 'v2' : lane.startsWith('prime') ? lane : 'v1'
+  }
+}

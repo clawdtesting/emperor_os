@@ -1,0 +1,24 @@
+{
+  "runs": [
+    {
+      "id": "run_1776646260407",
+      "status": "ingested",
+      "adapter": "webhook",
+      "submittedAt": "2026-04-20T00:51:00.407Z",
+      "updatedAt": "2026-04-20T00:51:00.408Z"
+    }
+  ],
+  "packets": [
+    {
+      "packetHash": "pkt_1776646260405",
+      "packet": {
+        "schema": "emperor-os/agent-job-packet/v1",
+        "jobId": "1"
+      },
+      "jobId": "1",
+      "lane": "job-v1",
+      "connectionId": "c1",
+      "createdAt": "2026-04-20T00:51:00.406Z"
+    }
+  ]
+}

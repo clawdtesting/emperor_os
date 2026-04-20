@@ -60,3 +60,13 @@ export async function publish() {
     console.log(`[publish] published deliverable for ${job.jobId}`);
   }
 }
+
+export async function buildPublishManifestFromInventory({ jobId, inventory = [] }) {
+  return {
+    kind: 'publish-manifest',
+    generatedAt: new Date().toISOString(),
+    jobId: String(jobId),
+    mode: 'external-candidate-ingest',
+    publicArtifacts: inventory.map(item => ({ name: item.path, sha256: item.sha256, size: item.size, mimeType: item.mimeType }))
+  }
+}
