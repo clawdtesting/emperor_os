@@ -200,3 +200,23 @@ export async function reconcileCompletion() {
     }
   }
 }
+
+export async function reconcileExternalCandidateCompletion({ jobState, ingestResult }) {
+  if (!ingestResult?.ok) {
+    return {
+      ok: false,
+      status: 'candidate_rejected',
+      reason: 'deterministic ingestion failed',
+      errors: ingestResult?.errors || []
+    }
+  }
+
+  return {
+    ok: true,
+    status: 'completion_pending_review',
+    jobId: String(jobState?.jobId || ''),
+    validationReport: ingestResult.validationReport,
+    signingManifest: ingestResult.signingManifest,
+    unsignedTx: ingestResult.unsignedTx
+  }
+}

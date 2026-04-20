@@ -13,6 +13,14 @@ import { normalizeV1JobForList, normalizeV2JobForList, resolveV1MetadataUri, bui
 import { buildV1OperatorViewModel } from './lib/v1-operator-view.js'
 import { buildAssignedJobRunner } from './lib/intake-runner.js'
 import { listProviders, getPreferredProvider, setPreferredProvider } from '../agent/llm-router.js'
+import { listAgentConnections, createAgentConnection, updateAgentConnection, deleteAgentConnection, getAgentConnection, ensureConnectionStateFile } from './lib/agent-connections.js'
+import { ensureAgentRunStateFile, createPreparedPacketRecord, findPreparedPacket, createRun, getRun, updateRun } from './lib/agent-runs.js'
+import { buildAgentPacketPreview } from './lib/agent-packet-view.js'
+import { buildAgentResultReviewPayload } from './lib/agent-result-view.js'
+import { validateSchema } from './lib/schema-validate.js'
+import { buildAgentJobPacket } from '../agent/agent-packet-builder.js'
+import { computePacketHash, startAgentRun, pollAgentRun, fetchAgentRunResult, cancelAgentRun } from '../agent/agent-runner.js'
+import { ingestAgentResult } from '../agent/agent-result-ingest.js'
 
 const app = express()
 app.use(cors())
@@ -54,6 +62,8 @@ const IPFS_GATEWAYS = [
 ]
 
 mkdirSync(NOTIF_STATE_DIR, { recursive: true })
+ensureConnectionStateFile()
+ensureAgentRunStateFile()
 
 // ── Notification / Action Engine ──────────────────────────────────────────────
 
@@ -5200,6 +5210,177 @@ app.post('/api/workflow-dispatch', async (req, res) => {
     res.json({ ok: true, workflow, ref, inputs })
   } catch (e) {
     res.status(500).json({ error: e.message })
+  }
+})
+
+// ── External Agent Connections ────────────────────────────────────────────────
+app.get('/api/agent-connections', (_req, res) => {
+  try {
+    return res.json({ connections: listAgentConnections() })
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/agent-connections', (req, res) => {
+  try {
+    const created = createAgentConnection(req.body || {})
+    return res.status(201).json(created)
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
+})
+
+app.post('/api/agent-connections/test', async (req, res) => {
+  try {
+    const { connectionId, packet } = req.body || {}
+    const connection = connectionId ? getAgentConnection(connectionId) : (req.body?.connection || null)
+    if (!connection) return res.status(404).json({ error: 'connection not found' })
+    const schemaCheck = validateSchema('agent-job-packet', packet || {})
+    if (packet && !schemaCheck.valid) return res.status(400).json({ error: 'invalid packet', details: schemaCheck.errors })
+    return res.json({ ok: true, adapter: connection.adapter, schemaCheck, testedAt: new Date().toISOString() })
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
+})
+
+app.patch('/api/agent-connections/:id', (req, res) => {
+  try {
+    const updated = updateAgentConnection(req.params.id, req.body || {})
+    return res.json(updated)
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
+})
+
+app.delete('/api/agent-connections/:id', (req, res) => {
+  try {
+    return res.json(deleteAgentConnection(req.params.id))
+  } catch (err) {
+    return res.status(400).json({ error: err.message })
+  }
+})
+
+// ── External Agent Runs ───────────────────────────────────────────────────────
+app.post('/api/agent-runs/prepare', async (req, res) => {
+  try {
+    const { jobId, lane, connectionId, phase } = req.body || {}
+    if (!jobId || !lane || !connectionId) return res.status(400).json({ error: 'jobId, lane, connectionId required' })
+    const connection = getAgentConnection(connectionId)
+    if (!connection) return res.status(404).json({ error: `unknown connection: ${connectionId}` })
+    const jobs = await loadJobsUnified()
+    const job = jobs.find(item => String(item.jobId) === String(jobId))
+    if (!job) return res.status(404).json({ error: `job ${jobId} not found` })
+    const packet = buildAgentJobPacket({ job, lane, workspaceRoot: WORKSPACE_ROOT, phase, connectionHints: { connectionId } })
+    const schemaCheck = validateSchema('agent-job-packet', packet)
+    if (!schemaCheck.valid) return res.status(500).json({ error: 'packet schema validation failed', details: schemaCheck.errors })
+    const packetHash = computePacketHash(packet)
+    createPreparedPacketRecord({ packetHash, packet, jobId: String(jobId), lane, connectionId })
+    return res.json(buildAgentPacketPreview({
+      packet,
+      packetHash,
+      requiredArtifacts: packet.requiredArtifacts,
+      acceptanceChecks: packet.acceptanceChecks,
+      connection,
+    }))
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/agent-runs/start', async (req, res) => {
+  try {
+    const { connectionId, packet, packetRef } = req.body || {}
+    const connection = getAgentConnection(connectionId)
+    if (!connection) return res.status(404).json({ error: `unknown connection: ${connectionId}` })
+    if (!connection.enabled) return res.status(400).json({ error: 'connection is disabled' })
+    const resolvedPacket = packet || findPreparedPacket(packetRef)?.packet
+    if (!resolvedPacket) return res.status(400).json({ error: 'packet or valid packetRef required' })
+
+    const runRecord = await startAgentRun({ connection, packet: resolvedPacket, context: { workspaceRoot: WORKSPACE_ROOT } })
+    createRun(runRecord)
+    return res.status(201).json({ runId: runRecord.id, externalRunId: runRecord.externalRunId, status: runRecord.status, adapter: runRecord.adapter, packetHash: runRecord.packetHash })
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/agent-runs/:runId', async (req, res) => {
+  try {
+    const run = getRun(req.params.runId)
+    if (!run) return res.status(404).json({ error: 'run not found' })
+    const connection = getAgentConnection(run.connectionId)
+    let poll = null
+    if (connection && run.externalRunId) {
+      try { poll = await pollAgentRun({ connection, runRecord: run, context: { workspaceRoot: WORKSPACE_ROOT } }) } catch (err) { poll = { done: false, status: 'poll_error', error: err.message } }
+    }
+    const updated = updateRun(run.id, {
+      lastPollStatus: poll?.status || run.lastPollStatus || null,
+      resultAvailable: Boolean(run.result || poll?.done),
+      status: poll?.status || run.status,
+      lastError: poll?.error || null,
+    }) || run
+    return res.json({
+      runId: updated.id,
+      runStatus: updated.status,
+      adapter: updated.adapter,
+      timestamps: { submittedAt: updated.submittedAt, updatedAt: updated.updatedAt },
+      packetHash: updated.packetHash,
+      lastPollStatus: updated.lastPollStatus,
+      lastError: updated.lastError,
+      resultAvailable: Boolean(updated.result || updated.resultAvailable),
+      externalRunId: updated.externalRunId || null,
+    })
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/agent-runs/:runId/ingest', async (req, res) => {
+  try {
+    const run = getRun(req.params.runId)
+    if (!run) return res.status(404).json({ error: 'run not found' })
+    const connection = getAgentConnection(run.connectionId)
+    if (!connection) return res.status(404).json({ error: 'connection not found for run' })
+
+    const packet = req.body?.packet || findPreparedPacket(run.packetHash)?.packet || null
+    if (!packet) return res.status(400).json({ error: 'packet required for ingest' })
+    const result = req.body?.result || await fetchAgentRunResult({ connection, runRecord: run, context: { workspaceRoot: WORKSPACE_ROOT } })
+
+    const ingest = await ingestAgentResult({
+      packet,
+      result,
+      workspaceRoot: WORKSPACE_ROOT,
+      connectionSummary: { id: connection.id, adapter: connection.adapter },
+      runMeta: { externalRunId: run.externalRunId }
+    })
+
+    updateRun(run.id, {
+      status: ingest.ok ? 'ingested' : 'ingest_failed',
+      result,
+      validationReport: ingest.validationReport,
+      signingManifestPreview: ingest.signingManifest,
+      unsignedTxPreview: ingest.unsignedTx,
+      lastError: ingest.ok ? null : (ingest.errors || []).join('; ')
+    })
+
+    return res.json(buildAgentResultReviewPayload({ run: getRun(run.id), ingest }))
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/agent-runs/:runId/cancel', async (req, res) => {
+  try {
+    const run = getRun(req.params.runId)
+    if (!run) return res.status(404).json({ error: 'run not found' })
+    const connection = getAgentConnection(run.connectionId)
+    if (!connection) return res.status(404).json({ error: 'connection not found for run' })
+    const result = await cancelAgentRun({ connection, runRecord: run, context: { workspaceRoot: WORKSPACE_ROOT } })
+    updateRun(run.id, { status: result.ok ? 'cancelled' : run.status, cancel: result })
+    return res.json(result)
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
   }
 })
 

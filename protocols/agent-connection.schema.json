@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "emperor-os/agent-connection.schema.json",
+  "title": "External Agent Connection",
+  "type": "object",
+  "required": ["id", "name", "adapter", "enabled", "scopes", "config"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "adapter": { "type": "string", "minLength": 1 },
+    "enabled": { "type": "boolean" },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["job-v1", "job-v2", "prime-v1", "prime-v2"]
+      }
+    },
+    "config": { "type": "object", "additionalProperties": true },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -131,3 +131,25 @@ export async function runPreSignChecks({
 
   return report;
 }
+
+export function runExternalResultPreSignChecks({
+  schemaValid,
+  fileScopeValid,
+  packetJobId,
+  resultJobId,
+  knownConnection,
+  prohibitedOutputViolations = [],
+  canonicalBundleExists,
+  decodedUnsignedTx = {}
+}) {
+  const checks = [
+    { check: 'result-schema-valid', pass: Boolean(schemaValid), detail: String(schemaValid) },
+    { check: 'file-scope-valid', pass: Boolean(fileScopeValid), detail: String(fileScopeValid) },
+    { check: 'packet-result-jobid-match', pass: String(packetJobId) === String(resultJobId), detail: `${packetJobId}/${resultJobId}` },
+    { check: 'known-connection', pass: Boolean(knownConnection), detail: String(knownConnection) },
+    { check: 'no-prohibited-outputs', pass: prohibitedOutputViolations.length === 0, detail: prohibitedOutputViolations.join(', ') || 'none' },
+    { check: 'canonical-bundle-exists', pass: Boolean(canonicalBundleExists), detail: String(canonicalBundleExists) },
+    { check: 'unsigned-tx-decoded', pass: Boolean(decodedUnsignedTx?.to && decodedUnsignedTx?.functionName), detail: JSON.stringify(decodedUnsignedTx) }
+  ]
+  return { allPassed: checks.every(c => c.pass), checks }
+}

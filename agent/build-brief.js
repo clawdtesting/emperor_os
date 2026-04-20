@@ -104,3 +104,11 @@ function inferAudience(job) {
       }
     };
   }
+export function buildBriefWithLane(job, lane = 'job-v1') {
+  const brief = buildBrief(job)
+  return {
+    ...brief,
+    lane,
+    deterministicBoundary: 'external-agent-candidate-only'
+  }
+}

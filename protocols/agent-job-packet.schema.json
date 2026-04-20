@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "emperor-os/agent-job-packet.schema.json",
+  "title": "External Agent Job Packet",
+  "type": "object",
+  "required": [
+    "schema",
+    "jobId",
+    "lane",
+    "jobContext",
+    "brief",
+    "constraints",
+    "requiredArtifacts",
+    "acceptanceChecks",
+    "workspaceContract",
+    "submissionContract"
+  ],
+  "properties": {
+    "schema": { "const": "emperor-os/agent-job-packet/v1" },
+    "jobId": { "type": "string", "minLength": 1 },
+    "lane": { "type": "string", "minLength": 1 },
+    "jobContext": { "type": "object", "additionalProperties": true },
+    "brief": { "type": "object", "additionalProperties": true },
+    "constraints": {
+      "type": "object",
+      "required": ["rules"],
+      "properties": {
+        "rules": { "type": "array", "items": { "type": "string" } },
+        "deadline": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "requiredArtifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean" },
+          "description": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "acceptanceChecks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "workspaceContract": {
+      "type": "object",
+      "required": ["allowedOutputPrefixes", "prohibitedPrefixes", "prohibitedPatterns"],
+      "properties": {
+        "allowedOutputPrefixes": { "type": "array", "items": { "type": "string" } },
+        "prohibitedPrefixes": { "type": "array", "items": { "type": "string" } },
+        "prohibitedPatterns": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "submissionContract": { "type": "object", "additionalProperties": true },
+    "retrievalPacket": { "type": ["object", "null"], "additionalProperties": true },
+    "capabilityHints": { "type": "array", "items": { "type": "string" } },
+    "agentHints": { "type": "object", "additionalProperties": true },
+    "attachments": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+  },
+  "additionalProperties": false
+}

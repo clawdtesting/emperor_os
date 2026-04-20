@@ -17,6 +17,10 @@ import { PipelineRegistry } from './components/PipelineRegistry'
 import { MissionControlTab } from './components/MissionControlTab'
 import { useWallet } from './hooks/useWallet'
 import { resolveOperatorEntityCandidate } from './features/operator-actions/entity-navigation'
+import { AgentConnectionsTab } from './components/AgentConnectionsTab'
+import { JobAgentPacketPanel } from './components/JobAgentPacketPanel'
+import { AgentRunPanel } from './components/AgentRunPanel'
+import { AgentResultReviewPanel } from './components/AgentResultReviewPanel'
 
 function compareJobIdDesc(a, b) {
   try {
@@ -37,6 +41,9 @@ export default function App() {
   const actionsModel = useActions()
   const { unreadCount } = actionsModel
   const [selected, setSelected] = useState(null)
+  const [selectedConnection, setSelectedConnection] = useState(null)
+  const [packetPreview, setPacketPreview] = useState(null)
+  const [agentReview, setAgentReview] = useState(null)
   const [tab, setTab] = useState('mission')
   const wallet = useWallet()
   const enableTestMode = String(import.meta.env.VITE_ENABLE_TEST_MODE || '').toLowerCase() === 'true'
@@ -136,7 +143,7 @@ export default function App() {
 
         <div className="text-[11px] uppercase tracking-wider text-slate-500 px-2 py-1">Lanes & tools</div>
         <div className="flex flex-col gap-1">
-          {['jobs-v1', 'jobs-v2', 'prime', 'prime-v2', 'wallet', 'ops', 'pipelines', 'events', 'ipfs', 'workflows', enableTestMode ? 'test' : null].filter(Boolean).map(t => (
+          {['jobs-v1', 'jobs-v2', 'prime', 'prime-v2', 'agents', 'wallet', 'ops', 'pipelines', 'events', 'ipfs', 'workflows', enableTestMode ? 'test' : null].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -355,6 +362,25 @@ export default function App() {
         {tab === 'test' && enableTestMode && <TestTab />}
 
         {tab === 'ipfs' && <IpfsTab />}
+        {tab === 'agents' && (
+          <div className="space-y-3">
+            <AgentConnectionsTab onSelectConnection={setSelectedConnection} selectedConnectionId={selectedConnection?.id} />
+            <div className="grid lg:grid-cols-2 gap-3">
+              <JobAgentPacketPanel packetPreview={packetPreview} />
+              <AgentRunPanel
+                selectedJob={selected}
+                selectedLane={selected?.source === 'agijobmanager-v2' ? 'job-v2' : selected?.source === 'agiprimediscovery' ? 'prime-v1' : selected?.source === 'agijobmanagerprime' || selected?.source === 'agijobmanager-prime' ? 'prime-v2' : 'job-v1'}
+                selectedConnection={selectedConnection}
+                onPrepared={(preview) => {
+                  setPacketPreview(preview)
+                  if (selected) setSelected({ ...selected, agentPacket: preview.packet })
+                }}
+                onReview={setAgentReview}
+              />
+            </div>
+            <AgentResultReviewPanel review={agentReview} />
+          </div>
+        )}
         </div>
         </div>
       </div>
