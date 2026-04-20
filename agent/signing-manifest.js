@@ -99,3 +99,25 @@ export async function buildSigningManifest({
 
   return manifest;
 }
+
+export async function buildExternalAgentSigningManifest({
+  base,
+  packetHash,
+  agentConnectionId,
+  adapterId,
+  externalRunId,
+  candidateResultDigest,
+  validationReportDigest,
+  finalArtifactHashes = {}
+}) {
+  return {
+    ...(base || {}),
+    packetHash: packetHash || null,
+    agentConnectionId: agentConnectionId || null,
+    adapterId: adapterId || null,
+    externalRunId: externalRunId || null,
+    candidateResultDigest: candidateResultDigest || null,
+    validationReportDigest: validationReportDigest || null,
+    finalArtifactHashes
+  }
+}

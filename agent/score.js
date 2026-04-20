@@ -53,3 +53,11 @@ export function scoreJob(job, spec) {
 function fail(reason) {
   return { score: 0, pass: false, reason }
 }
+
+export function buildLaneScoringHints(lane) {
+  return {
+    lane,
+    deterministicOnly: true,
+    note: 'External agent output is candidate work only and must pass deterministic checks.'
+  }
+}

@@ -9,28 +9,77 @@ This app is focused on sign-only operator workflows:
 - inspect job specs/completions from on-chain URI -> IPFS
 - generate unsigned tx + review manifests for operator signing
 - monitor autonomous/keepalive GitHub workflows
+- configure BYO external agent connections that can produce candidate work packages
+- deterministically ingest and validate candidate work before manifest/unsigned tx packaging
 
 No AGI Alpha MCP dependency is required at runtime.
 
-## Runtime layout
+## Deterministic core vs external agent boundary
 
-- `src/` — React + Vite frontend
-- `server.js` — Express API for on-chain reads, IPFS fetch/pin, unsigned package generation
-- `lib/` — normalization and contract-first helpers
+**Deterministic core (Emperor_OS + Mission Control):**
+- contract reads / lane normalization / brief construction
+- required artifacts + acceptance checks
+- candidate result validation (schema, path scope, hashes, lane checks)
+- canonical publication bundle, signing manifest, unsigned tx preview
+
+**External agents (BYO adapters):**
+- planning, reasoning, writing/coding, tool use
+- candidate deliverable production only
+- never canonical state mutation and never authoritative tx package generation
+
+**Human boundary:**
+- operator review/sign/broadcast only
+- signing remains outside runtime (MetaMask/Ledger)
+
+## Run lifecycle (agent mode)
+
+1. Create an agent connection (`/api/agent-connections`)
+2. Prepare a deterministic packet (`POST /api/agent-runs/prepare`)
+3. Start external run (`POST /api/agent-runs/start`)
+4. Poll/status (`GET /api/agent-runs/:runId`)
+5. Ingest candidate result (`POST /api/agent-runs/:runId/ingest`)
+6. Review deterministic checks + unsigned tx preview in UI
 
 ## Key API routes
 
-- `GET /api/jobs` — v1/v2/Prime list from contracts + RPC
-- `GET /api/job-spec/:jobId` — resolve spec URI on-chain, fetch payload from IPFS
-- `GET /api/job-metadata/:jobId` — resolve completion/spec URI on-chain, fetch payload from IPFS
-- `POST /api/job-requests` — generate unsigned `createJob(...)` tx package + review manifest
-- `POST /api/ipfs/pin-json` — Pinata-direct JSON pinning (requires `PINATA_JWT`)
-- `POST /api/validator/v1/prepare` — external validator package generation (contract/IPFS based)
+Existing routes remain unchanged. New agent routes:
+
+- `GET /api/agent-connections`
+- `POST /api/agent-connections`
+- `POST /api/agent-connections/test`
+- `PATCH /api/agent-connections/:id`
+- `DELETE /api/agent-connections/:id`
+- `POST /api/agent-runs/prepare`
+- `POST /api/agent-runs/start`
+- `GET /api/agent-runs/:runId`
+- `POST /api/agent-runs/:runId/ingest`
+- `POST /api/agent-runs/:runId/cancel`
+
+## State files initialized
+
+- `mission-control/state/agent-connections.json`
+- `mission-control/state/agent-runs.json`
+
+Both use atomic write/rename updates.
+
+## Recommended Hermes/OpenClaw integration pattern
+
+Use `hermes` or `openclaw` adapter configs as thin webhook contracts:
+- `baseUrl`
+- `submitPath`
+- `statusPathTemplate`
+- `resultPathTemplate`
+- `authTokenRef` (env ref)
+
+Keep transport contract stable; packet/result schemas are canonical.
 
 ## Required environment
 
 - `ETH_RPC_URL` (or `RPC_URL`)
 - `PINATA_JWT` (required for `/api/ipfs/pin-json`)
+
+Optional agent env refs:
+- any `authTokenRef`, `envKey`, `apiKeyRef` values referenced by connection config
 
 ## Development
 
