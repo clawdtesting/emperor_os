@@ -54,6 +54,7 @@ export function WalletPanel({ wallet }) {
     agentReputation,
     reputationSource,
     reputationContract,
+    ensHoldings,
   } = wallet
 
   return (
@@ -130,6 +131,24 @@ export function WalletPanel({ wallet }) {
             contract <EnsAddress address={reputationContract} className="text-slate-400" />
           </div>
         )}
+      </div>
+
+      <div className="rounded border border-slate-800 bg-slate-950 p-2 text-xs">
+        <div className="text-slate-600 mb-1">ENS holdings (agent / clubagi / agi)</div>
+        {!isConnected && <div className="text-slate-500 font-mono">not connected</div>}
+        {isConnected && (!Array.isArray(ensHoldings) || ensHoldings.length === 0) && (
+          <div className="text-slate-500 font-mono">no matching ENS names found</div>
+        )}
+        {isConnected && Array.isArray(ensHoldings) && ensHoldings.length > 0 && (
+          <ul className="space-y-1">
+            {ensHoldings.map((name) => (
+              <li key={name} className="font-mono text-slate-200 break-all">{name}</li>
+            ))}
+          </ul>
+        )}
+        <div className="text-[10px] text-slate-500 mt-1">
+          matching suffixes: <span className="font-mono">.agent.agi.eth</span>, <span className="font-mono">.clubagi.eth</span>, <span className="font-mono">.agi.eth</span>
+        </div>
       </div>
     </div>
   )

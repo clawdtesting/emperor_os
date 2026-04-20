@@ -1327,6 +1327,62 @@ app.get('/api/ens/:address', async (req, res) => {
   res.json({ name: null })
 })
 
+function collectEnsNamesDeep(value, out = new Set()) {
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase()
+    if (v.endsWith('.eth') && /^[a-z0-9.-]+\.eth$/.test(v)) out.add(v)
+    return out
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectEnsNamesDeep(item, out))
+    return out
+  }
+  if (value && typeof value === 'object') {
+    Object.values(value).forEach((item) => collectEnsNamesDeep(item, out))
+    return out
+  }
+  return out
+}
+
+app.get('/api/ens/:address/holdings', async (req, res) => {
+  const address = String(req.params.address || '').toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(address)) return res.status(400).json({ error: 'invalid address' })
+
+  const wantedSuffixes = ['.agent.agi.eth', '.clubagi.eth', '.agi.eth']
+  const names = new Set()
+
+  try {
+    const r = await fetch(`https://api.ensideas.com/ens/resolve/${address}`, {
+      signal: AbortSignal.timeout(6000),
+    })
+    if (r.ok) {
+      const d = await r.json().catch(() => ({}))
+      if (d?.name) names.add(String(d.name).toLowerCase())
+    }
+  } catch {}
+
+  try {
+    const r = await fetch(`https://api.web3.bio/profile/${address}`, {
+      signal: AbortSignal.timeout(8000),
+    })
+    if (r.ok) {
+      const d = await r.json().catch(() => [])
+      collectEnsNamesDeep(d, names)
+    }
+  } catch {}
+
+  const holdings = Array.from(names)
+    .filter((name) => wantedSuffixes.some((suffix) => name.endsWith(suffix)))
+    .sort((a, b) => a.localeCompare(b))
+
+  return res.json({
+    address,
+    holdings,
+    suffixes: wantedSuffixes,
+    sources: ['ensideas', 'web3.bio'],
+  })
+})
+
 app.get('/api/agent', (_, res) => res.json({
   ens:   process.env.ENS_SUBDOMAIN || null,
   chain: 'Base Sepolia',

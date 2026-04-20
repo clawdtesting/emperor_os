@@ -95,6 +95,7 @@ export function ActionsPanel({
   setFilter = () => {},
   unreadCount = 0,
   dismiss = () => {},
+  dismissAll = () => {},
   refetch = () => {},
 }) {
 
@@ -115,12 +116,21 @@ export function ActionsPanel({
             </span>
           )}
         </div>
-        <button
-          onClick={refetch}
-          className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-        >
-          refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={dismissAll}
+            disabled={actions.length === 0}
+            className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
+          >
+            dismiss all
+          </button>
+          <button
+            onClick={refetch}
+            className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+          >
+            refresh
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4">

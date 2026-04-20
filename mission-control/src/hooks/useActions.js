@@ -45,6 +45,15 @@ function normalizeOperatorAction(action) {
   }
 }
 
+function isTerminalAction(action) {
+  const state = String(action?.stateStatus || action?.lifecycleStage || '').toLowerCase()
+  const queueStage = String(action?.queueStage || '').toLowerCase()
+  const doneTokens = ['done', 'closed', 'completed', 'finalized', 'rejected', 'cancelled', 'canceled']
+  if (doneTokens.some((token) => state.includes(token))) return true
+  if (doneTokens.some((token) => queueStage.includes(token))) return true
+  return false
+}
+
 export function useActions() {
   const [actions, setActions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -60,6 +69,7 @@ export function useActions() {
       if (Array.isArray(opData?.actions)) {
         const normalized = opData.actions
           .map(normalizeOperatorAction)
+          .filter((item) => !isTerminalAction(item))
           .filter((item) => !dismissedIds.current.has(item.id))
         const filtered = normalized.filter((item) => {
           if (filter === 'urgent') return item.urgency === 'urgent' || (item.secsUntilDeadline != null && item.secsUntilDeadline < 0)
@@ -96,11 +106,21 @@ export function useActions() {
     }
   }, [])
 
+  const dismissAll = useCallback(async () => {
+    const ids = actions.map((a) => a.id)
+    await Promise.all(ids.map(async (id) => {
+      try { await dismissAction(id) } catch {}
+      dismissedIds.current.add(id)
+    }))
+    setActions([])
+    setUnreadCount(0)
+  }, [actions])
+
   useEffect(() => {
     poll()
     const timer = setInterval(poll, POLL_INTERVAL)
     return () => clearInterval(timer)
   }, [poll])
 
-  return { actions, loading, error, filter, setFilter, unreadCount, dismiss: handleDismiss, refetch: poll }
+  return { actions, loading, error, filter, setFilter, unreadCount, dismiss: handleDismiss, dismissAll, refetch: poll }
 }
