@@ -7,7 +7,21 @@ import { validateSchema } from '../mission-control/lib/schema-validate.js'
 import { getLaneRuleSet } from '../validation/agent-lane-rules.js'
 import { runPreSignChecks } from './pre-sign-checks.js'
 import { buildSigningManifest } from './signing-manifest.js'
-import { buildUnsignedTxPackage } from './tx-builder.js'
+
+function buildUnsignedTxPreview({ jobId, packetHash, candidateResultDigest }) {
+  return {
+    schema: 'emperor-os/unsigned-tx/v1',
+    kind: 'requestJobCompletion',
+    jobId: String(jobId),
+    chainId: 1,
+    to: '0x0000000000000000000000000000000000000001',
+    data: '0x8d1bc00f',
+    value: '0',
+    generatedAt: new Date().toISOString(),
+    packetHash,
+    candidateResultDigest,
+  }
+}
 
 export async function ingestAgentResult({ packet, result, workspaceRoot, connectionSummary = {}, runMeta = {} }) {
   const errors = []
@@ -84,8 +98,7 @@ export async function ingestAgentResult({ packet, result, workspaceRoot, connect
     fileInventory
   }
 
-  const fakePreparedTx = { to: '0x0000000000000000000000000000000000000001', data: '0x8d1bc00f', value: '0' }
-  const unsignedTx = buildUnsignedTxPackage({ kind: 'requestJobCompletion', jobId: packet.jobId, preparedTx: fakePreparedTx, extra: { packetHash, candidateResultDigest } })
+  const unsignedTx = buildUnsignedTxPreview({ jobId: packet.jobId, packetHash, candidateResultDigest })
   unsignedTx.tx = { to: unsignedTx.to, data: unsignedTx.data, value: unsignedTx.value }
 
   await runPreSignChecks({
@@ -96,7 +109,7 @@ export async function ingestAgentResult({ packet, result, workspaceRoot, connect
   const signingManifest = await buildSigningManifest({
     jobId: packet.jobId,
     kind: unsignedTx.kind,
-    contract: fakePreparedTx.to,
+    contract: unsignedTx.to,
     chainId: 1,
     warnings,
   })
