@@ -17,6 +17,10 @@ import { PipelineRegistry } from './components/PipelineRegistry'
 import { MissionControlTab } from './components/MissionControlTab'
 import { useWallet } from './hooks/useWallet'
 import { resolveOperatorEntityCandidate } from './features/operator-actions/entity-navigation'
+import { AgentConnectionsTab } from './components/AgentConnectionsTab'
+import { JobAgentPacketPanel } from './components/JobAgentPacketPanel'
+import { AgentRunPanel } from './components/AgentRunPanel'
+import { AgentResultReviewPanel } from './components/AgentResultReviewPanel'
 
 function compareJobIdDesc(a, b) {
   try {
@@ -32,11 +36,19 @@ function compareJobIdDesc(a, b) {
   }
 }
 
+function isClosedJobStatus(status) {
+  const s = String(status || '').toLowerCase()
+  return s === 'completed' || s === 'closed' || s === 'cancelled' || s === 'canceled' || s === 'done'
+}
+
 export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
   const actionsModel = useActions()
   const { unreadCount } = actionsModel
   const [selected, setSelected] = useState(null)
+  const [selectedConnection, setSelectedConnection] = useState(null)
+  const [packetPreview, setPacketPreview] = useState(null)
+  const [agentReview, setAgentReview] = useState(null)
   const [tab, setTab] = useState('mission')
   const wallet = useWallet()
   const enableTestMode = String(import.meta.env.VITE_ENABLE_TEST_MODE || '').toLowerCase() === 'true'
@@ -55,6 +67,10 @@ export default function App() {
     && j.source !== 'agijobmanager-prime',
   )
   const jobsV2Display = jobsV2
+  const activeJobsV1 = jobsV1.filter(j => !isClosedJobStatus(j.status))
+  const activeJobsV2 = jobsV2Display.filter(j => !isClosedJobStatus(j.status))
+  const activeJobsPrime = jobsPrime.filter(j => !isClosedJobStatus(j.status))
+  const activeJobsPrimeV2 = jobsPrimeV2.filter(j => !isClosedJobStatus(j.status))
 
   function handleSelectJob(job) {
     setSelected(job)
@@ -115,7 +131,7 @@ export default function App() {
           {[
             { key: 'mission', label: 'System visual' },
             { key: 'request', label: 'Create job' },
-            { key: 'jobs', label: 'Apply for job (4 lanes)', badge: jobsV1.length + jobsV2.length + jobsPrime.length + jobsPrimeV2.length },
+            { key: 'jobs', label: 'Apply for job (4 lanes)', badge: activeJobsV1.length + activeJobsV2.length + activeJobsPrime.length + activeJobsPrimeV2.length },
             { key: selected ? 'detail' : 'jobs', label: 'Validate a job', badge: selected ? 1 : 0 },
             { key: 'actions', label: 'Operator queue', badge: unreadCount },
           ].map(item => (
@@ -136,7 +152,7 @@ export default function App() {
 
         <div className="text-[11px] uppercase tracking-wider text-slate-500 px-2 py-1">Lanes & tools</div>
         <div className="flex flex-col gap-1">
-          {['jobs-v1', 'jobs-v2', 'prime', 'prime-v2', 'wallet', 'ops', 'pipelines', 'events', 'ipfs', 'workflows', enableTestMode ? 'test' : null].filter(Boolean).map(t => (
+          {['jobs-v1', 'jobs-v2', 'prime', 'prime-v2', 'agents', 'wallet', 'ops', 'pipelines', 'events', 'ipfs', 'workflows', enableTestMode ? 'test' : null].filter(Boolean).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -145,17 +161,17 @@ export default function App() {
               }`}
             >
               {t === 'jobs-v1' ? 'apply lane: v1' : t === 'jobs-v2' ? 'apply lane: v2' : t === 'prime' ? 'apply lane: prime v1' : t === 'prime-v2' ? 'apply lane: prime v2' : t}
-              {t === 'jobs-v1' && jobsV1.length > 0 && (
-                <span className="ml-1 bg-cyan-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsV1.length}</span>
+              {t === 'jobs-v1' && activeJobsV1.length > 0 && (
+                <span className="ml-1 bg-cyan-700 text-white text-xs rounded-full px-1.5 py-0.5">{activeJobsV1.length}</span>
               )}
-              {t === 'jobs-v2' && jobsV2Display.length > 0 && (
-                <span className="ml-1 bg-fuchsia-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsV2Display.length}</span>
+              {t === 'jobs-v2' && activeJobsV2.length > 0 && (
+                <span className="ml-1 bg-fuchsia-700 text-white text-xs rounded-full px-1.5 py-0.5">{activeJobsV2.length}</span>
               )}
-              {t === 'prime' && jobsPrime.length > 0 && (
-                <span className="ml-1 bg-violet-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsPrime.length}</span>
+              {t === 'prime' && activeJobsPrime.length > 0 && (
+                <span className="ml-1 bg-violet-700 text-white text-xs rounded-full px-1.5 py-0.5">{activeJobsPrime.length}</span>
               )}
-              {t === 'prime-v2' && jobsPrimeV2.length > 0 && (
-                <span className="ml-1 bg-amber-700 text-white text-xs rounded-full px-1.5 py-0.5">{jobsPrimeV2.length}</span>
+              {t === 'prime-v2' && activeJobsPrimeV2.length > 0 && (
+                <span className="ml-1 bg-amber-700 text-white text-xs rounded-full px-1.5 py-0.5">{activeJobsPrimeV2.length}</span>
               )}
             </button>
           ))}
@@ -332,6 +348,7 @@ export default function App() {
               setFilter={actionsModel.setFilter}
               unreadCount={actionsModel.unreadCount}
               dismiss={actionsModel.dismiss}
+              dismissAll={actionsModel.dismissAll}
               refetch={actionsModel.refetch}
             />
           </div>
@@ -355,6 +372,25 @@ export default function App() {
         {tab === 'test' && enableTestMode && <TestTab />}
 
         {tab === 'ipfs' && <IpfsTab />}
+        {tab === 'agents' && (
+          <div className="space-y-3">
+            <AgentConnectionsTab onSelectConnection={setSelectedConnection} selectedConnectionId={selectedConnection?.id} />
+            <div className="grid lg:grid-cols-2 gap-3">
+              <JobAgentPacketPanel packetPreview={packetPreview} />
+              <AgentRunPanel
+                selectedJob={selected}
+                selectedLane={selected?.source === 'agijobmanager-v2' ? 'job-v2' : selected?.source === 'agiprimediscovery' ? 'prime-v1' : selected?.source === 'agijobmanagerprime' || selected?.source === 'agijobmanager-prime' ? 'prime-v2' : 'job-v1'}
+                selectedConnection={selectedConnection}
+                onPrepared={(preview) => {
+                  setPacketPreview(preview)
+                  if (selected) setSelected({ ...selected, agentPacket: preview.packet })
+                }}
+                onReview={setAgentReview}
+              />
+            </div>
+            <AgentResultReviewPanel review={agentReview} />
+          </div>
+        )}
         </div>
         </div>
       </div>

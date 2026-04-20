@@ -43,6 +43,7 @@ export function useWallet() {
   const [agentReputation, setAgentReputation] = useState(null)
   const [reputationSource, setReputationSource] = useState(null)
   const [reputationContract, setReputationContract] = useState(null)
+  const [ensHoldings, setEnsHoldings] = useState([])
 
   const providerAvailable = useMemo(() => Boolean(getProvider()), [])
 
@@ -107,6 +108,21 @@ export function useWallet() {
     }
   }, [])
 
+  const refreshEnsHoldings = useCallback(async activeAccount => {
+    if (!activeAccount) {
+      setEnsHoldings([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/ens/${activeAccount}/holdings`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setEnsHoldings(Array.isArray(data?.holdings) ? data.holdings : [])
+    } catch {
+      setEnsHoldings([])
+    }
+  }, [])
+
   const refresh = useCallback(async () => {
     const provider = getProvider()
     if (!provider) return
@@ -121,11 +137,11 @@ export function useWallet() {
       setChainId(chain || null)
       setEnsName(null)
       resolveEns(active).then(setEnsName)
-      await Promise.all([refreshBalances(active), refreshReputation(active)])
+      await Promise.all([refreshBalances(active), refreshReputation(active), refreshEnsHoldings(active)])
     } catch (e) {
       setError(e.message || 'Unable to read wallet state')
     }
-  }, [refreshBalances, refreshReputation])
+  }, [refreshBalances, refreshReputation, refreshEnsHoldings])
 
   const connect = useCallback(async () => {
     const provider = getProvider()
@@ -145,13 +161,13 @@ export function useWallet() {
       setChainId(chain || null)
       setEnsName(null)
       resolveEns(active).then(setEnsName)
-      await Promise.all([refreshBalances(active), refreshReputation(active)])
+      await Promise.all([refreshBalances(active), refreshReputation(active), refreshEnsHoldings(active)])
       setStatus('connected')
     } catch (e) {
       setStatus('idle')
       setError(e.message || 'Wallet connection rejected')
     }
-  }, [refreshBalances, refreshReputation])
+  }, [refreshBalances, refreshReputation, refreshEnsHoldings])
 
   useEffect(() => {
     const provider = getProvider()
@@ -187,6 +203,7 @@ export function useWallet() {
     agentReputation,
     reputationSource,
     reputationContract,
+    ensHoldings,
     connect,
     refresh,
   }
