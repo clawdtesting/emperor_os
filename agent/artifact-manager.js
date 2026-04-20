@@ -112,3 +112,20 @@ export async function validateArtifactShape(filePath, requiredFields, label) {
 
   return data;
 }
+
+export function getCandidateArtifactPaths(jobId) {
+  const dir = getJobArtifactDir(jobId)
+  return {
+    candidateResult: path.join(dir, 'candidate_result.json'),
+    candidateValidationReport: path.join(dir, 'candidate_validation_report.json'),
+    candidateInventory: path.join(dir, 'candidate_inventory.json')
+  }
+}
+
+export async function registerCandidateResultImport(jobId, payload = {}) {
+  const candidate = getCandidateArtifactPaths(jobId)
+  await writeJson(candidate.candidateResult, payload.result || {})
+  if (payload.validationReport) await writeJson(candidate.candidateValidationReport, payload.validationReport)
+  if (payload.inventory) await writeJson(candidate.candidateInventory, payload.inventory)
+  return candidate
+}

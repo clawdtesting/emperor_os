@@ -282,3 +282,97 @@ export async function fetchPrimeValidatorTimeline(procurementId) {
   return data
 }
 
+
+export async function fetchAgentConnections() {
+  const res = await fetch(BASE + '/api/agent-connections')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch agent connections')
+  return data
+}
+
+export async function createAgentConnection(payload) {
+  const res = await fetch(BASE + '/api/agent-connections', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to create connection')
+  return data
+}
+
+export async function updateAgentConnection(id, patch) {
+  const res = await fetch(BASE + '/api/agent-connections/' + encodeURIComponent(id), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to update connection')
+  return data
+}
+
+export async function deleteAgentConnection(id) {
+  const res = await fetch(BASE + '/api/agent-connections/' + encodeURIComponent(id), { method: 'DELETE' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to delete connection')
+  return data
+}
+
+export async function testAgentConnection(payload) {
+  const res = await fetch(BASE + '/api/agent-connections/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to test connection')
+  return data
+}
+
+export async function prepareAgentRun(payload) {
+  const res = await fetch(BASE + '/api/agent-runs/prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to prepare agent run')
+  return data
+}
+
+export async function startAgentRun(payload) {
+  const res = await fetch(BASE + '/api/agent-runs/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to start agent run')
+  return data
+}
+
+export async function fetchAgentRun(runId) {
+  const res = await fetch(BASE + '/api/agent-runs/' + encodeURIComponent(runId))
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to fetch agent run')
+  return data
+}
+
+export async function ingestAgentRun(runId, payload = {}) {
+  const res = await fetch(BASE + '/api/agent-runs/' + encodeURIComponent(runId) + '/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to ingest agent run')
+  return data
+}
+
+export async function cancelAgentRun(runId) {
+  const res = await fetch(BASE + '/api/agent-runs/' + encodeURIComponent(runId) + '/cancel', { method: 'POST' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to cancel agent run')
+  return data
+}
