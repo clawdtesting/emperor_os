@@ -25,6 +25,10 @@
   - [The Four Layers](#the-four-layers)
   - [The Signing Boundary — Absolute](#the-signing-boundary--absolute)
   - [The Flywheel Model](#the-flywheel-model)
+- [External Agent (BYO Agent / BYO LLM) Architecture](#external-agent-byo-agent--byo-llm-architecture)
+  - [Deterministic Core vs External Agent Responsibilities](#deterministic-core-vs-external-agent-responsibilities)
+  - [Candidate Packet/Result Schemas](#candidate-packetresult-schemas)
+  - [Mission Control Agent API Surface](#mission-control-agent-api-surface)
 - [On-Chain Infrastructure](#on-chain-infrastructure)
   - [Smart Contracts](#smart-contracts)
   - [Agent Identity](#agent-identity)
@@ -181,6 +185,51 @@ Emperor_OS is designed to compound, not to produce isolated outputs.
 ```
 
 A completed job that leaves nothing behind for the archive is a **half-finished job**. The deliverable is the minimum viable output.
+
+---
+
+## External Agent (BYO Agent / BYO LLM) Architecture
+
+Emperor_OS now supports a **Bring Your Own Agent / Bring Your Own LLM** mode where users can connect external systems (webhooks, OpenAI, Ollama, Hermes/OpenClaw-compatible endpoints) to generate candidate work.
+
+The key invariant is unchanged:
+- external agents can propose candidate outputs
+- Emperor_OS / Mission Control remains deterministic system-of-record
+- all signing and broadcast authority remains human-only
+
+### Deterministic Core vs External Agent Responsibilities
+
+| Layer | Responsibilities |
+|---|---|
+| **Deterministic Core (Emperor_OS + Mission Control)** | Contract reads, job normalization, brief generation, required artifact definitions, acceptance checks, file-scope validation, authoritative hash inventory, canonical artifact bundling, signing manifest generation, unsigned tx preview generation |
+| **External Agent** | Planning, reasoning, coding/writing/research, producing candidate deliverables and candidate result package only |
+| **Human Operator** | Review deterministic checks, approve/reject, sign via MetaMask + Ledger, broadcast tx |
+
+### Candidate Packet/Result Schemas
+
+Canonical schemas are versioned in:
+
+- `protocols/agent-job-packet.schema.json`
+- `protocols/agent-job-result.schema.json`
+- `protocols/agent-connection.schema.json`
+
+External results are always treated as untrusted and must pass deterministic ingestion before any canonical publication/manifest/unsigned tx handoff occurs.
+
+### Mission Control Agent API Surface
+
+Mission Control exposes agent connection and run lifecycle APIs:
+
+- `GET/POST/PATCH/DELETE /api/agent-connections`
+- `POST /api/agent-connections/test`
+- `POST /api/agent-runs/prepare`
+- `POST /api/agent-runs/start`
+- `GET /api/agent-runs/:runId`
+- `POST /api/agent-runs/:runId/ingest`
+- `POST /api/agent-runs/:runId/cancel`
+
+Persistent state is stored at:
+- `mission-control/state/agent-connections.json`
+- `mission-control/state/agent-runs.json`
 
 ---
 
@@ -959,6 +1008,12 @@ State files committed back to `main` with `[skip ci]` to prevent action loops.
 | **Webhook Listener** | 9000 | GitHub auto-pull webhook (`webhook_listener.py`) |
 
 Services managed via `systemd`. GitHub Actions deploys via SSH + systemd restart.
+
+### Mission Control Deploy Note (separate service roots)
+
+If Mission Control is deployed from `mission-control/` as an isolated service root (for example on Render), ensure runtime code paths do not require root-level dependency resolution via `agent/config.js` unless root dependencies are installed in that service image.
+
+Current BYO-agent ingestion paths are written to avoid requiring `agent/config.js`/`dotenv` for Mission Control runtime startup.
 
 ### Environment Variables
 
