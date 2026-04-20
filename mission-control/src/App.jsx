@@ -21,6 +21,8 @@ import { AgentConnectionsTab } from './components/AgentConnectionsTab'
 import { JobAgentPacketPanel } from './components/JobAgentPacketPanel'
 import { AgentRunPanel } from './components/AgentRunPanel'
 import { AgentResultReviewPanel } from './components/AgentResultReviewPanel'
+import { PLATFORM_NAV_SECTIONS } from './models/platform'
+import { usePlatformData } from './hooks/usePlatformData'
 
 function compareJobIdDesc(a, b) {
   try {
@@ -49,9 +51,11 @@ export default function App() {
   const [selectedConnection, setSelectedConnection] = useState(null)
   const [packetPreview, setPacketPreview] = useState(null)
   const [agentReview, setAgentReview] = useState(null)
+  const [platformSection, setPlatformSection] = useState('dashboard')
   const [tab, setTab] = useState('mission')
   const wallet = useWallet()
   const enableTestMode = String(import.meta.env.VITE_ENABLE_TEST_MODE || '').toLowerCase() === 'true'
+  const { data: platformData, summary: platformSummary, validation: platformValidation } = usePlatformData()
 
   const assigned  = jobs.filter(j => j.status === 'Assigned')
   const completed = jobs.filter(j => j.status === 'Completed')
@@ -71,6 +75,10 @@ export default function App() {
   const activeJobsV2 = jobsV2Display.filter(j => !isClosedJobStatus(j.status))
   const activeJobsPrime = jobsPrime.filter(j => !isClosedJobStatus(j.status))
   const activeJobsPrimeV2 = jobsPrimeV2.filter(j => !isClosedJobStatus(j.status))
+  const platformProjects = platformData.projects
+  const platformRuntimes = platformData.runtimes
+  const platformSkills = platformData.skills
+  const platformExecutions = platformData.executions
 
   function handleSelectJob(job) {
     setSelected(job)
@@ -98,25 +106,192 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
-      <div className="border-b border-slate-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">⬡</div>
-          <div>
-            <div className="text-sm font-semibold leading-tight">Emperor_OS Mission Control</div>
-            <div className="text-xs text-slate-500 leading-tight break-words">Operator console for contract lanes, manifests, and unsigned transaction review</div>
+      <div className="border-b border-slate-800 px-4 py-3 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">⬡</div>
+            <div>
+              <div className="text-sm font-semibold leading-tight">Op-control Platform Shell</div>
+              <div className="text-xs text-slate-500 leading-tight break-words">Deterministic operator platform with legacy Emperor_OS Mission Control preserved during migration</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-mono hidden sm:block">{countdown}s</span>
+            <button onClick={refetch} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">refresh</button>
+            <div className="flex items-center gap-1">
+              <div className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} />
+              <span className="text-xs text-slate-500">{error ? 'error' : 'live'}</span>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-mono hidden sm:block">{countdown}s</span>
-          <button onClick={refetch} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">refresh</button>
-          <div className="flex items-center gap-1">
-            <div className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`} />
-            <span className="text-xs text-slate-500">{error ? 'error' : 'live'}</span>
-          </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+          {PLATFORM_NAV_SECTIONS.map((section) => (
+            <button
+              key={section.key}
+              onClick={() => setPlatformSection(section.key)}
+              className={`w-full text-left px-3 py-2 text-xs rounded border transition-colors ${
+                platformSection === section.key
+                  ? 'text-white bg-blue-600/25 border-blue-500/50'
+                  : 'text-slate-300 border-slate-800 hover:bg-slate-800'
+              }`}
+            >
+              {section.label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="px-4 py-3">
+        {platformSection === 'dashboard' && (
+          <div className="space-y-4">
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-2">
+              <MetricCard label="Projects" value={platformSummary.projectsTotal} />
+              <MetricCard label="Active" value={platformSummary.activeProjects} color="text-green-400" />
+              <MetricCard label="Planned" value={platformSummary.plannedProjects} color="text-amber-400" />
+              <MetricCard label="Pending operator actions" value={unreadCount} color="text-blue-400" />
+            </div>
+
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="rounded border border-slate-800 bg-slate-900 p-3">
+                <div className="text-xs uppercase tracking-wider text-slate-500">Available projects</div>
+                <div className="text-2xl font-semibold mt-2">{platformSummary.projectsTotal}</div>
+                <div className="text-xs text-slate-400 mt-1">{platformSummary.activeProjects} active legacy · {platformSummary.plannedProjects} planned</div>
+              </div>
+              <div className="rounded border border-slate-800 bg-slate-900 p-3">
+                <div className="text-xs uppercase tracking-wider text-slate-500">Connected runtimes</div>
+                <div className="text-2xl font-semibold mt-2">{platformSummary.connectedRuntimes}</div>
+                <div className="text-xs text-slate-400 mt-1">{platformSummary.plannedRuntimes} planned runtime records from local platform seed data.</div>
+              </div>
+              <div className="rounded border border-slate-800 bg-slate-900 p-3">
+                <div className="text-xs uppercase tracking-wider text-slate-500">Skills</div>
+                <div className="text-2xl font-semibold mt-2">{platformSummary.skillsTotal}</div>
+                <div className="text-xs text-slate-400 mt-1">{platformSummary.deterministicSkills} deterministic · {platformSummary.llmAssistedSkills} llm-assisted.</div>
+              </div>
+              <div className="rounded border border-slate-800 bg-slate-900 p-3">
+                <div className="text-xs uppercase tracking-wider text-slate-500">Recent executions</div>
+                <div className="text-2xl font-semibold mt-2">{platformSummary.executionsTotal}</div>
+                <div className="text-xs text-slate-400 mt-1">{platformSummary.awaitingReviewExecutions} awaiting review · {platformSummary.runningExecutions} running.</div>
+              </div>
+            </div>
+
+            <div className="rounded border border-slate-800 bg-slate-900 p-4">
+              <div className="text-xs uppercase tracking-wider text-slate-500">Platform direction</div>
+              <div className="text-sm text-slate-300 mt-2">Mission Control is transitioning into a multi-project platform shell while preserving deterministic operator workflows. Emperor_OS remains the active legacy project during migration.</div>
+              {!platformValidation.ok && (
+                <div className="mt-2 text-xs text-red-300 border border-red-900/70 bg-red-950/30 rounded p-2">Platform seed validation error: {platformValidation.errors.join(' | ')}</div>
+              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button onClick={() => setPlatformSection('projects')} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">View projects</button>
+                <button onClick={() => { setPlatformSection('executions'); setTab('mission') }} className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30">Open Emperor_OS legacy workspace</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {platformSection === 'projects' && (
+          <div className="space-y-3">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Project verticals</div>
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {platformProjects.map((project) => (
+                <div key={project.id} className="rounded border border-slate-800 bg-slate-900 p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold text-slate-100">{project.name}</div>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${project.status === 'active-legacy' ? 'text-green-300 border-green-700/60 bg-green-950/40' : 'text-amber-300 border-amber-700/60 bg-amber-950/40'}`}>
+                      {project.status === 'active-legacy' ? 'active legacy' : 'planned scaffold'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400">{project.description}</div>
+                  <div className="text-[11px] text-slate-500">adapter: {project.adapterKey} · deterministic: {project.supportsDeterministic ? 'yes' : 'no'} · agent runtime: {project.supportsAgentRuntime ? 'yes' : 'no'}</div>
+                  {project.slug === 'emperor-os' && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button onClick={() => { setPlatformSection('executions'); setTab('mission') }} className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30">Open embedded legacy workspace</button>
+                      {project.legacyUrl && (
+                        <a href={project.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
+                      )}
+                    </div>
+                  )}
+                  {project.slug === 'polymarket' && (
+                    <div className="text-xs text-slate-500 border border-slate-800 rounded p-2">Scaffold only. Runtime integration and execution lanes intentionally deferred.</div>
+                  )}
+                  {project.slug === 'future-placeholder' && (
+                    <div className="text-xs text-slate-500 border border-slate-800 rounded p-2">Placeholder for future project verticals. No runtime hooks yet.</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {platformSection === 'runtimes' && (
+          <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300 space-y-3">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Runtimes</div>
+            <div className="text-xs text-slate-400">Seeded runtime records only. TODO: add deterministic runtime registry read API when backend model is ready.</div>
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
+              {platformRuntimes.map((runtime) => (
+                <div key={runtime.id} className="rounded border border-slate-800 p-3 bg-slate-950/40 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm text-slate-100 font-medium">{runtime.name}</div>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${runtime.status === 'connected' ? 'text-green-300 border-green-700/60 bg-green-950/40' : 'text-amber-300 border-amber-700/60 bg-amber-950/40'}`}>{runtime.status}</span>
+                  </div>
+                  <div className="text-xs text-slate-400">provider: {runtime.provider} · endpoint: {runtime.endpointType}</div>
+                  <div className="text-xs text-slate-500">workspace: {runtime.workspaceRoot}</div>
+                  <div className="text-xs text-slate-500">scopes: {runtime.projectScopes.join(', ') || 'none'}</div>
+                  <div className="text-[11px] text-slate-500">deterministic ops: {runtime.supportsDeterministicOps ? 'yes' : 'no'} · interactive ops: {runtime.supportsInteractiveAgentOps ? 'yes' : 'no'} · signing: no</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {platformSection === 'skills' && (
+          <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300 space-y-3">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Skills</div>
+            <div className="text-xs text-slate-400">Seeded skill records only. TODO: wire versioned skill catalog and persistence when platform backend is introduced.</div>
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
+              {platformSkills.map((skill) => (
+                <div key={skill.id} className="rounded border border-slate-800 p-3 bg-slate-950/40 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm text-slate-100 font-medium">{skill.name}</div>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${skill.status === 'active' ? 'text-green-300 border-green-700/60 bg-green-950/40' : 'text-amber-300 border-amber-700/60 bg-amber-950/40'}`}>{skill.status}</span>
+                  </div>
+                  <div className="text-xs text-slate-400">kind: {skill.kind} · scope: {skill.scope}</div>
+                  <div className="text-xs text-slate-500">slug: {skill.slug}</div>
+                  <div className="text-xs text-slate-500">version: {skill.version}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {platformSection === 'settings' && (
+          <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Settings</div>
+            <div className="mt-2">Platform-level settings are scaffolded only in this phase. TODO: add project/runtimes/skill preferences with deterministic persistence.</div>
+          </div>
+        )}
+
+        {platformSection === 'executions' && (
+          <>
+        <div className="rounded border border-slate-800 bg-slate-900 p-3 mb-3">
+          <div className="text-xs uppercase tracking-wider text-slate-500">Seeded platform executions</div>
+          <div className="mt-2 grid md:grid-cols-2 xl:grid-cols-3 gap-2">
+            {platformExecutions.map((execution) => (
+              <div key={execution.id} className="rounded border border-slate-800 bg-slate-950/50 p-2 text-xs space-y-1">
+                <div className="text-slate-200 font-medium">{execution.id}</div>
+                <div className="text-slate-400">status: {execution.status}</div>
+                <div className="text-slate-500">project: {execution.projectId}</div>
+                <div className="text-slate-500">runtime: {execution.runtimeId}</div>
+                <div className="text-slate-500">deterministic steps: {execution.deterministicStepCount} · llm calls: {execution.llmCallCount}</div>
+                <div className="text-slate-500">approval required: {execution.approvalRequired ? 'yes' : 'no'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded border border-blue-900/50 bg-blue-950/20 p-3 mb-3">
+          <div className="text-xs uppercase tracking-wider text-blue-300">Executions · Emperor_OS legacy workspace</div>
+          <div className="text-xs text-slate-300 mt-1">This section preserves the current Mission Control execution workflows during platform-shell migration.</div>
+        </div>
         <div className="grid grid-cols-4 gap-2 mb-4">
           <MetricCard label="Total" value={loading ? '—' : jobsDesc.length} />
           <MetricCard label="Assigned" value={loading ? '—' : assigned.length} color="text-blue-400" />
@@ -393,6 +568,8 @@ export default function App() {
         )}
         </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   )

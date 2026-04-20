@@ -14,6 +14,37 @@ This app is focused on sign-only operator workflows:
 
 No AGI Alpha MCP dependency is required at runtime.
 
+## Platform shell transition (Task 1)
+
+Mission Control now includes a top-level multi-project platform shell with sections:
+- Dashboard
+- Projects
+- Runtimes
+- Skills
+- Executions
+- Settings
+
+Notes:
+- `Executions` preserves the existing Emperor_OS Mission Control workflows (legacy workspace) with no signing-boundary changes.
+- `Projects` includes Emperor_OS, Polymarket (scaffold), and a coming-soon placeholder.
+- Emperor_OS card provides both an embedded legacy workspace path and an external legacy link: `https://emperor-os.onrender.com/`.
+- Runtimes/Skills/Settings are intentionally scaffold placeholders in this phase.
+
+## Platform entities (Task 2 foundation)
+
+Mission Control now includes typed platform entities and seeded local records in frontend modules:
+- Models: `src/models/platform.js`
+- Seed data: `src/state/platform-seed.js`
+- Hook/data access: `src/hooks/usePlatformData.js`
+
+Entity fields are explicit and extensible:
+- Project: `id`, `slug`, `name`, `status`, `adapterKey`, capability flags, optional `legacyUrl`
+- Runtime: `id`, `name`, `provider`, `endpointType`, `status`, `workspaceRoot`, `projectScopes`, capability flags, `supportsSigning=false`
+- Skill: `id`, `slug`, `name`, `kind`, `scope`, `version`, `status`
+- Execution: `id`, `projectId`, `runtimeId`, `status`, `deterministicStepCount`, `llmCallCount`, `approvalRequired`, `createdAt`
+
+Current data source is intentionally local/read-only seed data (no database, no write API).
+
 ## Deterministic core vs external agent boundary
 
 **Deterministic core (Emperor_OS + Mission Control):**
