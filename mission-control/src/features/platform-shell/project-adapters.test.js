@@ -21,6 +21,8 @@ test('adapter metadata exposes shell/project capability contract', () => {
   assert.equal(emperor.supportsDeterministic, true)
   assert.equal(emperor.supportsHumanSigning, true)
   assert.equal(emperor.legacyEntry?.embeddedSectionKey, 'executions')
+  assert.equal(emperor.legacyUrl, null)
+  assert.equal(emperor.legacyEntry?.externalUrl, undefined)
   assert.equal(emperor.doctrine?.signingAuthority, 'human-only')
   assert.ok(Array.isArray(emperor.requestTypes) && emperor.requestTypes.includes('agijobmanager-v2'))
 

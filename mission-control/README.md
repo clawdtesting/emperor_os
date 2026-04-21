@@ -29,8 +29,8 @@ Notes:
   - `Overview` (informational-only seeded execution table)
   - `Legacy workspace` (existing Emperor_OS Mission Control execution flows)
 - `Projects` includes Emperor_OS, Polymarket (scaffold), and a coming-soon placeholder.
-- Emperor_OS card provides both an embedded legacy workspace path and an external legacy link: `https://emperor-os.onrender.com/`.
-- External legacy opens are intentional transition behavior (not a broken split).
+- Emperor_OS card provides an embedded legacy workspace path in-app.
+- Separate external legacy deployment is not enabled in this environment.
 
 ## Platform entities (Task 2 foundation)
 
@@ -84,8 +84,9 @@ Architecture note: `docs/platform-shell-project-adapters.md`
 1. Platform shell is the top-level navigation and project catalog.
 2. Project adapters declare project metadata, doctrine flags, and legacy entry points.
 3. Executions overview is informational-only and deterministic-read model driven.
-4. Emperor_OS legacy workspace remains embedded and externally openable for live operations.
-5. Polymarket remains scaffold-only until adapter execution planning and validation hooks are implemented.
+4. Emperor_OS legacy workspace remains embedded for live operations.
+5. Separate external legacy deployment is not enabled in this environment.
+6. Polymarket remains scaffold-only until adapter execution planning and validation hooks are implemented.
 
 ## Deterministic core vs external agent boundary
 

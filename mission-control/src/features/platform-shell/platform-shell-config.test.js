@@ -22,7 +22,7 @@ test('platform projects include emperor_os legacy destination and scaffold proje
 
   const emperor = PROJECTS.find((project) => project.key === 'emperor-os')
   assert.ok(emperor)
-  assert.equal(emperor.legacyUrl, 'https://emperor-os.onrender.com/')
+  assert.equal(emperor.legacyUrl, null)
   assert.equal(emperor.status, 'active-legacy')
 
   const polymarket = PROJECTS.find((project) => project.key === 'polymarket')
@@ -31,8 +31,8 @@ test('platform projects include emperor_os legacy destination and scaffold proje
   assert.equal(polymarket.scaffoldOnly, true)
 })
 
-test('legacyProjectLink returns deterministic external URL for Emperor_OS card', () => {
-  assert.equal(legacyProjectLink('emperor-os'), 'https://emperor-os.onrender.com/')
+test('legacyProjectLink is null when separate external legacy deployment is not configured', () => {
+  assert.equal(legacyProjectLink('emperor-os'), null)
   assert.equal(legacyProjectLink('polymarket'), null)
 })
 

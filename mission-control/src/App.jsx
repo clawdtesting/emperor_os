@@ -253,13 +253,10 @@ export default function App() {
                       >
                         Open embedded legacy workspace
                       </button>
-                      {(project.legacyEntry.externalUrl || project.legacyUrl) && (
-                        <a href={project.legacyEntry.externalUrl || project.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
-                      )}
                     </div>
                   )}
-                  {(project.legacyEntry?.externalUrl || project.legacyUrl) && (
-                    <div className="text-[11px] text-slate-500">Transition note: external legacy app stays available during platform-shell migration; this split is intentional.</div>
+                  {project.legacyEntry?.embeddedSectionKey && (
+                    <div className="text-[11px] text-slate-500">Legacy workspace remains available in-app during migration. Separate external legacy deployment is not enabled in this environment.</div>
                   )}
                   {project.scaffoldNote && (
                     <div className="text-xs text-slate-500 border border-slate-800 rounded p-2">{project.scaffoldNote}</div>
@@ -328,20 +325,15 @@ export default function App() {
             <div className="text-xs text-slate-400">This section explains the migration state. Preferences are not persisted yet.</div>
             <div className="rounded border border-slate-800 bg-slate-950/40 p-3 text-xs space-y-1">
               <div className="text-slate-200">Platform shell is now the top-level entrypoint.</div>
-              <div className="text-slate-400">{primaryLegacyProject?.name || 'Legacy project'} remains available through embedded legacy workspace and external legacy app links.</div>
+              <div className="text-slate-400">{primaryLegacyProject?.name || 'Legacy project'} remains available through embedded in-app legacy workspace.</div>
               <div className="text-slate-400">Polymarket is planned scaffold only in this phase.</div>
               <div className="text-slate-400">Runtime and skills registries are seeded/read-only scaffolds for future expansion.</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={openExecutionOverview} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open executions overview</button>
               <button onClick={openLegacyWorkspace} className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30">Open legacy workspace</button>
-              {primaryLegacyProject?.legacyUrl && (
-                <a href={primaryLegacyProject.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
-              )}
             </div>
-            {primaryLegacyProject?.legacyUrl && (
-              <div className="text-[11px] text-slate-500">Transition note: using the external legacy app is expected during migration and does not indicate a broken route.</div>
-            )}
+            <div className="text-[11px] text-slate-500">Separate external legacy deployment is not enabled in this environment.</div>
           </div>
         )}
 
@@ -356,14 +348,9 @@ export default function App() {
             <div className="flex flex-wrap gap-2">
               <button onClick={() => setExecutionView('overview')} className={`text-xs px-2 py-1 rounded border ${executionView === 'overview' ? 'border-blue-500/50 bg-blue-600/20 text-blue-200' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}>Overview</button>
               <button onClick={() => setExecutionView('legacy')} className={`text-xs px-2 py-1 rounded border ${executionView === 'legacy' ? 'border-blue-500/50 bg-blue-600/20 text-blue-200' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}>Legacy workspace</button>
-              {primaryLegacyProject?.legacyUrl && (
-                <a href={primaryLegacyProject.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
-              )}
             </div>
           </div>
-          {primaryLegacyProject?.legacyUrl && (
-            <div className="text-[11px] text-slate-500">Transition note: external legacy app remains intentionally available while shell migration is in progress.</div>
-          )}
+          <div className="text-[11px] text-slate-500">Legacy workspace is in-app during migration. Separate external legacy deployment is not enabled in this environment.</div>
         </div>
 
         {executionView === 'overview' && (

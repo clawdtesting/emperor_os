@@ -13,10 +13,8 @@ export class EmperorOsAdapter extends ProjectAdapter {
       supportsAgentRuntime: true,
       supportsHumanSigning: true,
       requestTypes: ['agijobmanager-v1', 'agijobmanager-v2', 'agiprimediscovery', 'agijobmanager-prime'],
-      legacyUrl: 'https://emperor-os.onrender.com/',
       legacyEntry: {
         embeddedSectionKey: 'executions',
-        externalUrl: 'https://emperor-os.onrender.com/',
       },
       doctrine: {
         deterministicCoreAuthoritative: true,

@@ -38,7 +38,8 @@ These are declarations, not bypasses. Runtime authority remains unchanged.
 - `Executions` section intentionally splits into:
   - informational `Overview` table (seeded typed records)
   - `Legacy workspace` (current Emperor_OS operational lanes)
-- External legacy app links include explicit transition messaging to avoid false "broken split" interpretation.
+- Legacy workspace is intentionally in-app during this migration stage.
+- Separate external legacy deployment is not enabled in this environment.
 - `Runtimes` and `Skills` remain registry scaffolds (read-only) to keep extension path obvious without fake backend wiring.
 
 ## Migration path summary
