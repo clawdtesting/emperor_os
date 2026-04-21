@@ -80,6 +80,13 @@ export async function fetchHealthStatus() {
   return data
 }
 
+export async function fetchRuntimeDetection() {
+  const res = await fetch(BASE + '/api/runtime/detect')
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to detect runtimes')
+  return data
+}
+
 export async function fetchActions(filter = 'pending') {
   const res = await fetch(BASE + '/api/actions?filter=' + filter)
   if (!res.ok) throw new Error('HTTP ' + res.status)

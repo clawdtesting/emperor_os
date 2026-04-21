@@ -69,9 +69,10 @@ Workflow note: `docs/orchestrator-chat-alpha-v0-op-control-workflow.md`
 
 - Runtime cards are backed by seeded typed records (`PLATFORM_SEED_DATA.runtimes`).
 - Registry fields define provider, endpoint type, workspace root, project scopes, and capability flags.
-- Registry is currently read-only scaffold data.
+- Registry metadata is read-only scaffold data, but Hermes/OpenClaw availability is detected live from backend checks.
 - No runtime in this phase has signing authority (`supportsSigning=false` everywhere).
-- Future phase: live heartbeat + deterministic backend registry endpoint.
+- Runtime detection endpoint: `GET /api/runtime/detect` returns `{ hermes, openclaw }` with `available` and optional `path`.
+- Detection uses safe binary lookup (`which`/`where`) only; it does not execute any runtime agent.
 
 ## Skills registry concept
 
@@ -119,6 +120,7 @@ Workflow note: `docs/orchestrator-chat-alpha-v0-op-control-workflow.md`
 
 Existing routes remain unchanged. New agent routes:
 
+- `GET /api/runtime/detect`
 - `GET /api/agent-connections`
 - `POST /api/agent-connections`
 - `POST /api/agent-connections/test`

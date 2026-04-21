@@ -121,6 +121,65 @@ function appendOperatorTransitionLog(entry) {
   }) + '\n')
 }
 
+function detectRuntimeBinary(binaryName) {
+  return new Promise((resolveDetection) => {
+    const locatorCmd = process.platform === 'win32' ? 'where' : 'which'
+    const proc = spawn(locatorCmd, [binaryName], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
+
+    let stdout = ''
+    let stderr = ''
+    proc.stdout.on('data', (chunk) => {
+      stdout += String(chunk || '')
+    })
+    proc.stderr.on('data', (chunk) => {
+      stderr += String(chunk || '')
+    })
+    proc.on('error', (err) => {
+      resolveDetection({
+        available: false,
+        error: String(err?.message || err || 'runtime detection failed'),
+      })
+    })
+    proc.on('close', (code) => {
+      const lines = stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      if (code === 0 && lines.length > 0) {
+        resolveDetection({ available: true, path: lines[0] })
+        return
+      }
+
+      const errorDetail = stderr.trim()
+      resolveDetection({
+        available: false,
+        error: errorDetail || `${binaryName} not found`,
+      })
+    })
+  })
+}
+
+async function buildRuntimeDetection() {
+  const [hermes, openclaw] = await Promise.all([
+    detectRuntimeBinary('hermes'),
+    detectRuntimeBinary('openclaw'),
+  ])
+
+  return {
+    hermes: {
+      available: Boolean(hermes.available),
+      ...(hermes.path ? { path: hermes.path } : {}),
+    },
+    openclaw: {
+      available: Boolean(openclaw.available),
+      ...(openclaw.path ? { path: openclaw.path } : {}),
+    },
+  }
+}
+
 function extractNumericJobId(rawJobId) {
   const raw = String(rawJobId || '').trim()
   if (!raw) return null
@@ -1296,6 +1355,19 @@ app.get('/health', async (_, res) => {
       pinataConfigured: pinataReady,
     },
   })
+})
+
+app.get('/api/runtime/detect', async (_req, res) => {
+  try {
+    const detection = await buildRuntimeDetection()
+    return res.json(detection)
+  } catch (err) {
+    return res.status(500).json({
+      error: err?.message || String(err || 'runtime detection failed'),
+      hermes: { available: false },
+      openclaw: { available: false },
+    })
+  }
 })
 
 // ── ENS reverse lookup proxy (avoids browser CORS / rate-limits) ──────────────
