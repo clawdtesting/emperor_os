@@ -36,7 +36,7 @@ test('adapter metadata exposes shell/project capability contract', () => {
   assert.ok(orchestrator)
   assert.equal(orchestrator.status, 'planned')
   assert.equal(orchestrator.supportsHumanSigning, false)
-  assert.equal(orchestrator.scaffoldNote, 'Scaffold only. Render deployment target not yet configured in Op-control.')
+  assert.equal(orchestrator.scaffoldNote, 'Scaffold only. Render deployment target not yet configured in Op-control. Requires MetaMask-compatible browser wallet.')
 })
 
 test('adapter placeholders are explicit and non-authoritative for execution hooks', () => {

@@ -23,6 +23,7 @@ import { AgentRunPanel } from './components/AgentRunPanel'
 import { AgentResultReviewPanel } from './components/AgentResultReviewPanel'
 import { PLATFORM_NAV_SECTIONS } from './models/platform'
 import { usePlatformData } from './hooks/usePlatformData'
+import { useRuntimeDetection } from './hooks/useRuntimeDetection'
 
 function compareJobIdDesc(a, b) {
   try {
@@ -58,6 +59,13 @@ function executionStatusTone(status) {
   return 'text-slate-300 border-slate-700/60 bg-slate-900/40'
 }
 
+function getRuntimeDetectionEntry(runtimeDetection, provider) {
+  const key = String(provider || '').toLowerCase()
+  if (key === 'hermes') return runtimeDetection.hermes
+  if (key === 'openclaw') return runtimeDetection.openclaw
+  return null
+}
+
 export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
   const actionsModel = useActions()
@@ -72,6 +80,7 @@ export default function App() {
   const wallet = useWallet()
   const enableTestMode = String(import.meta.env.VITE_ENABLE_TEST_MODE || '').toLowerCase() === 'true'
   const { data: platformData, summary: platformSummary, validation: platformValidation } = usePlatformData()
+  const runtimeDetection = useRuntimeDetection()
 
   const assigned  = jobs.filter(j => j.status === 'Assigned')
   const completed = jobs.filter(j => j.status === 'Completed')
@@ -99,6 +108,7 @@ export default function App() {
   const primaryLegacyProject = legacyProjects[0] || null
   const projectNameById = Object.fromEntries(platformProjects.map((project) => [project.id, project.name]))
   const runtimeNameById = Object.fromEntries(platformRuntimes.map((runtime) => [runtime.id, runtime.name]))
+  const detectedRuntimeCount = runtimeDetection.availableCount
 
   function handleSelectJob(job) {
     setSelected(job)
@@ -193,9 +203,12 @@ export default function App() {
                 <div className="text-xs text-slate-400 mt-1">{platformSummary.activeProjects} active legacy · {platformSummary.plannedProjects} planned</div>
               </div>
               <div className="rounded border border-slate-800 bg-slate-900 p-3">
-                <div className="text-xs uppercase tracking-wider text-slate-500">Connected runtimes</div>
-                <div className="text-2xl font-semibold mt-2">{platformSummary.connectedRuntimes}</div>
-                <div className="text-xs text-slate-400 mt-1">{platformSummary.plannedRuntimes} planned runtime records from local platform seed data.</div>
+                <div className="text-xs uppercase tracking-wider text-slate-500">Detected runtimes</div>
+                <div className="text-2xl font-semibold mt-2">{runtimeDetection.loading ? '…' : detectedRuntimeCount}</div>
+                <div className="text-xs text-slate-400 mt-1">
+                  {platformSummary.plannedRuntimes} planned runtime records from local platform seed data.
+                  {runtimeDetection.error ? ` Detection error: ${runtimeDetection.error}` : ''}
+                </div>
               </div>
               <div className="rounded border border-slate-800 bg-slate-900 p-3">
                 <div className="text-xs uppercase tracking-wider text-slate-500">Skills</div>
@@ -271,23 +284,48 @@ export default function App() {
         {platformSection === 'runtimes' && (
           <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300 space-y-3">
             <div className="text-xs uppercase tracking-wider text-slate-500">Runtimes</div>
-            <div className="text-xs text-slate-400">Runtime registry (seeded, read-only). Records define provider, endpoint type, workspace scope, and capability flags. TODO: add live heartbeat and deterministic runtime registry API.</div>
+            <div className="text-xs text-slate-400">Runtime registry is seeded/read-only for metadata. Hermes/OpenClaw availability is detected live from backend runtime checks (`/api/runtime/detect`).</div>
             <div className="grid md:grid-cols-3 gap-2 text-xs">
-              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">connected: <span className="text-slate-200">{platformSummary.connectedRuntimes}</span></div>
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">detected: <span className="text-slate-200">{runtimeDetection.loading ? '…' : detectedRuntimeCount}</span></div>
               <div className="rounded border border-slate-800 bg-slate-950/40 p-2">planned: <span className="text-slate-200">{platformSummary.plannedRuntimes}</span></div>
               <div className="rounded border border-slate-800 bg-slate-950/40 p-2">signing support: <span className="text-slate-200">none (human-only boundary)</span></div>
             </div>
+            {runtimeDetection.error && (
+              <div className="text-xs text-amber-300 border border-amber-900/70 bg-amber-950/20 rounded p-2">
+                Runtime detection temporarily unavailable: {runtimeDetection.error}
+              </div>
+            )}
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
               {platformRuntimes.map((runtime) => (
                 <div key={runtime.id} className="rounded border border-slate-800 p-3 bg-slate-950/40 space-y-1">
+                  {(() => {
+                    const detection = getRuntimeDetectionEntry(runtimeDetection.data, runtime.provider)
+                    const liveStatus = detection
+                      ? (detection.available ? 'available' : 'not found')
+                      : (runtime.status === 'planned' ? 'planned' : 'configured')
+                    const liveTone = detection
+                      ? (detection.available
+                        ? 'text-green-300 border-green-700/60 bg-green-950/40'
+                        : 'text-amber-300 border-amber-700/60 bg-amber-950/40')
+                      : (runtime.status === 'planned'
+                        ? 'text-amber-300 border-amber-700/60 bg-amber-950/40'
+                        : 'text-slate-300 border-slate-700/60 bg-slate-900/40')
+                    return (
+                      <>
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm text-slate-100 font-medium">{runtime.name}</div>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${runtime.status === 'connected' ? 'text-green-300 border-green-700/60 bg-green-950/40' : 'text-amber-300 border-amber-700/60 bg-amber-950/40'}`}>{runtime.status}</span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full border ${liveTone}`}>{liveStatus}</span>
                   </div>
                   <div className="text-xs text-slate-400">provider: {runtime.provider} · endpoint: {runtime.endpointType}</div>
                   <div className="text-xs text-slate-500">workspace: {runtime.workspaceRoot}</div>
                   <div className="text-xs text-slate-500">scopes: {runtime.projectScopes.join(', ') || 'none'}</div>
+                  {detection && (
+                    <div className="text-[11px] text-slate-500">detected path: {detection.path || 'not found'}</div>
+                  )}
                   <div className="text-[11px] text-slate-500">deterministic ops: {runtime.supportsDeterministicOps ? 'yes' : 'no'} · interactive ops: {runtime.supportsInteractiveAgentOps ? 'yes' : 'no'} · signing: no</div>
+                      </>
+                    )
+                  })()}
                 </div>
               ))}
             </div>
