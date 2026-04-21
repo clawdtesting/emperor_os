@@ -43,6 +43,21 @@ function isClosedJobStatus(status) {
   return s === 'completed' || s === 'closed' || s === 'cancelled' || s === 'canceled' || s === 'done'
 }
 
+function formatExecutionCreatedAt(value) {
+  const ts = Date.parse(String(value || ''))
+  if (!Number.isFinite(ts)) return String(value || '—')
+  return new Date(ts).toLocaleString()
+}
+
+function executionStatusTone(status) {
+  const value = String(status || '').toLowerCase()
+  if (value === 'succeeded') return 'text-green-300 border-green-700/60 bg-green-950/40'
+  if (value === 'running') return 'text-blue-300 border-blue-700/60 bg-blue-950/40'
+  if (value === 'awaiting_review') return 'text-amber-300 border-amber-700/60 bg-amber-950/40'
+  if (value === 'failed') return 'text-red-300 border-red-700/60 bg-red-950/40'
+  return 'text-slate-300 border-slate-700/60 bg-slate-900/40'
+}
+
 export default function App() {
   const { jobs, loading, error, countdown, events, refetch } = useJobs()
   const actionsModel = useActions()
@@ -52,6 +67,7 @@ export default function App() {
   const [packetPreview, setPacketPreview] = useState(null)
   const [agentReview, setAgentReview] = useState(null)
   const [platformSection, setPlatformSection] = useState('dashboard')
+  const [executionView, setExecutionView] = useState('overview')
   const [tab, setTab] = useState('mission')
   const wallet = useWallet()
   const enableTestMode = String(import.meta.env.VITE_ENABLE_TEST_MODE || '').toLowerCase() === 'true'
@@ -79,6 +95,10 @@ export default function App() {
   const platformRuntimes = platformData.runtimes
   const platformSkills = platformData.skills
   const platformExecutions = platformData.executions
+  const legacyProjects = platformProjects.filter((project) => project.status === 'active-legacy')
+  const primaryLegacyProject = legacyProjects[0] || null
+  const projectNameById = Object.fromEntries(platformProjects.map((project) => [project.id, project.name]))
+  const runtimeNameById = Object.fromEntries(platformRuntimes.map((runtime) => [runtime.id, runtime.name]))
 
   function handleSelectJob(job) {
     setSelected(job)
@@ -104,6 +124,17 @@ export default function App() {
     handleOpenOperatorEntity(actionItem, jobsSnapshot)
   }
 
+  function openExecutionOverview() {
+    setPlatformSection('executions')
+    setExecutionView('overview')
+  }
+
+  function openLegacyWorkspace() {
+    setPlatformSection('executions')
+    setExecutionView('legacy')
+    setTab('mission')
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200">
       <div className="border-b border-slate-800 px-4 py-3 flex flex-col gap-3">
@@ -112,7 +143,7 @@ export default function App() {
             <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">⬡</div>
             <div>
               <div className="text-sm font-semibold leading-tight">Op-control Platform Shell</div>
-              <div className="text-xs text-slate-500 leading-tight break-words">Deterministic operator platform with legacy Emperor_OS Mission Control preserved during migration</div>
+              <div className="text-xs text-slate-500 leading-tight break-words">Deterministic operator platform shell with adapter-backed project metadata and preserved legacy execution workspace</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -129,7 +160,10 @@ export default function App() {
           {PLATFORM_NAV_SECTIONS.map((section) => (
             <button
               key={section.key}
-              onClick={() => setPlatformSection(section.key)}
+              onClick={() => {
+                setPlatformSection(section.key)
+                if (section.key === 'executions') setExecutionView('overview')
+              }}
               className={`w-full text-left px-3 py-2 text-xs rounded border transition-colors ${
                 platformSection === section.key
                   ? 'text-white bg-blue-600/25 border-blue-500/50'
@@ -177,13 +211,14 @@ export default function App() {
 
             <div className="rounded border border-slate-800 bg-slate-900 p-4">
               <div className="text-xs uppercase tracking-wider text-slate-500">Platform direction</div>
-              <div className="text-sm text-slate-300 mt-2">Mission Control is transitioning into a multi-project platform shell while preserving deterministic operator workflows. Emperor_OS remains the active legacy project during migration.</div>
+              <div className="text-sm text-slate-300 mt-2">Mission Control is transitioning into a multi-project platform shell while preserving deterministic operator workflows. Active legacy project: {primaryLegacyProject?.name || 'none'}.</div>
               {!platformValidation.ok && (
                 <div className="mt-2 text-xs text-red-300 border border-red-900/70 bg-red-950/30 rounded p-2">Platform seed validation error: {platformValidation.errors.join(' | ')}</div>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button onClick={() => setPlatformSection('projects')} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">View projects</button>
-                <button onClick={() => { setPlatformSection('executions'); setTab('mission') }} className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30">Open Emperor_OS legacy workspace</button>
+                <button onClick={openExecutionOverview} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">View executions</button>
+                <button onClick={openLegacyWorkspace} className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30">Open {primaryLegacyProject?.name || 'legacy'} workspace</button>
               </div>
             </div>
           </div>
@@ -202,21 +237,34 @@ export default function App() {
                     </span>
                   </div>
                   <div className="text-xs text-slate-400">{project.description}</div>
-                  <div className="text-[11px] text-slate-500">adapter: {project.adapterKey} · deterministic: {project.supportsDeterministic ? 'yes' : 'no'} · agent runtime: {project.supportsAgentRuntime ? 'yes' : 'no'}</div>
-                  {project.slug === 'emperor-os' && (
+                  <div className="text-[11px] text-slate-500">adapter: {project.adapterKey} · deterministic: {project.supportsDeterministic ? 'yes' : 'no'} · agent runtime: {project.supportsAgentRuntime ? 'yes' : 'no'} · human sign: {project.supportsHumanSigning ? 'yes' : 'no'}</div>
+                  <div className="text-[11px] text-slate-500">request types: {Array.isArray(project.requestTypes) && project.requestTypes.length > 0 ? project.requestTypes.join(', ') : 'none (scaffold)'}</div>
+                  {project.legacyEntry?.embeddedSectionKey && (
                     <div className="flex flex-wrap gap-2 pt-2">
-                      <button onClick={() => { setPlatformSection('executions'); setTab('mission') }} className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30">Open embedded legacy workspace</button>
-                      {project.legacyUrl && (
-                        <a href={project.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
+                      <button
+                        onClick={() => {
+                          if (project.legacyEntry.embeddedSectionKey === 'executions') {
+                            openLegacyWorkspace()
+                            return
+                          }
+                          setPlatformSection(project.legacyEntry.embeddedSectionKey)
+                        }}
+                        className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30"
+                      >
+                        Open embedded legacy workspace
+                      </button>
+                      {(project.legacyEntry.externalUrl || project.legacyUrl) && (
+                        <a href={project.legacyEntry.externalUrl || project.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
                       )}
                     </div>
                   )}
-                  {project.slug === 'polymarket' && (
-                    <div className="text-xs text-slate-500 border border-slate-800 rounded p-2">Scaffold only. Runtime integration and execution lanes intentionally deferred.</div>
+                  {(project.legacyEntry?.externalUrl || project.legacyUrl) && (
+                    <div className="text-[11px] text-slate-500">Transition note: external legacy app stays available during platform-shell migration; this split is intentional.</div>
                   )}
-                  {project.slug === 'future-placeholder' && (
-                    <div className="text-xs text-slate-500 border border-slate-800 rounded p-2">Placeholder for future project verticals. No runtime hooks yet.</div>
+                  {project.scaffoldNote && (
+                    <div className="text-xs text-slate-500 border border-slate-800 rounded p-2">{project.scaffoldNote}</div>
                   )}
+                  <div className="text-[11px] text-slate-500 border border-slate-800 rounded p-2">deterministic authoritative: {project.doctrine?.deterministicCoreAuthoritative ? 'yes' : 'no'} · external outputs untrusted until ingested: {project.doctrine?.externalOutputsUntrustedUntilIngested ? 'yes' : 'no'} · signing authority: {project.doctrine?.signingAuthority || 'n/a'} · irreversible requires review: {project.doctrine?.irreversibleActionsRequireHumanReview ? 'yes' : 'no'}</div>
                 </div>
               ))}
             </div>
@@ -226,7 +274,12 @@ export default function App() {
         {platformSection === 'runtimes' && (
           <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300 space-y-3">
             <div className="text-xs uppercase tracking-wider text-slate-500">Runtimes</div>
-            <div className="text-xs text-slate-400">Seeded runtime records only. TODO: add deterministic runtime registry read API when backend model is ready.</div>
+            <div className="text-xs text-slate-400">Runtime registry (seeded, read-only). Records define provider, endpoint type, workspace scope, and capability flags. TODO: add live heartbeat and deterministic runtime registry API.</div>
+            <div className="grid md:grid-cols-3 gap-2 text-xs">
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">connected: <span className="text-slate-200">{platformSummary.connectedRuntimes}</span></div>
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">planned: <span className="text-slate-200">{platformSummary.plannedRuntimes}</span></div>
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">signing support: <span className="text-slate-200">none (human-only boundary)</span></div>
+            </div>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
               {platformRuntimes.map((runtime) => (
                 <div key={runtime.id} className="rounded border border-slate-800 p-3 bg-slate-950/40 space-y-1">
@@ -247,7 +300,12 @@ export default function App() {
         {platformSection === 'skills' && (
           <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300 space-y-3">
             <div className="text-xs uppercase tracking-wider text-slate-500">Skills</div>
-            <div className="text-xs text-slate-400">Seeded skill records only. TODO: wire versioned skill catalog and persistence when platform backend is introduced.</div>
+            <div className="text-xs text-slate-400">Skills registry (seeded, read-only). Versioned records are displayed here as platform capability inventory. TODO: wire real skill manifests and persistence.</div>
+            <div className="grid md:grid-cols-3 gap-2 text-xs">
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">total: <span className="text-slate-200">{platformSummary.skillsTotal}</span></div>
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">deterministic: <span className="text-slate-200">{platformSummary.deterministicSkills}</span></div>
+              <div className="rounded border border-slate-800 bg-slate-950/40 p-2">llm-assisted: <span className="text-slate-200">{platformSummary.llmAssistedSkills}</span></div>
+            </div>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2">
               {platformSkills.map((skill) => (
                 <div key={skill.id} className="rounded border border-slate-800 p-3 bg-slate-950/40 space-y-1">
@@ -265,32 +323,97 @@ export default function App() {
         )}
 
         {platformSection === 'settings' && (
-          <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">
-            <div className="text-xs uppercase tracking-wider text-slate-500">Settings</div>
-            <div className="mt-2">Platform-level settings are scaffolded only in this phase. TODO: add project/runtimes/skill preferences with deterministic persistence.</div>
+          <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300 space-y-3">
+            <div className="text-xs uppercase tracking-wider text-slate-500">Settings / About</div>
+            <div className="text-xs text-slate-400">This section explains the migration state. Preferences are not persisted yet.</div>
+            <div className="rounded border border-slate-800 bg-slate-950/40 p-3 text-xs space-y-1">
+              <div className="text-slate-200">Platform shell is now the top-level entrypoint.</div>
+              <div className="text-slate-400">{primaryLegacyProject?.name || 'Legacy project'} remains available through embedded legacy workspace and external legacy app links.</div>
+              <div className="text-slate-400">Polymarket is planned scaffold only in this phase.</div>
+              <div className="text-slate-400">Runtime and skills registries are seeded/read-only scaffolds for future expansion.</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={openExecutionOverview} className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open executions overview</button>
+              <button onClick={openLegacyWorkspace} className="text-xs px-2 py-1 rounded border border-blue-700 text-blue-200 hover:bg-blue-950/30">Open legacy workspace</button>
+              {primaryLegacyProject?.legacyUrl && (
+                <a href={primaryLegacyProject.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
+              )}
+            </div>
+            {primaryLegacyProject?.legacyUrl && (
+              <div className="text-[11px] text-slate-500">Transition note: using the external legacy app is expected during migration and does not indicate a broken route.</div>
+            )}
           </div>
         )}
 
         {platformSection === 'executions' && (
           <>
-        <div className="rounded border border-slate-800 bg-slate-900 p-3 mb-3">
-          <div className="text-xs uppercase tracking-wider text-slate-500">Seeded platform executions</div>
-          <div className="mt-2 grid md:grid-cols-2 xl:grid-cols-3 gap-2">
-            {platformExecutions.map((execution) => (
-              <div key={execution.id} className="rounded border border-slate-800 bg-slate-950/50 p-2 text-xs space-y-1">
-                <div className="text-slate-200 font-medium">{execution.id}</div>
-                <div className="text-slate-400">status: {execution.status}</div>
-                <div className="text-slate-500">project: {execution.projectId}</div>
-                <div className="text-slate-500">runtime: {execution.runtimeId}</div>
-                <div className="text-slate-500">deterministic steps: {execution.deterministicStepCount} · llm calls: {execution.llmCallCount}</div>
-                <div className="text-slate-500">approval required: {execution.approvalRequired ? 'yes' : 'no'}</div>
-              </div>
-            ))}
+        <div className="rounded border border-slate-800 bg-slate-900 p-3 mb-3 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-slate-500">Executions</div>
+              <div className="text-xs text-slate-400 mt-1">Platform execution list is informational-only in this phase. Operator execution actions remain in the legacy workspace.</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setExecutionView('overview')} className={`text-xs px-2 py-1 rounded border ${executionView === 'overview' ? 'border-blue-500/50 bg-blue-600/20 text-blue-200' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}>Overview</button>
+              <button onClick={() => setExecutionView('legacy')} className={`text-xs px-2 py-1 rounded border ${executionView === 'legacy' ? 'border-blue-500/50 bg-blue-600/20 text-blue-200' : 'border-slate-700 text-slate-200 hover:bg-slate-800'}`}>Legacy workspace</button>
+              {primaryLegacyProject?.legacyUrl && (
+                <a href={primaryLegacyProject.legacyUrl} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-800">Open legacy app (external)</a>
+              )}
+            </div>
           </div>
+          {primaryLegacyProject?.legacyUrl && (
+            <div className="text-[11px] text-slate-500">Transition note: external legacy app remains intentionally available while shell migration is in progress.</div>
+          )}
         </div>
+
+        {executionView === 'overview' && (
+          <div className="rounded border border-slate-800 bg-slate-900 p-3 mb-3 space-y-3">
+            <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-2">
+              <MetricCard label="Executions" value={platformExecutions.length} />
+              <MetricCard label="Awaiting review" value={platformSummary.awaitingReviewExecutions} color="text-amber-400" />
+              <MetricCard label="Running" value={platformSummary.runningExecutions} color="text-blue-400" />
+              <MetricCard label="With approval gate" value={platformExecutions.filter((item) => item.approvalRequired).length} color="text-violet-400" />
+              <MetricCard label="Deterministic steps" value={platformExecutions.reduce((sum, item) => sum + Number(item.deterministicStepCount || 0), 0)} />
+              <MetricCard label="LLM calls" value={platformExecutions.reduce((sum, item) => sum + Number(item.llmCallCount || 0), 0)} color="text-fuchsia-400" />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-slate-500 border-b border-slate-800">
+                    <th className="text-left py-2 pr-3 font-medium">Execution</th>
+                    <th className="text-left py-2 pr-3 font-medium">Project</th>
+                    <th className="text-left py-2 pr-3 font-medium">Runtime</th>
+                    <th className="text-left py-2 pr-3 font-medium">Status</th>
+                    <th className="text-left py-2 pr-3 font-medium">Deterministic steps</th>
+                    <th className="text-left py-2 pr-3 font-medium">LLM calls</th>
+                    <th className="text-left py-2 pr-3 font-medium">Approval required</th>
+                    <th className="text-left py-2 pr-3 font-medium">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {platformExecutions.map((execution) => (
+                    <tr key={execution.id} className="border-b border-slate-900 last:border-b-0 text-slate-300">
+                      <td className="py-2 pr-3 font-mono text-[11px] text-slate-200">{execution.id}</td>
+                      <td className="py-2 pr-3">{projectNameById[execution.projectId] || execution.projectId}</td>
+                      <td className="py-2 pr-3">{runtimeNameById[execution.runtimeId] || execution.runtimeId}</td>
+                      <td className="py-2 pr-3"><span className={`text-[11px] px-2 py-0.5 rounded-full border ${executionStatusTone(execution.status)}`}>{execution.status}</span></td>
+                      <td className="py-2 pr-3">{execution.deterministicStepCount}</td>
+                      <td className="py-2 pr-3">{execution.llmCallCount}</td>
+                      <td className="py-2 pr-3">{execution.approvalRequired ? 'yes' : 'no'}</td>
+                      <td className="py-2 pr-3">{formatExecutionCreatedAt(execution.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {executionView === 'legacy' && (
+          <>
         <div className="rounded border border-blue-900/50 bg-blue-950/20 p-3 mb-3">
-          <div className="text-xs uppercase tracking-wider text-blue-300">Executions · Emperor_OS legacy workspace</div>
-          <div className="text-xs text-slate-300 mt-1">This section preserves the current Mission Control execution workflows during platform-shell migration.</div>
+          <div className="text-xs uppercase tracking-wider text-blue-300">Executions · {primaryLegacyProject?.name || 'legacy'} workspace</div>
+          <div className="text-xs text-slate-300 mt-1">Current Emperor_OS Mission Control flows remain active here during migration. Signing and broadcast authority remain human-only.</div>
         </div>
         <div className="grid grid-cols-4 gap-2 mb-4">
           <MetricCard label="Total" value={loading ? '—' : jobsDesc.length} />
@@ -568,6 +691,8 @@ export default function App() {
         )}
         </div>
         </div>
+          </>
+        )}
           </>
         )}
       </div>

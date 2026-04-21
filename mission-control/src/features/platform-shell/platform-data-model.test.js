@@ -67,3 +67,15 @@ test('buildPlatformSummary derives dashboard metrics from typed seed data', () =
   assert.equal(summary.executionsTotal, PLATFORM_SEED_DATA.executions.length)
   assert.ok(summary.awaitingReviewExecutions >= 1)
 })
+
+test('seeded executions include informational fields required by shell executions overview', () => {
+  PLATFORM_SEED_DATA.executions.forEach((execution) => {
+    assert.ok(typeof execution.projectId === 'string' && execution.projectId.length > 0)
+    assert.ok(typeof execution.runtimeId === 'string' && execution.runtimeId.length > 0)
+    assert.ok(typeof execution.status === 'string' && execution.status.length > 0)
+    assert.ok(Number.isFinite(execution.deterministicStepCount))
+    assert.ok(Number.isFinite(execution.llmCallCount))
+    assert.ok(typeof execution.approvalRequired === 'boolean')
+    assert.ok(Number.isFinite(Date.parse(execution.createdAt)))
+  })
+})

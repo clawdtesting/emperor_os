@@ -25,10 +25,12 @@ Mission Control now includes a top-level multi-project platform shell with secti
 - Settings
 
 Notes:
-- `Executions` preserves the existing Emperor_OS Mission Control workflows (legacy workspace) with no signing-boundary changes.
+- `Executions` now has two sub-views:
+  - `Overview` (informational-only seeded execution table)
+  - `Legacy workspace` (existing Emperor_OS Mission Control execution flows)
 - `Projects` includes Emperor_OS, Polymarket (scaffold), and a coming-soon placeholder.
 - Emperor_OS card provides both an embedded legacy workspace path and an external legacy link: `https://emperor-os.onrender.com/`.
-- Runtimes/Skills/Settings are intentionally scaffold placeholders in this phase.
+- External legacy opens are intentional transition behavior (not a broken split).
 
 ## Platform entities (Task 2 foundation)
 
@@ -44,6 +46,46 @@ Entity fields are explicit and extensible:
 - Execution: `id`, `projectId`, `runtimeId`, `status`, `deterministicStepCount`, `llmCallCount`, `approvalRequired`, `createdAt`
 
 Current data source is intentionally local/read-only seed data (no database, no write API).
+
+## Project adapter system (Task 4)
+
+Project metadata now comes from adapter definitions instead of static project cards:
+- Adapter contract: `src/adapters/projects/ProjectAdapter.js`
+- Registry: `src/adapters/projects/index.js`
+- Emperor_OS adapter: `src/adapters/projects/emperor-os/EmperorOsAdapter.js`
+- Polymarket scaffold adapter: `src/adapters/projects/polymarket/PolymarketAdapter.js`
+
+Shell views consume adapter-derived metadata for:
+- capability flags
+- request type declarations
+- doctrine flags
+- legacy entry points
+- scaffold notes
+
+Architecture note: `docs/platform-shell-project-adapters.md`
+
+## Runtime registry concept
+
+- Runtime cards are backed by seeded typed records (`PLATFORM_SEED_DATA.runtimes`).
+- Registry fields define provider, endpoint type, workspace root, project scopes, and capability flags.
+- Registry is currently read-only scaffold data.
+- No runtime in this phase has signing authority (`supportsSigning=false` everywhere).
+- Future phase: live heartbeat + deterministic backend registry endpoint.
+
+## Skills registry concept
+
+- Skills cards are backed by seeded typed records (`PLATFORM_SEED_DATA.skills`).
+- Each record has explicit `kind`, `scope`, `version`, and `status`.
+- Registry is currently read-only scaffold data for platform-level UX coherence.
+- Future phase: real skill manifests and deterministic persistence.
+
+## Migration path (current transition state)
+
+1. Platform shell is the top-level navigation and project catalog.
+2. Project adapters declare project metadata, doctrine flags, and legacy entry points.
+3. Executions overview is informational-only and deterministic-read model driven.
+4. Emperor_OS legacy workspace remains embedded and externally openable for live operations.
+5. Polymarket remains scaffold-only until adapter execution planning and validation hooks are implemented.
 
 ## Deterministic core vs external agent boundary
 

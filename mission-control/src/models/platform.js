@@ -39,7 +39,13 @@ export const PLATFORM_NAV_SECTIONS = Object.freeze([
  * @property {boolean} supportsDeterministic
  * @property {boolean} supportsAgentRuntime
  * @property {boolean} supportsHumanSigning
+ * @property {string[]=} requestTypes
  * @property {string=} legacyUrl
+ * @property {{embeddedSectionKey?: string, externalUrl?: string}=} legacyEntry
+ * @property {{deterministicCoreAuthoritative: boolean, externalOutputsUntrustedUntilIngested: boolean, signingAuthority: 'human-only', irreversibleActionsRequireHumanReview: boolean}=} doctrine
+ * @property {{supportsDeterministicExecutionPlanning: boolean, supportsDeterministicValidationHooks: boolean}=} futureHooks
+ * @property {string=} scaffoldNote
+ * @property {number=} displayOrder
  * @property {string=} description
  */
 
@@ -135,6 +141,9 @@ export function validatePlatformDataset(value) {
     if (typeof record.supportsAgentRuntime !== 'boolean') errors.push(`${prefix}.supportsAgentRuntime must be boolean`)
     if (typeof record.supportsHumanSigning !== 'boolean') errors.push(`${prefix}.supportsHumanSigning must be boolean`)
     if (hasOwn(record, 'legacyUrl') && record.legacyUrl != null && typeof record.legacyUrl !== 'string') errors.push(`${prefix}.legacyUrl must be string when set`)
+    if (hasOwn(record, 'requestTypes') && !Array.isArray(record.requestTypes)) errors.push(`${prefix}.requestTypes must be array when set`)
+    if (hasOwn(record, 'doctrine') && record.doctrine != null && typeof record.doctrine !== 'object') errors.push(`${prefix}.doctrine must be object when set`)
+    if (hasOwn(record, 'futureHooks') && record.futureHooks != null && typeof record.futureHooks !== 'object') errors.push(`${prefix}.futureHooks must be object when set`)
   })
 
   ;(runtimes || []).forEach((runtime, index) => {

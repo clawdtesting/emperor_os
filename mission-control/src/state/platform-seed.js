@@ -1,43 +1,9 @@
+import { getProjectsMetadataFromAdapters } from '../adapters/projects/index.js'
 import { validatePlatformDataset } from '../models/platform.js'
 
 /** @type {import('../models/platform').PlatformDataset} */
 export const PLATFORM_SEED_DATA = Object.freeze({
-  projects: Object.freeze([
-    Object.freeze({
-      id: 'project_emperor_os',
-      slug: 'emperor-os',
-      name: 'Emperor_OS',
-      status: 'active-legacy',
-      adapterKey: 'emperor_os',
-      supportsDeterministic: true,
-      supportsAgentRuntime: true,
-      supportsHumanSigning: true,
-      legacyUrl: 'https://emperor-os.onrender.com/',
-      description: 'Current operator-grade Mission Control workspace preserved as legacy executions experience.',
-    }),
-    Object.freeze({
-      id: 'project_polymarket',
-      slug: 'polymarket',
-      name: 'Polymarket',
-      status: 'planned',
-      adapterKey: 'polymarket',
-      supportsDeterministic: true,
-      supportsAgentRuntime: true,
-      supportsHumanSigning: false,
-      description: 'Planned market-operations vertical. Scaffold records only in this phase.',
-    }),
-    Object.freeze({
-      id: 'project_future_placeholder',
-      slug: 'future-placeholder',
-      name: 'Coming Soon',
-      status: 'planned',
-      adapterKey: 'future_placeholder',
-      supportsDeterministic: false,
-      supportsAgentRuntime: false,
-      supportsHumanSigning: false,
-      description: 'Reserved slot for future project vertical onboarding.',
-    }),
-  ]),
+  projects: Object.freeze(getProjectsMetadataFromAdapters().map((project) => Object.freeze({ ...project }))),
   runtimes: Object.freeze([
     Object.freeze({
       id: 'runtime_hermes_vps_main',
