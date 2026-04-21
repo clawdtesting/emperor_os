@@ -62,6 +62,7 @@ Render service settings:
 Current Dockerfile behavior:
 - base image: `node:20-bullseye-slim`
 - installs dependencies with `npm install`
+- builds before switching to `NODE_ENV=production` so TypeScript/Next build-time dev dependencies are available
 - runs `npm run build`
 - starts with `npm start`
 - exposes port `3000`
