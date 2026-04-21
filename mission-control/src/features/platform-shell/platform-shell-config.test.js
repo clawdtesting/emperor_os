@@ -18,7 +18,7 @@ test('platform shell exposes expected top-level navigation sections in order', (
 
 test('platform projects include emperor_os legacy destination and scaffold projects', () => {
   const projectKeys = PROJECTS.map((project) => project.key)
-  assert.deepEqual(projectKeys, ['emperor-os', 'polymarket', 'future-placeholder'])
+  assert.deepEqual(projectKeys, ['emperor-os', 'polymarket', 'orchestrator-chat-alpha-v0'])
 
   const emperor = PROJECTS.find((project) => project.key === 'emperor-os')
   assert.ok(emperor)
@@ -44,5 +44,5 @@ test('buildPlatformSummary returns deterministic dashboard counts from seed data
   assert.equal(summary.plannedProjects, 2)
   assert.equal(summary.connectedRuntimes, 2)
   assert.equal(summary.skillsTotal, 5)
-  assert.equal(summary.executionsTotal, 3)
+  assert.equal(summary.executionsTotal, 4)
 })

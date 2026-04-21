@@ -9,12 +9,12 @@ import {
 } from '../../adapters/projects/index.js'
 
 test('project adapter registry exposes deterministic adapter keys', () => {
-  assert.deepEqual(Object.keys(PROJECT_ADAPTER_REGISTRY), ['emperor_os', 'polymarket', 'future_placeholder'])
+  assert.deepEqual(Object.keys(PROJECT_ADAPTER_REGISTRY), ['emperor_os', 'polymarket', 'orchestrator_chat_alpha_v0'])
 })
 
 test('adapter metadata exposes shell/project capability contract', () => {
   const projects = getProjectsMetadataFromAdapters()
-  assert.deepEqual(projects.map((project) => project.slug), ['emperor-os', 'polymarket', 'future-placeholder'])
+  assert.deepEqual(projects.map((project) => project.slug), ['emperor-os', 'polymarket', 'orchestrator-chat-alpha-v0'])
 
   const emperor = projects.find((project) => project.slug === 'emperor-os')
   assert.ok(emperor)
@@ -31,6 +31,12 @@ test('adapter metadata exposes shell/project capability contract', () => {
   assert.equal(polymarket.status, 'planned')
   assert.equal(polymarket.supportsHumanSigning, false)
   assert.equal(polymarket.scaffoldNote, 'Scaffold only. Runtime integration and execution lanes intentionally deferred.')
+
+  const orchestrator = projects.find((project) => project.slug === 'orchestrator-chat-alpha-v0')
+  assert.ok(orchestrator)
+  assert.equal(orchestrator.status, 'planned')
+  assert.equal(orchestrator.supportsHumanSigning, false)
+  assert.equal(orchestrator.scaffoldNote, 'Scaffold only. Render deployment target not yet configured in Op-control.')
 })
 
 test('adapter placeholders are explicit and non-authoritative for execution hooks', () => {

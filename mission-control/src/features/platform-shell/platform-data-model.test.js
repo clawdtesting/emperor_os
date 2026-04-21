@@ -21,7 +21,7 @@ test('platform nav contains required sections in deterministic order', () => {
 })
 
 test('seeded projects, runtimes, skills, and executions match required base set', () => {
-  assert.deepEqual(PLATFORM_SEED_DATA.projects.map((item) => item.slug), ['emperor-os', 'polymarket', 'future-placeholder'])
+  assert.deepEqual(PLATFORM_SEED_DATA.projects.map((item) => item.slug), ['emperor-os', 'polymarket', 'orchestrator-chat-alpha-v0'])
   assert.deepEqual(PLATFORM_SEED_DATA.runtimes.map((item) => item.name), ['Hermes VPS Main', 'OpenClaw Local', 'Hosted Runtime Placeholder'])
   assert.deepEqual(PLATFORM_SEED_DATA.skills.map((item) => item.slug), [
     'deterministic-artifact-packaging',

@@ -28,7 +28,7 @@ Notes:
 - `Executions` now has two sub-views:
   - `Overview` (informational-only seeded execution table)
   - `Legacy workspace` (existing Emperor_OS Mission Control execution flows)
-- `Projects` includes Emperor_OS, Polymarket (scaffold), and a coming-soon placeholder.
+- `Projects` includes Emperor_OS, Polymarket (scaffold), and Orchestrator Chat Alpha v0 (scaffold).
 - Emperor_OS card provides an embedded legacy workspace path in-app.
 - Separate external legacy deployment is not enabled in this environment.
 
