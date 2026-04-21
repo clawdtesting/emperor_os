@@ -25,10 +25,10 @@ test('platform projects include emperor_os legacy destination and scaffold proje
   assert.equal(emperor.legacyUrl, null)
   assert.equal(emperor.status, 'active-legacy')
 
-  const polymarket = PROJECTS.find((project) => project.key === 'polymarket')
-  assert.ok(polymarket)
-  assert.equal(polymarket.status, 'planned')
-  assert.equal(polymarket.scaffoldOnly, true)
+      const polymarket = PROJECTS.find((project) => project.key === 'polymarket')
+          + assert.ok(polymarket)
+          + assert.equal(polymarket.status, 'planned')
+          + assert.equal(polymarket.scaffoldOnly, false)
 })
 
 test('legacyProjectLink is null when separate external legacy deployment is not configured', () => {

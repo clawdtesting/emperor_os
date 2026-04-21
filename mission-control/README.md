@@ -63,6 +63,7 @@ Shell views consume adapter-derived metadata for:
 - scaffold notes
 
 Architecture note: `docs/platform-shell-project-adapters.md`
+Workflow note: `docs/orchestrator-chat-alpha-v0-op-control-workflow.md`
 
 ## Runtime registry concept
 

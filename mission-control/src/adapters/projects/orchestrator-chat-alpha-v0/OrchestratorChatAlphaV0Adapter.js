@@ -8,7 +8,7 @@ export class OrchestratorChatAlphaV0Adapter extends ProjectAdapter {
       name: 'Orchestrator Chat Alpha v0',
       status: 'planned',
       adapterKey: 'orchestrator_chat_alpha_v0',
-      description: 'Planned orchestration vertical sourced from /Orchestrator-node/orchestratorchatalphav0 with Render onboarding pending.',
+      description: 'Planned orchestration vertical sourced from /Orchestrator-node/orchestratorchatalphav0 with Render onboarding pending and MetaMask required for browser access.',
       supportsDeterministic: true,
       supportsAgentRuntime: true,
       supportsHumanSigning: false,
@@ -23,7 +23,7 @@ export class OrchestratorChatAlphaV0Adapter extends ProjectAdapter {
         supportsDeterministicExecutionPlanning: false,
         supportsDeterministicValidationHooks: false,
       },
-      scaffoldNote: 'Scaffold only. Render deployment target not yet configured in Op-control.',
+      scaffoldNote: 'Scaffold only. Render deployment target not yet configured in Op-control. Requires MetaMask-compatible browser wallet.',
       displayOrder: 30,
     })
   }
