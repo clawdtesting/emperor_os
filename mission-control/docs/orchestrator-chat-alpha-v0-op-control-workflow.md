@@ -44,20 +44,40 @@ From Op-control Projects page:
 
 ## Implementation workflow
 
-### Phase 1: Deploy the app on Render
+### Phase 1: Deploy the app on Render (Docker)
 
 Repository/app root:
 - root directory: `Orchestrator-node/orchestratorchatalphav0`
 
+Render service type:
+- Web Service using Docker
+
 Render service settings:
-- build command: `npm install && npm run build`
-- start command: `npm start`
+- root directory: `Orchestrator-node/orchestratorchatalphav0`
+- environment: `Docker`
+- Dockerfile: use the repo-local `Dockerfile`
+- build command: none in Render UI (Docker build handles this)
+- start command: none in Render UI (Docker `CMD ["npm", "start"]` handles this)
+
+Current Dockerfile behavior:
+- base image: `node:20-bullseye-slim`
+- installs dependencies with `npm install`
+- runs `npm run build`
+- starts with `npm start`
+- exposes port `3000`
+- sets `HOSTNAME=0.0.0.0` for container-friendly startup
+
+Recommended Docker follow-up:
+- add a lockfile and switch to `npm ci` for reproducible builds
+- verify no browser-only wallet assumptions are moved server-side
 
 Expected result:
 - a stable Render URL for the app
 - browser-accessible HTTPS endpoint suitable for MetaMask usage
+- deployment behavior controlled by the checked-in Dockerfile, not duplicated in Render commands
 
 Validation:
+- Render build succeeds from Dockerfile
 - landing page loads
 - MetaMask prompt appears in a browser with extension installed
 - app fails honestly in browsers without injected wallet
