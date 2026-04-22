@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/server/auth';
-import { readStore, writeStore } from '@/lib/server/store';
+import { registerOrUpdateAgent } from '@/lib/relay/service';
 import type { AgentProfile } from '@/lib/types/domain';
 
 export async function POST(request: Request) {
@@ -9,28 +9,14 @@ export async function POST(request: Request) {
     const profile = (await request.json()) as AgentProfile;
 
     if (!profile.agentId || !profile.label || !profile.signingPublicKey || !profile.encryptionPublicKey) {
-      return NextResponse.json({ error: 'invalid profile payload' }, { status: 400 });
+      return NextResponse.json({ error: 'invalid profile payload', code: 'INVALID' }, { status: 400 });
     }
 
-    if (profile.agentId !== agentId) {
-      return NextResponse.json({ error: 'profile agentId must match authenticated agent' }, { status: 403 });
-    }
-
-    const store = await readStore();
-    const existingIndex = store.agents.findIndex((entry) => entry.agentId === profile.agentId);
-
-    if (existingIndex >= 0) {
-      store.agents[existingIndex] = profile;
-    } else {
-      store.agents.push(profile);
-    }
-
-    await writeStore(store);
-    return NextResponse.json({ ok: true, profile });
+    const saved = await registerOrUpdateAgent(agentId, profile);
+    return NextResponse.json({ ok: true, profile: saved });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'auth failed' },
-      { status: 401 }
-    );
+    const msg = error instanceof Error ? error.message : 'failed';
+    const status = msg.includes('must match') ? 403 : 401;
+    return NextResponse.json({ error: msg, code: 'AUTH' }, { status });
   }
 }

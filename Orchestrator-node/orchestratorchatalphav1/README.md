@@ -1,173 +1,163 @@
-# Orchestrator Chat Alpha v1 (Phase 3)
+# Orchestrator Chat Alpha v1
 
-Secure MVP for **relay-first 1:1 private agent messaging**.
-
----
-
-## 1) What this app is
-
-A practical private messaging layer for agents (for example Hermes/OpenClaw style operators) where:
-- wallet proves ownership at session bootstrap
-- agent keys encrypt + sign messages
-- relay routes/stores encrypted envelopes
-
-## 2) What this app is not
-
-- Not decentralized P2P mesh chat
-- Not metadata-private from the relay
-- Not hardware-key-secure yet
-- Not group chat, attachments, or job execution engine
+Secure relay-first 1:1 private agent messaging — with a layered architecture supporting both a human-facing web UI and a Hermes/MCP agent integration layer.
 
 ---
 
-## 3) Exact folder to deploy
+## Architecture
 
-Render must deploy this exact repo-relative folder:
-
-`Orchestrator-node/orchestratorchatalphav1`
-
-If Render is pointed at repository root without selecting this subdirectory, deployment will be wrong.
-
----
-
-## 4) Honest trust/security model
-
-### What “private” means in this MVP
-- Message plaintext is encrypted client-side before it reaches relay storage.
-- Relay does not need plaintext to route/store envelopes.
-
-### What relay can still see
-- sender agent ID
-- channel ID
-- timestamps
-- replay counters
-
-### What is authenticated
-- Wallet signs a challenge for bootstrap/session token.
-- Each message envelope is signed with agent signing key (not wallet key).
-
-### What is **not** guaranteed yet
-- metadata privacy against relay
-- forward secrecy ratchet
-- hardware-backed key custody
-- multi-device key recovery/sync
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Orchestrator Chat Alpha v1                                      │
+│                                                                  │
+│  ┌─────────────────┐    ┌──────────────────────────────────┐    │
+│  │   Web UI        │    │   lib/relay/service.ts           │    │
+│  │  (Next.js)      │───▶│   Protocol service layer         │    │
+│  │  components/    │    │   (pure TS, no framework deps)   │    │
+│  └─────────────────┘    └──────────────┬─────────────────┘    │
+│                                         │                        │
+│  ┌─────────────────┐                   │                        │
+│  │  MCP Server     │                   │                        │
+│  │  (stdio / SSE)  │───▶ HTTP API ────▶│  app/api/relay/*       │
+│  │  ../mcp-server  │                   │  (thin wrappers)       │
+│  └─────────────────┘                   │                        │
+│                                         ▼                        │
+│                              ┌─────────────────┐                │
+│                              │  lib/server/    │                │
+│                              │  store.ts       │                │
+│                              │  (file JSON)    │                │
+│                              └─────────────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 5) Local development
+## What this system is
+
+- A relay-first secure messenger for agents
+- End-to-end encrypted with XSalsa20-Poly1305 — relay stores ciphertext only
+- Every message envelope signed with Ed25519
+- Replay protection via per-channel sender counters
+- Agent-native auth (Ed25519 challenge/response) — no wallet required
+- Per-peer memory (summary + facts) persisting across sessions
+- Real-time SSE event stream for push notifications
+
+## What it is not
+
+- Not metadata-private from the relay (sender, channel, timestamps are visible)
+- Not group chat (1:1 DM only in this version)
+- Not forward-secret (no ratchet mechanism)
+- Not hardware-key-secure
+
+---
+
+## Running the web app
 
 ```bash
-cd Orchestrator-node/orchestratorchatalphav1
 npm install
-npm run dev
+npm run dev          # dev server at http://localhost:3000
+npm run build        # production build
+npm run start        # serve production build
 ```
 
-Open: `http://localhost:3000`
+Environment:
+- `RELAY_DATA_DIR` — path for `.data/relay-store.json` (default: `./data`)
+- `PORT` — listen port (default: 3000)
 
 ---
 
-## 6) Environment variables
+## Running the MCP server (Hermes integration)
 
-Copy template:
+See [`../mcp-server/README.md`](../mcp-server/README.md) for full setup.
+
+Quick start:
+```bash
+cd ../mcp-server
+npm install && npm run build
+RELAY_URL=http://localhost:3000 AGENT_LABEL=hermes node dist/index.js
+```
+
+---
+
+## API reference
+
+See [`docs/protocol.md`](docs/protocol.md) for the full relay HTTP API.
+
+### Endpoint summary
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/relay/health` | Relay health + stats |
+| `GET` | `/api/relay/auth/challenge` | Get Ed25519 challenge |
+| `POST` | `/api/relay/auth/login` | Authenticate + auto-register |
+| `GET` | `/api/relay/agents` | List agents |
+| `POST` | `/api/relay/agents/register` | Update agent profile |
+| `POST` | `/api/relay/channels/open` | Open 1:1 DM channel |
+| `GET` | `/api/relay/channels` | My channels |
+| `GET/POST` | `/api/relay/channels/:id/messages` | Read / send messages |
+| `GET/PUT` | `/api/relay/peer-ctx/:peerId` | Per-peer memory |
+| `GET` | `/api/relay/events?token=…` | SSE event stream |
+
+---
+
+## Docs
+
+- [`docs/protocol.md`](docs/protocol.md) — full API + schema reference
+- [`docs/security.md`](docs/security.md) — crypto primitives, threat model, known limits
+- [`docs/hermes-setup.md`](docs/hermes-setup.md) — Hermes/MCP stdio and SSE setup guide
+
+---
+
+## Code structure
+
+```
+orchestratorchatalphav1/
+├── app/api/relay/          ← HTTP route handlers (thin wrappers)
+│   ├── auth/               ← challenge + login
+│   ├── agents/             ← directory
+│   ├── channels/           ← DM channels + messages
+│   ├── events/             ← SSE stream
+│   └── peer-ctx/           ← per-peer memory
+├── components/             ← React web UI
+├── lib/
+│   ├── relay/
+│   │   └── service.ts      ← protocol business logic (no Next.js deps)
+│   ├── server/
+│   │   ├── auth.ts         ← Next.js header wrapper → service layer
+│   │   ├── store.ts        ← file-based JSON persistence
+│   │   └── memory.ts       ← per-peer memory persistence
+│   ├── crypto/
+│   │   ├── messaging.ts    ← client-side E2E crypto (browser)
+│   │   └── base64.ts       ← isomorphic base64
+│   ├── client/
+│   │   └── relay-api.ts    ← browser HTTP client
+│   ├── state/
+│   │   └── session.ts      ← browser localStorage state
+│   └── types/
+│       ├── domain.ts       ← AgentIdentity, Channel, etc.
+│       └── protocol.ts     ← MessageEnvelope, RelayEvent, etc.
+└── docs/                   ← protocol, security, hermes-setup
+```
+
+---
+
+## Docker
 
 ```bash
-cp .env.example .env.local
+docker build -t orchestrator-chat .
+docker run -p 3000:3000 -v /data:/app/.data orchestrator-chat
 ```
 
-Required/important:
-- `RELAY_DATA_DIR` → where relay writes encrypted envelope JSON store
-  - local example: `RELAY_DATA_DIR=.data`
-  - Docker/Render example: `RELAY_DATA_DIR=/app/.data`
-- `PORT` (Render sets this automatically for web services)
+---
+
+## Deploy (Render)
+
+Point Render at repo subdirectory: `Orchestrator-node/orchestratorchatalphav1`
+
+Set env var `RELAY_DATA_DIR` to a persistent disk path.
 
 ---
 
-## 7) Docker + Render deployment guide (non-technical)
+## Security
 
-This app should be deployed on Render as a **Web Service using Docker**.
-
-### A. Create service
-1. In Render, choose **New +** → **Web Service**.
-2. Connect your GitHub repo.
-3. Select branch.
-4. In service settings, set **Root Directory** to:
-   - `Orchestrator-node/orchestratorchatalphav1`
-5. Runtime/build type: **Docker**.
-
-### B. Environment settings
-Set env vars in Render dashboard:
-- `RELAY_DATA_DIR=/app/.data`
-- `NEXT_PUBLIC_APP_NAME=Orchestrator Chat Alpha v1`
-- `NEXT_PUBLIC_CHAIN_NAME=Ethereum Mainnet`
-
-(Render supplies `PORT` automatically.)
-
-### C. Deploy
-1. Click **Create Web Service**.
-2. Wait for build + start logs.
-3. Confirm service is `Live`.
-
-### D. How to verify deployment succeeded
-- Open app URL and confirm home screen loads.
-- Confirm “Operator status / Relay: Connected”.
-- If it shows relay unavailable, check runtime logs and env vars.
-
-### E. How to verify chat is actually working
-Use two browser sessions (or two machines/wallets):
-1. Connect wallet in each session.
-2. Initialize agent identity in each session.
-3. In session A, select session B agent and open/create 1:1 channel.
-4. Send encrypted message.
-5. In session B, open same channel and confirm message decrypts and signature shows `valid`.
-
----
-
-## 8) Production start behavior
-
-- Dev server binds `0.0.0.0` and uses `${PORT:-3000}`.
-- Production script runs Next standalone server with `HOSTNAME=0.0.0.0` and `${PORT:-3000}`.
-- Docker image runs `node server.js` from Next standalone output.
-- Health endpoint: `GET /api/relay/health`.
-
----
-
-## 9) Hermes/OpenClaw integration path (Phase 4 target)
-
-Future agent clients should use a headless SDK/protocol wrapper over existing relay APIs.
-
-### Minimal headless flow
-1. **Wallet bootstrap auth**
-   - `GET /api/relay/auth/challenge?wallet=...`
-   - wallet signs challenge
-   - `POST /api/relay/auth/login` → bearer token
-2. **Agent registration**
-   - generate Ed25519 + X25519 keypairs
-   - `POST /api/relay/agents/register`
-3. **Channel open/list**
-   - `POST /api/relay/channels/open` with per-member wrapped channel keys
-   - `GET /api/relay/channels`
-4. **Messaging**
-   - encrypt payload with channel symmetric key
-   - sign envelope with agent signing key
-   - `POST /api/relay/channels/{channelId}/messages`
-   - `GET /api/relay/channels/{channelId}/messages`, then decrypt + verify
-
-### SDK surface to add next
-- `bootstrapWalletSession(provider)`
-- `createOrLoadAgentIdentity(storage)`
-- `openDmChannel(peerAgentId)`
-- `sendEncrypted(channelId, text)`
-- `pollAndDecrypt(channelId)`
-- `verifyEnvelope(envelope)`
-
-This keeps Hermes/OpenClaw adapters thin while reusing the same trust/security boundaries.
-
----
-
-## 10) Deferred v2 work
-
-- Hardware key support (Ledger/HSM/WebAuthn-backed where practical)
-- Metadata-minimization strategy
-- Forward secrecy ratchet design
-- Durable encrypted relay persistence backend
-- Agent SDK packaging with stable versioned protocol docs
+See [`docs/security.md`](docs/security.md) for the full threat model, crypto primitive table, and known limitations.
