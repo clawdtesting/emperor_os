@@ -75,7 +75,12 @@ export class RelayClient {
   }
 
   private async json<T>(res: Response): Promise<T> {
-    const body = (await res.json()) as T & { error?: string };
+    let body: T & { error?: string };
+    try {
+      body = (await res.json()) as T & { error?: string };
+    } catch {
+      throw new Error(`Relay at ${this.baseUrl} returned non-JSON (HTTP ${res.status}) — is the relay running?`);
+    }
     if (!res.ok) throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
     return body;
   }

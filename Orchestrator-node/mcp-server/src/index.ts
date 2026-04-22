@@ -60,8 +60,9 @@ async function ensureAuthenticated(): Promise<void> {
       capabilities: { mcp: true, sse: true }
     });
   } catch (e) {
-    // Login failure is non-fatal at startup — tools will return auth errors
-    process.stderr.write(`[orchestrator-chat-mcp] Login failed: ${e instanceof Error ? e.message : e}\n`);
+    const msg = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`[orchestrator-chat-mcp] Login failed: ${msg}\n`);
+    process.stderr.write(`[orchestrator-chat-mcp] Set RELAY_URL env var and call relay_login tool to retry.\n`);
   }
 }
 
