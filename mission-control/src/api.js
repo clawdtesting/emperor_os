@@ -31,6 +31,18 @@ export async function createJobRequest(payload) {
   return data
 }
 
+
+export async function createJobDraftArtifact(payload) {
+  const res = await fetch(BASE + '/api/job-drafts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error || 'Failed to create job draft artifact')
+  return data
+}
+
 export async function prepareJobApplication(payload) {
   const res = await fetch(BASE + '/api/job-applications/prepare', {
     method: 'POST',
