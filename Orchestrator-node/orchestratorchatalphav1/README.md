@@ -124,7 +124,8 @@ Use two browser sessions (or two machines/wallets):
 
 ## 8) Production start behavior
 
-- App binds `0.0.0.0` and uses `${PORT:-3000}` for both dev/start scripts.
+- Dev server binds `0.0.0.0` and uses `${PORT:-3000}`.
+- Production script runs Next standalone server with `HOSTNAME=0.0.0.0` and `${PORT:-3000}`.
 - Docker image runs `node server.js` from Next standalone output.
 - Health endpoint: `GET /api/relay/health`.
 

@@ -20,6 +20,10 @@ export async function POST(request: Request) {
     const existingIndex = store.agents.findIndex((entry) => entry.agentId === profile.agentId);
 
     if (existingIndex >= 0) {
+      const existing = store.agents[existingIndex];
+      if (existing.ownerWallet.toLowerCase() !== wallet.toLowerCase()) {
+        return NextResponse.json({ error: 'agentId already owned by a different wallet' }, { status: 409 });
+      }
       store.agents[existingIndex] = profile;
     } else {
       store.agents.push(profile);

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "sh -c 'next dev -H 0.0.0.0 -p ${PORT:-3000}'",
     "build": "next build",
-    "start": "sh -c 'next start -H 0.0.0.0 -p ${PORT:-3000}'",
+    "start": "sh -c 'HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node .next/standalone/server.js'",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run build"
   },
