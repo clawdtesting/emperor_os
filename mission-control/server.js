@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import Ajv from 'ajv'
 import { spawn } from 'child_process'
 import { readdirSync, readFileSync, existsSync, statSync, mkdirSync, writeFileSync, appendFileSync, renameSync, unlinkSync } from 'fs'
 import { dirname, resolve, join } from 'path'
@@ -2074,6 +2075,64 @@ function writeJsonFile(file, data) {
   writeFileSync(file, JSON.stringify(data, null, 2))
 }
 
+const STRICT_JOB_SPEC_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'title',
+    'category',
+    'objective',
+    'inputs',
+    'deliverables',
+    'constraints',
+    'evaluationCriteria',
+    'payout',
+    'duration',
+  ],
+  properties: {
+    title: { type: 'string', minLength: 1 },
+    category: { type: 'string', minLength: 1 },
+    objective: { type: 'string', minLength: 1 },
+    inputs: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+    deliverables: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+    constraints: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+    evaluationCriteria: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+    payout: { type: 'string', pattern: '^[0-9]+$' },
+    duration: { type: 'integer', minimum: 1 },
+  },
+}
+
+const FORBIDDEN_JOB_INPUT_PATTERNS = [
+  /ignore\s+previous\s+instructions/i,
+  /system\s+prompt/i,
+  /<\s*tool\s*>/i,
+  /<\s*\/\s*tool\s*>/i,
+]
+
+const strictSpecAjv = new Ajv({ allErrors: true, strict: false })
+const validateStrictJobSpec = strictSpecAjv.compile(STRICT_JOB_SPEC_SCHEMA)
+
+function containsForbiddenJobInputPattern(spec) {
+  const raw = JSON.stringify(spec || {})
+  return FORBIDDEN_JOB_INPUT_PATTERNS.find((pattern) => pattern.test(raw)) || null
+}
+
+function toCanonicalStrictJobSpec(spec) {
+  const normalizeList = (value) =>
+    (Array.isArray(value) ? value : []).map((item) => String(item || '').trim()).filter(Boolean)
+  return {
+    title: String(spec.title || '').trim(),
+    category: String(spec.category || '').trim(),
+    objective: String(spec.objective || '').trim(),
+    inputs: normalizeList(spec.inputs),
+    deliverables: normalizeList(spec.deliverables),
+    constraints: normalizeList(spec.constraints),
+    evaluationCriteria: normalizeList(spec.evaluationCriteria),
+    payout: String(spec.payout || '').trim(),
+    duration: Number(spec.duration || 0),
+  }
+}
+
 async function getV1ContractInterface() {
   const { ethers } = await import('ethers')
   const abiPath = join(WORKSPACE_ROOT, 'contracts', 'AGIJobManager-v1', 'AGIJobManager.v1.json')
@@ -4104,6 +4163,47 @@ app.post('/api/job-applications/:jobId/reconcile', async (req, res) => {
     return res.json({ ok: true, state: result.state, summary: result.summary, statePath: result.statePath })
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message || 'Failed to reconcile apply state' })
+  }
+})
+
+app.post('/api/job-drafts', (req, res) => {
+  try {
+    const candidate = toCanonicalStrictJobSpec(req.body?.spec || {})
+
+    const blockedPattern = containsForbiddenJobInputPattern(candidate)
+    if (blockedPattern) {
+      return res.status(422).json({
+        error: `Forbidden input pattern detected: ${blockedPattern}`,
+      })
+    }
+
+    const valid = validateStrictJobSpec(candidate)
+    if (!valid) {
+      const errors = (validateStrictJobSpec.errors || []).map((item) => ({
+        field: item.instancePath || '/',
+        message: item.message || 'invalid value',
+      }))
+      return res.status(422).json({
+        error: 'Invalid structured job spec',
+        errors,
+      })
+    }
+
+    const timestamp = Date.now()
+    const dir = join(ARTIFACTS_DIR, 'job_drafts', `job_${timestamp}`)
+    mkdirSync(dir, { recursive: true })
+    const jobSpecPath = join(dir, 'job_spec.json')
+    writeJsonFile(jobSpecPath, candidate)
+
+    return res.json({
+      ok: true,
+      mode: 'strict_structured_input',
+      artifactDir: dir,
+      jobSpecPath,
+      spec: candidate,
+    })
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'Failed to create job draft artifact' })
   }
 })
 

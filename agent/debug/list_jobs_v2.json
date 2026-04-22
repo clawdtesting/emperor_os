@@ -1,0 +1,98 @@
+[
+  {
+    "jobId": 0,
+    "status": "Completed",
+    "employer": "0xa9eD0539c2fbc5C6BC15a2E168bd9BCd07c01201",
+    "assignedAgent": "0x3B7205E05D015D06323B432E9813bCb3fe86adf7",
+    "payout": "88888 AGIALPHA",
+    "duration": "3 days",
+    "specURI": "ipfs://bafkreie75ykl5o5mg3yuihxjn26rwwce5nyz5mo4k66l4lc2wmgkkdi4qe",
+    "approvals": 7,
+    "disapprovals": 0,
+    "completionRequested": true
+  },
+  {
+    "jobId": 1,
+    "status": "Disputed",
+    "employer": "0xa9eD0539c2fbc5C6BC15a2E168bd9BCd07c01201",
+    "assignedAgent": "0xA442540F7365cCd43848C4B25576706A95fd3559",
+    "payout": "88888 AGIALPHA",
+    "duration": "3 days",
+    "specURI": "ipfs://bafkreieqa2rbx3ic5ojtecod3am7kg4ylhtxr4e6cixfg6nwfem77weyja",
+    "approvals": 1,
+    "disapprovals": 5,
+    "completionRequested": true
+  },
+  {
+    "jobId": 3,
+    "status": "Completed",
+    "employer": "0x1bA171cd1FBFD0A0226CA9ecB50019ba8FB618b6",
+    "assignedAgent": "0x9DbBBCc3c603903702BC323C4A4A8a597280a89B",
+    "payout": "88888 AGIALPHA",
+    "duration": "7 days",
+    "specURI": "ipfs://QmUZwJ4DLmDHDFsfosqzoe1igHeDiCgBTBabaCnwtYaTVH",
+    "approvals": 7,
+    "disapprovals": 0,
+    "completionRequested": true
+  },
+  {
+    "jobId": 4,
+    "status": "Completed",
+    "employer": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "assignedAgent": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "payout": "1000 AGIALPHA",
+    "duration": "3 days",
+    "specURI": "ipfs://QmNpms2iEgiCrV3uojvodeAGnknJmvVXzomfJ1JXmjTgRG",
+    "approvals": 6,
+    "disapprovals": 0,
+    "completionRequested": true
+  },
+  {
+    "jobId": 5,
+    "status": "Completed",
+    "employer": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "assignedAgent": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "payout": "2000 AGIALPHA",
+    "duration": "4 days",
+    "specURI": "ipfs://QmYqSDbr9uexuUQE8CuqLaMZ3LRcWMmAeMGrG6neG9Cn4d",
+    "approvals": 7,
+    "disapprovals": 0,
+    "completionRequested": true
+  },
+  {
+    "jobId": 6,
+    "status": "Completed",
+    "employer": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "assignedAgent": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "payout": "2000 AGIALPHA",
+    "duration": "5 days",
+    "specURI": "ipfs://Qma9mvr18j8YCA4UdsxN4VbyvXezkmNHJ4i1D9YDizyHAq",
+    "approvals": 6,
+    "disapprovals": 0,
+    "completionRequested": true
+  },
+  {
+    "jobId": 8,
+    "status": "Completed",
+    "employer": "0xA204b14eD9bc09501e3A47CDde379279FcD5D743",
+    "assignedAgent": "0xd76AD27a1Bcf8652e7e46BE603FA742FD1c10A99",
+    "payout": "500000 AGIALPHA",
+    "duration": "7 days",
+    "specURI": "ipfs://bafkreif6slf4gnnzrnt54wnkve23owuf3mojeynykg2nlpwlk3ygb622we",
+    "approvals": 7,
+    "disapprovals": 0,
+    "completionRequested": true
+  },
+  {
+    "jobId": 11,
+    "status": "Assigned",
+    "employer": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "assignedAgent": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+    "payout": "10000 AGIALPHA",
+    "duration": "14 days",
+    "specURI": "ipfs://QmQ5DHNAh6XF5kVUh5dmgp47KuAASDX5MsgixyyDcbsgvs",
+    "approvals": 0,
+    "disapprovals": 0,
+    "completionRequested": false
+  }
+]

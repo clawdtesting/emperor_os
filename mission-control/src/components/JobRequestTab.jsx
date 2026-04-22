@@ -1,112 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  createJobDraftArtifact,
   createJobRequest,
   fetchHealthStatus,
-  pinJsonToIpfs,
   fetchOperatorActionFile,
+  pinJsonToIpfs,
 } from '../api'
 import {
   DEFAULT_REQUEST_IMAGE,
-  DURATION_SECONDS_BY_UI_VALUE,
   createDefaultJobRequestDraft,
   toJobSpecV2,
   toLegacyJobRequestPayload,
 } from '../models/jobSpecV2'
-import {
-  buildDraftJobSpec,
-  getMissingRequiredQuestions,
-  getQuestionsForCategory,
-  inferRequestCategory,
-  validateDraftJobSpec,
-} from '../features/request/requestBuilder'
 import { PROTOCOL_OPTIONS, getProtocolOption } from '../features/request/protocolConfig'
 import { approveToken, formatUnits, parseUnits, readAllowance } from '../features/request/erc20'
 import { shouldAutoScrollToStep } from '../features/request/stepNavigation'
-import { parseMdJobSpec } from '../utils/parseMdJob'
+import {
+  JSON_EXAMPLE_TEMPLATE,
+  TXT_EXAMPLE_TEMPLATE,
+  canonicalizeStructuredJobSpec,
+  parseStrictTxtTemplate,
+  validateStructuredJobSpec,
+} from '../features/request/structuredJobSpec'
 
-const STATIC_TOKEN_OPTIONS = [
-  { id: 'agialpha', symbol: 'AGIALPHA', address: '', decimals: 18 },
-]
-
-const DEADLINE_TO_DURATION = {
-  urgent_24h: '4h',
-  soon_3d: '3d',
-  normal_1w: '7d',
-  flexible: '7d',
-}
-
-function parseLines(raw) {
-  return String(raw || '')
-    .split('\n')
-    .map((v) => v.trim())
-    .filter(Boolean)
-}
-
-function toLineBlock(list) {
-  return Array.isArray(list) ? list.join('\n') : ''
-}
-
-function detectProtocolFromContract(contract) {
-  const normalized = normalizeAddress(contract)
-  if (!normalized) return ''
-  const match = PROTOCOL_OPTIONS.find(
-    (option) => normalizeAddress(option.contractAddress) === normalized,
-  )
-  return match?.id || ''
-}
-
-function toDraftFromCanonicalSpec(spec) {
-  const props = spec?.properties || {}
-  return {
-    ...createDefaultJobRequestDraft(),
-    title: props.title || '',
-    summary: props.summary || '',
-    details: props.details || props.summary || '',
-    category: props.category || 'other',
-    locale: props.locale || 'en-US',
-    tags: Array.isArray(props.tags) ? props.tags : [],
-    deliverables: Array.isArray(props.deliverables) ? props.deliverables : [],
-    acceptanceCriteria: Array.isArray(props.acceptanceCriteria) ? props.acceptanceCriteria : [],
-    requirements: Array.isArray(props.requirements) ? props.requirements : [],
-    payoutAGIALPHA: Number(props.payoutAGIALPHA || 0),
-    durationSeconds: Number(props.durationSeconds || DURATION_SECONDS_BY_UI_VALUE['1d']),
-    chainId: Number(props.chainId || 1),
-    contract: props.contract || '',
-    image: spec?.image || DEFAULT_REQUEST_IMAGE,
-    protocol: '',
-    scope: Array.isArray(props.deliverables) ? props.deliverables : [],
-    constraints: Array.isArray(props.requirements) ? props.requirements : [],
-    payment: {
-      tokenAddress: '',
-      symbol: 'AGIALPHA',
-      amount: String(Number(props.payoutAGIALPHA || 0)),
-    },
-  }
-}
-
-function toCanonicalSpecFromDraft(draft, createdBy = '') {
-  return toJobSpecV2({
-    ...createDefaultJobRequestDraft(),
-    title: draft?.title || '',
-    summary: draft?.summary || '',
-    details: draft?.details || draft?.summary || '',
-    category: draft?.category || 'other',
-    locale: draft?.locale || 'en-US',
-    tags: Array.isArray(draft?.tags) ? draft.tags : [],
-    deliverables: Array.isArray(draft?.deliverables) ? draft.deliverables : [],
-    acceptanceCriteria: Array.isArray(draft?.acceptanceCriteria)
-      ? draft.acceptanceCriteria
-      : [],
-    requirements: Array.isArray(draft?.requirements) ? draft.requirements : [],
-    payoutAGIALPHA: Number(draft?.payoutAGIALPHA || 0),
-    durationSeconds: Number(
-      draft?.durationSeconds || DURATION_SECONDS_BY_UI_VALUE['1d'],
-    ),
-    chainId: Number(draft?.chainId || 1),
-    contract: draft?.contract || '',
-    ...(createdBy ? { createdBy } : {}),
-  })
-}
+const STATIC_TOKEN_OPTIONS = [{ id: 'agialpha', symbol: 'AGIALPHA', address: '', decimals: 18 }]
 
 function normalizeAddress(address) {
   const value = String(address || '').trim()
@@ -152,9 +69,55 @@ function BriefCard({ title, items }) {
   )
 }
 
+function toCanonicalSpecFromDraft(draft, createdBy = '') {
+  return toJobSpecV2({
+    ...createDefaultJobRequestDraft(),
+    title: draft?.title || '',
+    summary: draft?.summary || '',
+    details: draft?.details || draft?.summary || '',
+    category: draft?.category || 'other',
+    locale: draft?.locale || 'en-US',
+    tags: Array.isArray(draft?.tags) ? draft.tags : [],
+    deliverables: Array.isArray(draft?.deliverables) ? draft.deliverables : [],
+    acceptanceCriteria: Array.isArray(draft?.acceptanceCriteria) ? draft.acceptanceCriteria : [],
+    requirements: Array.isArray(draft?.requirements) ? draft.requirements : [],
+    payoutAGIALPHA: Number(draft?.payoutAGIALPHA || 0),
+    durationSeconds: Number(draft?.durationSeconds || 86400),
+    chainId: Number(draft?.chainId || 1),
+    contract: draft?.contract || '',
+    ...(createdBy ? { createdBy } : {}),
+  })
+}
+
+function toDraftFromStructuredSpec(spec, protocol, wallet, payoutAmountDecimal) {
+  const category = String(spec.category || 'other').trim().toLowerCase()
+  return {
+    ...createDefaultJobRequestDraft(),
+    title: spec.title,
+    summary: spec.objective,
+    details: spec.objective,
+    category: category || 'other',
+    locale: 'en-US',
+    tags: [category || 'other', protocol?.id || 'unknown', 'structured-input-v1'],
+    deliverables: spec.deliverables,
+    acceptanceCriteria: spec.evaluationCriteria,
+    requirements: spec.constraints,
+    payoutAGIALPHA: Number(payoutAmountDecimal || 0),
+    durationSeconds: Number(spec.duration),
+    chainId: wallet?.chainIdDecimal || 1,
+    contract: protocol?.contractAddress || '',
+    scope: spec.inputs,
+    constraints: spec.constraints,
+    payment: {
+      tokenAddress: normalizeAddress(wallet?.agiToken) || '',
+      symbol: 'AGIALPHA',
+      amount: String(payoutAmountDecimal || ''),
+    },
+  }
+}
+
 export function JobRequestTab({ wallet }) {
   const walletReady = Boolean(wallet?.isConnected)
-
   const [step, setStep] = useState(1)
   const [error, setError] = useState('')
 
@@ -169,35 +132,24 @@ export function JobRequestTab({ wallet }) {
   const [approveTxHash, setApproveTxHash] = useState('')
   const [allowanceBaseUnits, setAllowanceBaseUnits] = useState(0n)
 
-  const [rawRequest, setRawRequest] = useState('')
-  const [category, setCategory] = useState('general')
-  const [questions, setQuestions] = useState([])
-  const [answers, setAnswers] = useState({})
-  const [questionIndex, setQuestionIndex] = useState(0)
+  const [inputMode, setInputMode] = useState('json')
+  const [structuredRawInput, setStructuredRawInput] = useState(JSON_EXAMPLE_TEMPLATE)
+  const [validationErrors, setValidationErrors] = useState([])
+  const [validationPassed, setValidationPassed] = useState(false)
+  const [validatedSpec, setValidatedSpec] = useState(null)
+  const [draftArtifactPath, setDraftArtifactPath] = useState('')
 
   const [draft, setDraft] = useState(null)
-  const [editingTitle, setEditingTitle] = useState('')
-  const [editingSummary, setEditingSummary] = useState('')
-  const [editingScope, setEditingScope] = useState('')
-  const [editingDeliverables, setEditingDeliverables] = useState('')
-  const [editingAcceptance, setEditingAcceptance] = useState('')
-
   const [ipfsUploading, setIpfsUploading] = useState(false)
   const [ipfsResult, setIpfsResult] = useState(null)
   const [infraLoading, setInfraLoading] = useState(false)
   const [ipfsPinataReady, setIpfsPinataReady] = useState(null)
-
   const [posting, setPosting] = useState(false)
   const [result, setResult] = useState(null)
-
-  const [mdRaw, setMdRaw] = useState('')
-  const [mdWarnings, setMdWarnings] = useState([])
-  const [mdImported, setMdImported] = useState(false)
-  const [importedCanonicalSpec, setImportedCanonicalSpec] = useState(null)
-
   const [pushPending, setPushPending] = useState(false)
   const [pushTxHash, setPushTxHash] = useState('')
   const [pushStatus, setPushStatus] = useState('')
+
   const stepRefs = useRef({})
   const pendingScrollStepRef = useRef(null)
 
@@ -205,8 +157,8 @@ export function JobRequestTab({ wallet }) {
     () => [{ ...STATIC_TOKEN_OPTIONS[0], address: normalizeAddress(wallet?.agiToken) || '' }],
     [wallet?.agiToken],
   )
-
   const protocol = useMemo(() => getProtocolOption(protocolId), [protocolId])
+  const ipfsReady = ipfsPinataReady !== false
 
   const amountBaseUnits = useMemo(() => {
     try {
@@ -219,83 +171,36 @@ export function JobRequestTab({ wallet }) {
 
   const payoutPreview = useMemo(() => {
     if (amountBaseUnits === null) return 'invalid amount'
-    return `${formatUnits(amountBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${
-      tokenSymbol || 'TOKEN'
-    }`
+    return `${formatUnits(amountBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${tokenSymbol || 'TOKEN'}`
   }, [amountBaseUnits, tokenDecimals, tokenSymbol])
 
   const approvalRequired = useMemo(() => {
-    if (!walletReady || !protocol || !normalizeAddress(tokenAddress) || amountBaseUnits === null) {
-      return false
-    }
+    if (!walletReady || !protocol || !normalizeAddress(tokenAddress) || amountBaseUnits === null) return false
     return (allowanceBaseUnits || 0n) < (amountBaseUnits || 0n)
   }, [walletReady, protocol, tokenAddress, amountBaseUnits, allowanceBaseUnits])
 
-  const requiredMissing = useMemo(
-    () => getMissingRequiredQuestions(questions, answers),
-    [questions, answers],
-  )
-
-  const currentQuestion = questions[questionIndex]
-  const ipfsReady = ipfsPinataReady !== false
-
-  function registerStepRef(stepNumber) {
-    return (node) => {
-      if (node) stepRefs.current[stepNumber] = node
-      else delete stepRefs.current[stepNumber]
-    }
-  }
-
-  function moveToStep(nextStep) {
-    setStep((currentStep) => {
-      pendingScrollStepRef.current = shouldAutoScrollToStep({
-        previousStep: currentStep,
-        nextStep,
-      })
-        ? nextStep
-        : null
-      return nextStep
-    })
-  }
-
-  const paymentState = useMemo(
-    () => ({
-      tokenAddress: normalizeAddress(tokenAddress),
-      symbol: tokenSymbol,
-      decimals: Number(tokenDecimals || 18),
-      amount: payoutAmount,
-      amountBaseUnits: amountBaseUnits ? amountBaseUnits.toString() : '',
-    }),
-    [tokenAddress, tokenSymbol, tokenDecimals, payoutAmount, amountBaseUnits],
-  )
-
   const publishPayload = useMemo(() => {
-    if (!draft || !ipfsResult || !wallet?.account) return null
+    if (!draft || !ipfsResult || !wallet?.account || !validatedSpec) return null
     return {
       version: 'mission-control-request/v1',
       walletAddress: wallet.account,
       protocol: protocolId,
-      rawUserInput: rawRequest.trim(),
-      category,
-      answers,
-      payment: paymentState,
+      structuredInputMode: inputMode,
+      structuredJobSpec: validatedSpec,
+      draftArtifactPath,
+      payment: {
+        tokenAddress: normalizeAddress(tokenAddress),
+        symbol: tokenSymbol,
+        decimals: Number(tokenDecimals || 18),
+        amount: payoutAmount,
+        amountBaseUnits: amountBaseUnits ? amountBaseUnits.toString() : '',
+      },
       draft,
-      canonicalSpec:
-        importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
+      canonicalSpec: toCanonicalSpecFromDraft(draft, wallet?.account || ''),
       ipfs: ipfsResult,
       createdAt: new Date().toISOString(),
     }
-  }, [
-    draft,
-    ipfsResult,
-    wallet,
-    protocolId,
-    rawRequest,
-    category,
-    answers,
-    paymentState,
-    importedCanonicalSpec,
-  ])
+  }, [draft, ipfsResult, wallet, protocolId, inputMode, validatedSpec, draftArtifactPath, tokenAddress, tokenSymbol, tokenDecimals, payoutAmount, amountBaseUnits])
 
   const unsignedBriefItems = useMemo(() => {
     if (!result?.unsignedTxPath || !publishPayload) return []
@@ -306,10 +211,7 @@ export function JobRequestTab({ wallet }) {
       { label: 'Summary', value: props.summary || draft?.summary || '—' },
       { label: 'Contract', value: protocol?.contractAddress || draft?.contract || '—', mono: true },
       { label: 'Payout', value: payoutPreview },
-      {
-        label: 'Duration',
-        value: `${Number(draft?.durationSeconds || 0).toLocaleString()} seconds`,
-      },
+      { label: 'Duration', value: `${Number(draft?.durationSeconds || 0).toLocaleString()} seconds` },
       { label: 'IPFS spec URI', value: ipfsResult?.uri || '—', mono: true },
       { label: 'Unsigned tx file', value: result?.unsignedTxPath || '—', mono: true },
     ]
@@ -319,11 +221,7 @@ export function JobRequestTab({ wallet }) {
     if (!result?.reviewManifestPath) return []
     return [
       { label: 'Review mode', value: 'Human-signed request package' },
-      {
-        label: 'Checklist',
-        value:
-          'Confirm contract, confirm IPFS spec, confirm payout/duration, then sign in MetaMask.',
-      },
+      { label: 'Checklist', value: 'Confirm contract, confirm IPFS spec, confirm payout/duration, then sign in MetaMask.' },
       { label: 'Review manifest file', value: result?.reviewManifestPath || '—', mono: true },
       { label: 'Unsigned tx file', value: result?.unsignedTxPath || '—', mono: true },
       { label: 'Wallet', value: wallet?.account || '—', mono: true },
@@ -342,21 +240,17 @@ export function JobRequestTab({ wallet }) {
 
   useEffect(() => {
     let cancelled = false
-
     async function refreshInfra() {
       setInfraLoading(true)
       try {
         const health = await fetchHealthStatus()
-        if (!cancelled) {
-          setIpfsPinataReady(Boolean(health?.readiness?.ipfsPinata))
-        }
+        if (!cancelled) setIpfsPinataReady(Boolean(health?.readiness?.ipfsPinata))
       } catch {
         if (!cancelled) setIpfsPinataReady(null)
       } finally {
         if (!cancelled) setInfraLoading(false)
       }
     }
-
     refreshInfra()
     return () => {
       cancelled = true
@@ -369,13 +263,11 @@ export function JobRequestTab({ wallet }) {
         setAllowanceBaseUnits(0n)
         return
       }
-
       const normalizedToken = normalizeAddress(tokenAddress)
       if (!normalizedToken) {
         setAllowanceBaseUnits(0n)
         return
       }
-
       setAllowanceLoading(true)
       try {
         const allowance = await readAllowance({
@@ -390,41 +282,42 @@ export function JobRequestTab({ wallet }) {
         setAllowanceLoading(false)
       }
     }
-
     refreshAllowance()
   }, [walletReady, wallet, protocol, tokenAddress, approveTxHash])
 
   useEffect(() => {
     const scrollStep = pendingScrollStepRef.current
     if (!scrollStep) return
-
     pendingScrollStepRef.current = null
     const node = stepRefs.current[scrollStep]
     if (!node) return
-
-    const timer = setTimeout(() => {
-      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 0)
-
+    const timer = setTimeout(() => node.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0)
     return () => clearTimeout(timer)
   }, [step])
 
+  function registerStepRef(stepNumber) {
+    return (node) => {
+      if (node) stepRefs.current[stepNumber] = node
+      else delete stepRefs.current[stepNumber]
+    }
+  }
+
+  function moveToStep(nextStep) {
+    setStep((currentStep) => {
+      pendingScrollStepRef.current = shouldAutoScrollToStep({ previousStep: currentStep, nextStep }) ? nextStep : null
+      return nextStep
+    })
+  }
+
   function resetAfterProtocolPaymentChange() {
-    setCategory('general')
-    setRawRequest('')
-    setQuestions([])
-    setAnswers({})
-    setQuestionIndex(0)
+    setValidationErrors([])
+    setValidationPassed(false)
+    setValidatedSpec(null)
+    setDraftArtifactPath('')
     setDraft(null)
-    setImportedCanonicalSpec(null)
     setIpfsResult(null)
     setResult(null)
     setError('')
-    setMdRaw('')
-    setMdWarnings([])
-    setMdImported(false)
-    setShowUnsignedBrief(false)
-    setShowReviewBrief(false)
     setPushPending(false)
     setPushTxHash('')
     setPushStatus('')
@@ -436,18 +329,21 @@ export function JobRequestTab({ wallet }) {
     if (!protocol) return 'Select a protocol before continuing.'
     if (!normalizeAddress(tokenAddress)) return 'Valid token address is required.'
     if (!tokenSymbol.trim()) return 'Token symbol is required.'
-    if (!Number.isFinite(Number(tokenDecimals)) || Number(tokenDecimals) < 0) {
-      return 'Token decimals must be valid.'
-    }
-    if (amountBaseUnits === null || amountBaseUnits <= 0n) {
-      return 'Payout amount must be greater than zero.'
-    }
+    if (!Number.isFinite(Number(tokenDecimals)) || Number(tokenDecimals) < 0) return 'Token decimals must be valid.'
+    if (amountBaseUnits === null || amountBaseUnits <= 0n) return 'Payout amount must be greater than zero.'
     return ''
   }
 
-  function handleBuildRequest() {
+  function loadExampleTemplate() {
+    setStructuredRawInput(inputMode === 'json' ? JSON_EXAMPLE_TEMPLATE : TXT_EXAMPLE_TEMPLATE)
+    setValidationErrors([])
+    setValidationPassed(false)
+  }
+
+  async function handleValidateStructuredInput() {
     setError('')
-    setResult(null)
+    setValidationErrors([])
+    setValidationPassed(false)
 
     const protocolAndPaymentError = validateProtocolAndPayment()
     if (protocolAndPaymentError) {
@@ -456,170 +352,55 @@ export function JobRequestTab({ wallet }) {
     }
 
     if (approvalRequired) {
-      setError('Token approval is required before request building.')
+      setError('Token approval is required before request validation.')
       return
     }
 
-    if (!rawRequest.trim()) {
-      setError('Request text is required.')
+    let parsed
+    try {
+      if (inputMode === 'json') parsed = JSON.parse(structuredRawInput)
+      else parsed = parseStrictTxtTemplate(structuredRawInput)
+    } catch (e) {
+      setValidationErrors([e.message || 'Failed to parse structured input.'])
       return
     }
 
-    const inferred = inferRequestCategory(rawRequest)
-    const flow = getQuestionsForCategory(protocolId, inferred)
-
-    setCategory(inferred)
-    setQuestions(flow)
-    setAnswers({})
-    setQuestionIndex(0)
-    moveToStep(5)
-  }
-
-  function handleMdImport() {
-    setError('')
-    setMdWarnings([])
-
-    if (!mdRaw.trim()) {
-      setError('Paste a markdown job spec to import.')
+    const candidate = canonicalizeStructuredJobSpec(parsed)
+    const verdict = validateStructuredJobSpec(candidate)
+    if (!verdict.ok) {
+      setValidationErrors(verdict.errors)
       return
     }
 
-    const trimmed = mdRaw.trim()
-
-    if (trimmed.startsWith('{')) {
-      try {
-        const parsedJson = JSON.parse(trimmed)
-        const canonical =
-          parsedJson?.properties?.schema === 'agijobmanager/job-spec/v2'
-            ? parsedJson
-            : parsedJson?.spec?.properties?.schema === 'agijobmanager/job-spec/v2'
-              ? parsedJson.spec
-              : toCanonicalSpecFromDraft(parsedJson, wallet?.account || '')
-
-        const importedDraft = toDraftFromCanonicalSpec(canonical)
-        const detectedProtocol = detectProtocolFromContract(importedDraft.contract)
-        const resolvedProtocol = detectedProtocol || protocolId
-
-        if (detectedProtocol) setProtocolId(detectedProtocol)
-        if (importedDraft.payoutAGIALPHA > 0) {
-          setPayoutAmount(String(importedDraft.payoutAGIALPHA))
-        }
-
-        const nextDraft = {
-          ...importedDraft,
-          protocol: resolvedProtocol,
-          scope: Array.isArray(importedDraft.deliverables)
-            ? importedDraft.deliverables
-            : [],
-          constraints: Array.isArray(importedDraft.requirements)
-            ? importedDraft.requirements
-            : [],
-          payment: {
-            tokenAddress: normalizeAddress(tokenAddress),
-            symbol: tokenSymbol || 'AGIALPHA',
-            amount: String(importedDraft.payoutAGIALPHA || payoutAmount || ''),
-          },
-        }
-
-        setDraft(nextDraft)
-        setImportedCanonicalSpec(canonical)
-        setCategory(importedDraft.category)
-        setRawRequest(JSON.stringify(canonical, null, 2))
-        setEditingTitle(importedDraft.title)
-        setEditingSummary(importedDraft.summary)
-        setEditingScope(toLineBlock(importedDraft.deliverables))
-        setEditingDeliverables(toLineBlock(importedDraft.deliverables))
-        setEditingAcceptance(toLineBlock(importedDraft.acceptanceCriteria))
-        setMdImported(true)
-        moveToStep(6)
-        return
-      } catch (e) {
-        setError(e.message || 'Failed to parse JSON job spec.')
-        return
-      }
+    try {
+      const artifact = await createJobDraftArtifact({ spec: candidate })
+      const payoutDecimal = formatUnits(BigInt(candidate.payout), Number(tokenDecimals || 18), 6)
+      setPayoutAmount(payoutDecimal)
+      const nextDraft = toDraftFromStructuredSpec(candidate, protocol, wallet, payoutDecimal)
+      setDraft(nextDraft)
+      setValidatedSpec(candidate)
+      setDraftArtifactPath(artifact?.jobSpecPath || '')
+      setValidationPassed(true)
+      moveToStep(5)
+    } catch (e) {
+      setError(e.message || 'Failed to persist structured draft artifact.')
     }
-
-    const { draft: parsed, protocol: detectedProtocol, warnings } = parseMdJobSpec(trimmed)
-    setMdWarnings(warnings || [])
-
-    if (!parsed.title) {
-      setError('Could not parse a job title from the pasted markdown.')
-      return
-    }
-
-    if (detectedProtocol) {
-      const match = PROTOCOL_OPTIONS.find((o) => o.id === detectedProtocol)
-      if (match) setProtocolId(detectedProtocol)
-    }
-
-    if (parsed.payoutAGIALPHA > 0) {
-      setPayoutAmount(String(parsed.payoutAGIALPHA))
-    }
-
-    const resolvedProtocol = detectedProtocol || protocolId
-
-    const importedDraft = {
-      ...createDefaultJobRequestDraft(),
-      title: parsed.title,
-      summary: parsed.summary,
-      details: parsed.details,
-      category: parsed.category,
-      locale: parsed.locale,
-      tags: parsed.tags,
-      deliverables: parsed.deliverables,
-      acceptanceCriteria: parsed.acceptanceCriteria,
-      requirements: parsed.requirements,
-      payoutAGIALPHA: parsed.payoutAGIALPHA,
-      durationSeconds: parsed.durationSeconds,
-      chainId: parsed.chainId,
-      contract: parsed.contract,
-      protocol: resolvedProtocol,
-      scope: parsed.deliverables,
-      constraints: parsed.requirements,
-      payment: {
-        tokenAddress: normalizeAddress(tokenAddress),
-        symbol: tokenSymbol || 'AGIALPHA',
-        amount: String(parsed.payoutAGIALPHA || payoutAmount || ''),
-      },
-    }
-
-    const canonical = toCanonicalSpecFromDraft(importedDraft, wallet?.account || '')
-
-    setDraft(importedDraft)
-    setImportedCanonicalSpec(canonical)
-    setCategory(parsed.category)
-    setRawRequest(JSON.stringify(canonical, null, 2))
-    setEditingTitle(parsed.title)
-    setEditingSummary(parsed.summary)
-    setEditingScope(toLineBlock(parsed.deliverables))
-    setEditingDeliverables(toLineBlock(parsed.deliverables))
-    setEditingAcceptance(toLineBlock(parsed.acceptanceCriteria))
-    setMdImported(true)
-    moveToStep(6)
   }
 
   async function handleApproveToken() {
     setError('')
-
     if (!walletReady || !protocol?.spenderAddress || !wallet?.account) {
       setError('Wallet and protocol are required for token approval.')
       return
     }
-
     const normalizedToken = normalizeAddress(tokenAddress)
     if (!normalizedToken || amountBaseUnits === null || amountBaseUnits <= 0n) {
       setError('Valid token and payout amount are required for approval.')
       return
     }
-
     setApprovePending(true)
     try {
-      const txHash = await approveToken({
-        tokenAddress: normalizedToken,
-        owner: wallet.account,
-        spender: protocol.spenderAddress,
-        amountBaseUnits,
-      })
+      const txHash = await approveToken({ tokenAddress: normalizedToken, owner: wallet.account, spender: protocol.spenderAddress, amountBaseUnits })
       setApproveTxHash(txHash)
     } catch (e) {
       setError(e.message || 'Token approval failed.')
@@ -628,113 +409,28 @@ export function JobRequestTab({ wallet }) {
     }
   }
 
-  function handleSelectAnswer(value) {
-    if (!currentQuestion) return
-    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: value }))
-    setError('')
-  }
-
-  function handleNextQuestion() {
-    if (!currentQuestion) return
-
-    const currentAnswer = String(answers[currentQuestion.id] || '').trim()
-    if (currentQuestion.required && !currentAnswer) {
-      setError('Select an option to continue.')
-      return
-    }
-
-    if (questionIndex >= questions.length - 1) {
-      const nextDraft = buildDraftJobSpec(
-        protocolId,
-        paymentState,
-        rawRequest,
-        category,
-        answers,
-      )
-      setImportedCanonicalSpec(null)
-      setDraft(nextDraft)
-      setEditingTitle(nextDraft.title)
-      setEditingSummary(nextDraft.summary)
-      setEditingScope(toLineBlock(nextDraft.scope))
-      setEditingDeliverables(toLineBlock(nextDraft.deliverables))
-      setEditingAcceptance(toLineBlock(nextDraft.acceptanceCriteria))
-      moveToStep(6)
-      return
-    }
-
-    setQuestionIndex((index) => index + 1)
-  }
-
-  function handleApplyDraftEdits() {
-    if (!draft) return
-
-    const nextDraft = {
-      ...draft,
-      title: editingTitle.trim(),
-      summary: editingSummary.trim(),
-      protocol: draft.protocol || protocolId,
-      payment:
-        draft.payment || {
-          tokenAddress: normalizeAddress(tokenAddress),
-          symbol: tokenSymbol || 'AGIALPHA',
-          amount: payoutAmount,
-        },
-      scope: parseLines(editingScope),
-      deliverables: parseLines(editingDeliverables),
-      acceptanceCriteria: parseLines(editingAcceptance),
-    }
-
-    const validation = validateDraftJobSpec(nextDraft)
-    if (validation.length > 0) {
-      setError(validation[0])
-      return
-    }
-
-    setDraft(nextDraft)
-    if (mdImported) {
-      setImportedCanonicalSpec(toCanonicalSpecFromDraft(nextDraft, wallet?.account || ''))
-    }
-    setError('')
-    moveToStep(7)
-  }
-
   async function handleUploadToIpfs() {
-    if (!draft) return
-
+    if (!draft || !validatedSpec) return
     setError('')
     if (!ipfsReady) {
-      setError(
-        'IPFS pinning is not ready: PINATA_JWT is missing on server. Add it in Render env vars and redeploy.',
-      )
+      setError('IPFS pinning is not ready: PINATA_JWT is missing on server. Add it in Render env vars and redeploy.')
       return
     }
-
     setIpfsUploading(true)
     try {
       const payload = {
         version: 'mission-control-job-request-spec/v1',
         generatedAt: new Date().toISOString(),
         protocol: protocolId,
-        rawUserInput: rawRequest.trim(),
-        category,
-        answers,
-        payment: paymentState,
+        structuredJobSpec: validatedSpec,
+        draftArtifactPath,
         draft,
-        canonicalSpec:
-          importedCanonicalSpec || toCanonicalSpecFromDraft(draft, wallet?.account || ''),
+        canonicalSpec: toCanonicalSpecFromDraft(draft, wallet?.account || ''),
       }
-
       const ipfs = await pinJsonToIpfs(payload, `${protocolId}-${Date.now()}-job-request.json`)
-      if (!ipfs?.uri || !extractCid(ipfs.uri)) {
-        throw new Error('IPFS upload did not return a valid URI.')
-      }
-
-      setIpfsResult({
-        cid: ipfs.cid || extractCid(ipfs.uri),
-        uri: ipfs.uri,
-        gatewayUrl: ipfs.gatewayUrl || '',
-      })
-      moveToStep(8)
+      if (!ipfs?.uri || !extractCid(ipfs.uri)) throw new Error('IPFS upload did not return a valid URI.')
+      setIpfsResult({ cid: ipfs.cid || extractCid(ipfs.uri), uri: ipfs.uri, gatewayUrl: ipfs.gatewayUrl || '' })
+      moveToStep(6)
     } catch (e) {
       setError(e.message || 'IPFS upload failed.')
     } finally {
@@ -746,70 +442,43 @@ export function JobRequestTab({ wallet }) {
     setError('')
     setPushTxHash('')
     setPushStatus('')
-    setShowUnsignedBrief(false)
-    setShowReviewBrief(false)
-
-    if (!publishPayload) {
-      setError('Publish payload is incomplete. Upload to IPFS first.')
+    if (!publishPayload || !validatedSpec) {
+      setError('Publish payload is incomplete. Validate and upload to IPFS first.')
       return
     }
-
     if (approvalRequired) {
       setError('Approval must be sufficient before creating a job request.')
       return
     }
-
-    if (requiredMissing.length > 0) {
-      setError('All required questions must be answered.')
-      return
-    }
-
     setPosting(true)
     try {
-      const durationKey =
-        DEADLINE_TO_DURATION[String(answers.deadline || 'normal_1w')] || '7d'
-
-      const resolvedDuration =
-        mdImported && draft.durationSeconds
-          ? draft.durationSeconds
-          : DURATION_SECONDS_BY_UI_VALUE[durationKey] ||
-            DURATION_SECONDS_BY_UI_VALUE['7d']
-
-      const resolvedTags =
-        mdImported && Array.isArray(draft.tags) && draft.tags.length > 0
-          ? draft.tags
-          : [draft.category, draft.protocol, paymentState.symbol]
-
-      const draftModel = {
-        ...createDefaultJobRequestDraft(),
-        title: draft.title,
-        summary: draft.summary,
-        details: (draft.summary || draft.title || '').slice(0, 200),
-        category: draft.category,
-        tags: resolvedTags,
-        deliverables: draft.deliverables,
-        acceptanceCriteria: draft.acceptanceCriteria,
-        requirements: draft.constraints || draft.requirements,
-        payoutAGIALPHA: Number.parseFloat(payoutAmount || '0') || 0,
-        durationSeconds: resolvedDuration,
-        chainId: wallet.chainIdDecimal || 1,
-        contract: protocol?.contractAddress || draft.contract || '',
-        createdBy: wallet.account,
-      }
-
       const response = await createJobRequest(
-        toLegacyJobRequestPayload(draftModel, {
-          durationUiValue:
-            mdImported && draft.durationSeconds
-              ? `${Math.round(draft.durationSeconds)}s`
-              : durationKey,
-          ipfsUri: ipfsResult.uri,
-          imageUri: DEFAULT_REQUEST_IMAGE,
-        }),
+        toLegacyJobRequestPayload(
+          {
+            ...createDefaultJobRequestDraft(),
+            title: draft.title,
+            summary: draft.summary,
+            details: draft.details,
+            category: draft.category,
+            tags: draft.tags,
+            deliverables: draft.deliverables,
+            acceptanceCriteria: draft.acceptanceCriteria,
+            requirements: draft.requirements,
+            payoutAGIALPHA: Number.parseFloat(payoutAmount || '0') || 0,
+            durationSeconds: Number(validatedSpec.duration),
+            chainId: wallet.chainIdDecimal || 1,
+            contract: protocol?.contractAddress || draft.contract || '',
+            createdBy: wallet.account,
+          },
+          {
+            durationUiValue: `${Math.round(validatedSpec.duration)}s`,
+            ipfsUri: ipfsResult.uri,
+            imageUri: DEFAULT_REQUEST_IMAGE,
+          },
+        ),
       )
-
       setResult({ ...response, publishPayload })
-      moveToStep(9)
+      moveToStep(7)
     } catch (e) {
       setError(e.message || 'Create job request failed.')
     } finally {
@@ -821,57 +490,23 @@ export function JobRequestTab({ wallet }) {
     setError('')
     setPushStatus('')
     setPushTxHash('')
-
-    if (!walletReady || !wallet?.account) {
-      setError('Connect MetaMask before pushing the job on-chain.')
-      return
-    }
-
-    if (!result?.unsignedTxPath) {
-      setError('Unsigned tx package is missing.')
-      return
-    }
-
+    if (!walletReady || !wallet?.account) return setError('Connect MetaMask before pushing the job on-chain.')
+    if (!result?.unsignedTxPath) return setError('Unsigned tx package is missing.')
     const provider = window?.ethereum || wallet?.provider
-    if (!provider?.request) {
-      setError('No injected wallet provider found.')
-      return
-    }
-
+    if (!provider?.request) return setError('No injected wallet provider found.')
     setPushPending(true)
     try {
       const file = await fetchOperatorActionFile(result.unsignedTxPath)
       const tx = file?.json
-
-      if (!tx || typeof tx !== 'object') {
-        throw new Error('Unsigned tx package could not be loaded as JSON.')
-      }
-
+      if (!tx || typeof tx !== 'object') throw new Error('Unsigned tx package could not be loaded as JSON.')
       const desiredChainId = String(tx.chainId || wallet?.chainId || '0x1').toLowerCase()
-      const currentChainId = String(
-        wallet?.chainId || (await provider.request({ method: 'eth_chainId' })),
-      ).toLowerCase()
-
+      const currentChainId = String(wallet?.chainId || (await provider.request({ method: 'eth_chainId' }))).toLowerCase()
       if (desiredChainId && desiredChainId !== currentChainId) {
-        await provider.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: desiredChainId }],
-        })
+        await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: desiredChainId }] })
       }
-
-      const sendTx = {
-        from: wallet.account,
-        to: tx.to,
-        data: tx.data,
-        value: tx.value || '0x0',
-      }
-
+      const sendTx = { from: wallet.account, to: tx.to, data: tx.data, value: tx.value || '0x0' }
       setPushStatus('Opening MetaMask for final createJob signature...')
-      const txHash = await provider.request({
-        method: 'eth_sendTransaction',
-        params: [sendTx],
-      })
-
+      const txHash = await provider.request({ method: 'eth_sendTransaction', params: [sendTx] })
       setPushTxHash(txHash)
       setPushStatus('Job create transaction submitted.')
     } catch (e) {
@@ -885,9 +520,7 @@ export function JobRequestTab({ wallet }) {
     <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 space-y-4 min-w-0 overflow-x-hidden">
       <div className="min-w-0">
         <div className="text-xs text-slate-500 uppercase tracking-wider">Request Wizard</div>
-        <div className="text-sm text-slate-300 mt-1 break-words">
-          Protocol-aware guided compiler for AGI job creation.
-        </div>
+        <div className="text-sm text-slate-300 mt-1 break-words">Deterministic structured job compiler for AGI job creation.</div>
       </div>
 
       <div className="rounded border border-slate-800 bg-slate-950 p-3 flex flex-wrap items-center gap-2 min-w-0">
@@ -896,31 +529,10 @@ export function JobRequestTab({ wallet }) {
         {statusPill('protocol', protocol?.label || 'not selected')}
         {statusPill('approval', approvalRequired ? 'required' : 'sufficient')}
         {statusPill('ipfs pin', infraLoading ? 'checking…' : ipfsReady ? 'ready' : 'missing PINATA_JWT')}
-        {!walletReady && (
-          <button
-            onClick={wallet?.connect}
-            disabled={!wallet?.providerAvailable || wallet?.status === 'connecting'}
-            className="text-xs px-3 py-1.5 rounded border border-amber-700 text-amber-200 hover:bg-amber-900/30 disabled:opacity-50"
-          >
-            {wallet?.status === 'connecting'
-              ? 'Connecting...'
-              : 'Connect MetaMask to create a request'}
-          </button>
-        )}
       </div>
 
-      {!infraLoading && !ipfsReady && (
-        <div className="rounded border border-amber-900 bg-amber-950/20 p-3 text-xs text-amber-200 break-words">
-          IPFS upload is disabled because PINATA_JWT is not configured on the server. This is why
-          “Upload reviewed spec to IPFS” fails. Add PINATA_JWT in Render env vars, redeploy, then
-          retry Step 7.
-        </div>
-      )}
-
       <div ref={registerStepRef(1)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">
-          Step 1 · Protocol selection
-        </div>
+        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 1 · Protocol selection</div>
         <div className="grid md:grid-cols-3 gap-2 min-w-0">
           {PROTOCOL_OPTIONS.map((option) => {
             const selected = protocolId === option.id
@@ -932,11 +544,7 @@ export function JobRequestTab({ wallet }) {
                   resetAfterProtocolPaymentChange()
                 }}
                 disabled={!walletReady}
-                className={`text-left rounded border p-3 min-w-0 ${
-                  selected
-                    ? 'border-blue-500 bg-blue-950/30'
-                    : 'border-slate-700 bg-slate-900'
-                } disabled:opacity-60`}
+                className={`text-left rounded border p-3 min-w-0 ${selected ? 'border-blue-500 bg-blue-950/30' : 'border-slate-700 bg-slate-900'} disabled:opacity-60`}
               >
                 <div className="text-sm text-slate-100 font-semibold break-words">{option.label}</div>
                 <div className="text-xs text-slate-400 mt-1 break-words">{option.description}</div>
@@ -947,547 +555,80 @@ export function JobRequestTab({ wallet }) {
       </div>
 
       <div ref={registerStepRef(2)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">
-          Step 2 · Payment token and payout
-        </div>
+        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 2 · Payment token and payout</div>
         <div className="grid md:grid-cols-2 gap-3 min-w-0">
-          <label className="space-y-1 min-w-0">
-            <span className="text-xs text-slate-400">Token</span>
-            <select
-              value={tokenAddress}
-              disabled={!walletReady || !protocol}
-              onChange={(e) => {
-                const selected = tokenOptions.find((item) => item.address === e.target.value)
-                setTokenAddress(selected?.address || '')
-                setTokenSymbol(selected?.symbol || '')
-                setTokenDecimals(selected?.decimals || 18)
-                setApproveTxHash('')
-              }}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            >
-              {tokenOptions.map((option) => (
-                <option key={option.id} value={option.address}>
-                  {option.symbol}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-1 min-w-0">
-            <span className="text-xs text-slate-400">Token address</span>
-            <input
-              value={tokenAddress}
-              disabled={!walletReady || !protocol}
-              onChange={(e) => {
-                setTokenAddress(e.target.value)
-                setApproveTxHash('')
-              }}
-              placeholder="0x..."
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-          </label>
-
-          <label className="space-y-1 min-w-0">
-            <span className="text-xs text-slate-400">Token symbol</span>
-            <input
-              value={tokenSymbol}
-              disabled={!walletReady || !protocol}
-              onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())}
-              placeholder="AGIALPHA"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-          </label>
-
-          <label className="space-y-1 min-w-0">
-            <span className="text-xs text-slate-400">Token decimals</span>
-            <input
-              value={tokenDecimals}
-              disabled={!walletReady || !protocol}
-              onChange={(e) => setTokenDecimals(e.target.value)}
-              placeholder="18"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-          </label>
-
-          <label className="space-y-1 min-w-0">
-            <span className="text-xs text-slate-400">Payout amount</span>
-            <input
-              value={payoutAmount}
-              disabled={!walletReady || !protocol}
-              onChange={(e) => {
-                setPayoutAmount(e.target.value)
-                setApproveTxHash('')
-              }}
-              placeholder="100"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-          </label>
+          <label className="space-y-1 min-w-0"><span className="text-xs text-slate-400">Token</span><select value={tokenAddress} disabled={!walletReady || !protocol} onChange={(e) => { const selected = tokenOptions.find((item) => item.address === e.target.value); setTokenAddress(selected?.address || ''); setTokenSymbol(selected?.symbol || ''); setTokenDecimals(selected?.decimals || 18); setApproveTxHash('') }} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0">{tokenOptions.map((option) => <option key={option.id} value={option.address}>{option.symbol}</option>)}</select></label>
+          <label className="space-y-1 min-w-0"><span className="text-xs text-slate-400">Token address</span><input value={tokenAddress} disabled={!walletReady || !protocol} onChange={(e) => { setTokenAddress(e.target.value); setApproveTxHash('') }} placeholder="0x..." className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0" /></label>
+          <label className="space-y-1 min-w-0"><span className="text-xs text-slate-400">Token symbol</span><input value={tokenSymbol} disabled={!walletReady || !protocol} onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0" /></label>
+          <label className="space-y-1 min-w-0"><span className="text-xs text-slate-400">Token decimals</span><input value={tokenDecimals} disabled={!walletReady || !protocol} onChange={(e) => setTokenDecimals(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0" /></label>
+          <label className="space-y-1 min-w-0"><span className="text-xs text-slate-400">Payout amount</span><input value={payoutAmount} disabled={!walletReady || !protocol} onChange={(e) => { setPayoutAmount(e.target.value); setApproveTxHash('') }} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0" /></label>
         </div>
-
         <div className="text-xs text-slate-400 break-words">Preview: {payoutPreview}</div>
       </div>
 
       <div ref={registerStepRef(3)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-2 min-w-0">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">
-          Step 3 · Token approval
-        </div>
-        <div className="text-xs text-slate-400 break-all">
-          Spender: <span className="font-mono">{protocol?.spenderAddress || '—'}</span>
-        </div>
-        <div className="text-xs text-slate-400 break-words">
-          Allowance:{' '}
-          {allowanceLoading
-            ? 'loading...'
-            : `${formatUnits(allowanceBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${
-                tokenSymbol || 'TOKEN'
-              }`}
-        </div>
-
+        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 3 · Token approval</div>
+        <div className="text-xs text-slate-400 break-all">Spender: <span className="font-mono">{protocol?.spenderAddress || '—'}</span></div>
+        <div className="text-xs text-slate-400 break-words">Allowance: {allowanceLoading ? 'loading...' : `${formatUnits(allowanceBaseUnits || 0n, Number(tokenDecimals || 18), 6)} ${tokenSymbol || 'TOKEN'}`}</div>
         {approvalRequired ? (
           <div className="space-y-2">
-            <div className="text-xs text-amber-300">
-              Approval required before request generation and publish.
-            </div>
-            <button
-              onClick={handleApproveToken}
-              disabled={approvePending || !walletReady || !protocol}
-              className="text-xs px-3 py-2 rounded border border-amber-700 text-amber-200 hover:bg-amber-900/30 disabled:opacity-50"
-            >
-              {approvePending ? 'Approving...' : 'Approve token spending'}
-            </button>
-            {approveTxHash && (
-              <div className="text-xs text-slate-400 font-mono break-all">
-                approval tx: {approveTxHash}
-              </div>
-            )}
+            <div className="text-xs text-amber-300">Approval required before request generation and publish.</div>
+            <button onClick={handleApproveToken} disabled={approvePending || !walletReady || !protocol} className="text-xs px-3 py-2 rounded border border-amber-700 text-amber-200 hover:bg-amber-900/30 disabled:opacity-50">{approvePending ? 'Approving...' : 'Approve token spending'}</button>
+            {approveTxHash && <div className="text-xs text-slate-400 font-mono break-all">approval tx: {approveTxHash}</div>}
           </div>
-        ) : (
-          <div className="text-xs text-emerald-300">
-            Approval sufficient for selected payout.
-          </div>
-        )}
+        ) : <div className="text-xs text-emerald-300">Approval sufficient for selected payout.</div>}
       </div>
 
       <div ref={registerStepRef(4)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-4 min-w-0">
-        <div className="text-xs text-slate-500 uppercase tracking-wider">
-          Step 4 · Request input
+        <div className="text-xs text-slate-500 uppercase tracking-wider">Step 4 · Structured request input (strict)</div>
+        <div className="text-xs text-slate-400">Only JSON mode or strict TXT template mode are accepted. Free-form chat input is disabled.</div>
+        <div className="flex gap-2">
+          <button onClick={() => { setInputMode('json'); setValidationPassed(false); setValidationErrors([]); setStructuredRawInput(JSON_EXAMPLE_TEMPLATE) }} className={`px-3 py-1.5 rounded text-xs border ${inputMode === 'json' ? 'border-blue-500 bg-blue-950/30 text-blue-200' : 'border-slate-700 text-slate-300'}`}>JSON Mode</button>
+          <button onClick={() => { setInputMode('txt'); setValidationPassed(false); setValidationErrors([]); setStructuredRawInput(TXT_EXAMPLE_TEMPLATE) }} className={`px-3 py-1.5 rounded text-xs border ${inputMode === 'txt' ? 'border-blue-500 bg-blue-950/30 text-blue-200' : 'border-slate-700 text-slate-300'}`}>TXT Mode</button>
         </div>
-        <div className="text-xs text-slate-400 break-words">
-          Two ways to create a request — use either box. Chat input runs the guided wizard
-          (Step 5). Markdown paste skips the wizard and lands you on the draft review (Step 6).
+        <textarea rows={18} value={structuredRawInput} onChange={(e) => setStructuredRawInput(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200" />
+        <div className="flex flex-wrap gap-2">
+          <button onClick={loadExampleTemplate} className="px-3 py-2 rounded border border-slate-600 text-xs text-slate-200">Load Example Template</button>
+          <button onClick={handleValidateStructuredInput} disabled={!walletReady || !protocol || approvalRequired} className="px-3 py-2 rounded border border-cyan-700 text-cyan-200 text-xs disabled:opacity-50">Validate</button>
+          <button onClick={() => validationPassed && moveToStep(5)} disabled={!validationPassed} className="px-3 py-2 rounded border border-blue-700 text-blue-200 text-xs disabled:opacity-50">Proceed</button>
         </div>
-
-        <div className="grid md:grid-cols-2 gap-3 min-w-0">
-          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2 min-w-0">
-            <div className="text-xs text-slate-300 font-semibold">Chat input</div>
-            <div className="text-[11px] text-slate-500 break-words">
-              Describe your job in plain words — the wizard will ask clarifying questions.
-            </div>
-            <textarea
-              rows={10}
-              disabled={!walletReady || !protocol || approvalRequired}
-              value={rawRequest}
-              onChange={(e) => setRawRequest(e.target.value)}
-              placeholder="Describe what you need in simple words"
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-            <button
-              onClick={handleBuildRequest}
-              disabled={!walletReady || !protocol || approvalRequired || !rawRequest.trim()}
-              className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50 w-full"
-            >
-              Build my request
-            </button>
-          </div>
-
-          <div className="rounded border border-slate-700 bg-slate-900/50 p-3 space-y-2 min-w-0">
-            <div className="text-xs text-slate-300 font-semibold">Paste .md file</div>
-            <div className="text-[11px] text-slate-500 break-words">
-              Paste a complete job spec in Markdown. JSON also works if you paste canonical spec.
-            </div>
-            <textarea
-              rows={14}
-              value={mdRaw}
-              onChange={(e) => setMdRaw(e.target.value)}
-              placeholder={`development
-Ethereum mainnet · AGIJobManager v1
-Your job title here
-
-Job description paragraph...
-
-tag1
-tag2
-Payout
-10,000
-AGIALPHA tokens
-Duration
-7 days
-604,800 sec window
-Deliverables
-deliverable item 1
-deliverable item 2
-Acceptance criteria
-criterion 1
-criterion 2
-Requirements
-requirement 1
-Employer: you · Contract: 0x... · createdVia: Emperor_os`}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-slate-200 min-w-0"
-            />
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                onClick={handleMdImport}
-                disabled={!mdRaw.trim()}
-                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm disabled:opacity-50"
-              >
-                Parse & import
-              </button>
-              {mdImported && (
-                <span className="text-xs text-emerald-400">
-                  Imported — review draft below
-                </span>
-              )}
-            </div>
-            {mdWarnings.length > 0 && (
-              <div className="rounded border border-amber-900 bg-amber-950/20 p-2 text-xs text-amber-200 space-y-1 min-w-0">
-                {mdWarnings.map((w, i) => (
-                  <div key={i} className="break-words">{w}</div>
-                ))}
-              </div>
-            )}
-          </div>
+        <div className="rounded border border-slate-700 bg-slate-900/50 p-2 text-xs">
+          <div className="text-slate-300 font-semibold mb-1">Validation status</div>
+          {validationPassed ? <div className="text-emerald-300">Valid structured input. Draft artifact written: <span className="font-mono break-all">{draftArtifactPath || 'pending'}</span></div> : <div className="text-amber-300">Not validated.</div>}
+          {validationErrors.length > 0 && <ul className="list-disc ml-4 mt-2 text-red-300">{validationErrors.map((item, idx) => <li key={idx} className="break-words">{item}</li>)}</ul>}
         </div>
       </div>
 
-      {step >= 5 && currentQuestion && (
+      {step >= 5 && draft && (
         <div ref={registerStepRef(5)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">
-            Step 5 · Guided questions ({questionIndex + 1}/{questions.length})
-          </div>
-          <div className="text-sm text-slate-100 font-semibold break-words">{currentQuestion.prompt}</div>
-          <div className="space-y-2">
-            {currentQuestion.options.map((option) => {
-              const checked = answers[currentQuestion.id] === option.value
-              return (
-                <label
-                  key={option.id}
-                  className={`flex items-center gap-2 px-3 py-2 rounded border ${
-                    checked ? 'border-blue-500 bg-blue-950/30' : 'border-slate-700'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name={currentQuestion.id}
-                    checked={checked}
-                    onChange={() => handleSelectAnswer(option.value)}
-                  />
-                  <span className="text-sm break-words">{option.label}</span>
-                </label>
-              )
-            })}
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setQuestionIndex((i) => Math.max(0, i - 1))}
-              disabled={questionIndex === 0}
-              className="text-xs px-3 py-2 rounded border border-slate-700 disabled:opacity-50"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleNextQuestion}
-              className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200"
-            >
-              {questionIndex === questions.length - 1 ? 'Generate draft' : 'Next'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step >= 6 && draft && (
-        <div ref={registerStepRef(6)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">
-            Step 6 · Draft spec{' '}
-            {mdImported && (
-              <span className="text-indigo-400 normal-case ml-1">
-                (imported from Markdown / JSON)
-              </span>
-            )}
-          </div>
-
-          <label className="space-y-1 block min-w-0">
-            <span className="text-xs text-slate-400">Title</span>
-            <input
-              value={editingTitle}
-              onChange={(e) => setEditingTitle(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-          </label>
-
-          <label className="space-y-1 block min-w-0">
-            <span className="text-xs text-slate-400">Summary</span>
-            <textarea
-              rows={4}
-              value={editingSummary}
-              onChange={(e) => setEditingSummary(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-          </label>
-
-          <div className="rounded border border-slate-700 bg-slate-900/60 p-3 min-w-0">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-2">
-              Wrapped preview
-            </div>
-            <SectionText>{editingSummary || 'No summary yet.'}</SectionText>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-3 min-w-0">
-            <label className="space-y-1 block min-w-0">
-              <span className="text-xs text-slate-400">{mdImported ? 'Deliverables' : 'Scope'}</span>
-              <textarea
-                rows={4}
-                value={editingScope}
-                onChange={(e) => setEditingScope(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-              />
-            </label>
-
-            <label className="space-y-1 block min-w-0">
-              <span className="text-xs text-slate-400">Deliverables</span>
-              <textarea
-                rows={4}
-                value={editingDeliverables}
-                onChange={(e) => setEditingDeliverables(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-              />
-            </label>
-          </div>
-
-          <label className="space-y-1 block min-w-0">
-            <span className="text-xs text-slate-400">Acceptance criteria</span>
-            <textarea
-              rows={4}
-              value={editingAcceptance}
-              onChange={(e) => setEditingAcceptance(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm min-w-0"
-            />
-          </label>
-
-          {mdImported && (
-            <div className="grid md:grid-cols-2 gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
-                <span className="text-xs text-slate-400">Requirements (read-only)</span>
-                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 space-y-1 max-h-40 overflow-y-auto min-w-0">
-                  {(draft.requirements || []).map((r, i) => (
-                    <div key={i} className="break-words">{r}</div>
-                  ))}
-                  {(!draft.requirements || draft.requirements.length === 0) && (
-                    <div className="text-slate-500 italic">none</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-1 min-w-0">
-                <span className="text-xs text-slate-400">Tags</span>
-                <div className="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-slate-300 flex flex-wrap gap-1 min-w-0">
-                  {(draft.tags || []).map((t, i) => (
-                    <span
-                      key={i}
-                      className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 break-all"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                  {(!draft.tags || draft.tags.length === 0) && (
-                    <span className="text-slate-500 italic">none</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="text-xs text-slate-400 break-words">
-            Protocol: {protocol?.label || draft.protocol} · Category: {draft.category}
-            {mdImported && draft.durationSeconds && (
-              <>
-                {' '}
-                · Duration: {Math.round((draft.durationSeconds / 86400) * 100) / 100} days (
-                {draft.durationSeconds.toLocaleString()}s)
-              </>
-            )}
-            {!mdImported && draft.complexity && <> · Complexity: {draft.complexity}</>}
-            {mdImported && draft.contract && (
-              <>
-                {' '}
-                · Contract:{' '}
-                <span className="font-mono break-all">{draft.contract}</span>
-              </>
-            )}
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={handleApplyDraftEdits}
-              className="text-xs px-3 py-2 rounded border border-blue-700 text-blue-200"
-            >
-              Continue to IPFS
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step >= 7 && draft && (
-        <div ref={registerStepRef(7)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">
-            Step 7 · IPFS upload
-          </div>
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 5 · Upload canonical payload to IPFS</div>
           {!ipfsResult ? (
-            <button
-              onClick={handleUploadToIpfs}
-              disabled={ipfsUploading || !ipfsReady}
-              className="text-xs px-3 py-2 rounded border border-cyan-700 text-cyan-200 disabled:opacity-50"
-            >
-              {ipfsUploading
-                ? 'Uploading to IPFS...'
-                : !ipfsReady
-                  ? 'IPFS disabled (missing PINATA_JWT)'
-                  : 'Upload reviewed spec to IPFS'}
-            </button>
+            <button onClick={handleUploadToIpfs} disabled={ipfsUploading || !ipfsReady || !validationPassed} className="text-xs px-3 py-2 rounded border border-cyan-700 text-cyan-200 disabled:opacity-50">{ipfsUploading ? 'Uploading to IPFS...' : !ipfsReady ? 'IPFS disabled (missing PINATA_JWT)' : 'Upload reviewed spec to IPFS'}</button>
           ) : (
-            <div className="space-y-1 text-xs min-w-0">
-              <div className="text-emerald-300">IPFS upload complete.</div>
-              <div className="text-slate-400 font-mono break-all">URI: {ipfsResult.uri}</div>
-              {ipfsResult.gatewayUrl && (
-                <a
-                  href={ipfsResult.gatewayUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-400 break-all"
-                >
-                  Open gateway ↗
-                </a>
-              )}
-            </div>
+            <div className="space-y-1 text-xs min-w-0"><div className="text-emerald-300">IPFS upload complete.</div><div className="text-slate-400 font-mono break-all">URI: {ipfsResult.uri}</div></div>
           )}
         </div>
       )}
 
-      {step >= 8 && draft && ipfsResult && (
-        <div ref={registerStepRef(8)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">
-            Step 8 · Generate sign-ready request package
-          </div>
-          <div className="text-xs text-slate-300 space-y-1 min-w-0">
-            <div className="break-all">
-              Wallet: <span className="font-mono">{wallet?.account || '—'}</span>
-            </div>
-            <div className="break-words">Protocol: {protocol?.label}</div>
-            <div className="break-words">Payment: {payoutPreview}</div>
-            <div className="break-words">Approval status: {approvalRequired ? 'insufficient' : 'sufficient'}</div>
-            <div className="break-all">
-              IPFS URI: <span className="font-mono">{ipfsResult.uri}</span>
-            </div>
-          </div>
-          <button
-            onClick={handleCreateJobRequest}
-            disabled={posting || approvalRequired || !publishPayload}
-            className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
-          >
-            {posting ? 'Generating package...' : 'Generate sign-ready request package'}
-          </button>
+      {step >= 6 && draft && ipfsResult && (
+        <div ref={registerStepRef(6)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 6 · Generate sign-ready request package</div>
+          <button onClick={handleCreateJobRequest} disabled={posting || approvalRequired || !publishPayload} className="px-3 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50">{posting ? 'Generating package...' : 'Generate sign-ready request package'}</button>
         </div>
       )}
 
-      {step >= 9 && result?.unsignedTxPath && (
-        <div ref={registerStepRef(9)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
-          <div className="text-xs text-slate-500 uppercase tracking-wider">
-            Step 9 · Final push job on-chain
-          </div>
-
-          <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2 text-xs space-y-2 min-w-0">
-            <div className="text-emerald-300">Sign-ready request package generated.</div>
-          </div>
-
+      {step >= 7 && result?.unsignedTxPath && (
+        <div ref={registerStepRef(7)} className="rounded border border-slate-800 bg-slate-950 p-3 space-y-3 min-w-0">
+          <div className="text-xs text-slate-500 uppercase tracking-wider">Step 7 · Final push job on-chain</div>
           <BriefCard title="Unsigned tx brief" items={unsignedBriefItems} />
           <BriefCard title="Review manifest brief" items={reviewBriefItems} />
-
-          <details className="rounded border border-slate-800 bg-slate-900/40 p-3">
-            <summary className="text-xs text-slate-300 cursor-pointer">Inspect raw files (secondary/debug)</summary>
-            <div className="mt-2 space-y-2 text-xs">
-              <div className="text-slate-300 break-all">
-                unsigned tx:{' '}
-                <a
-                  className="text-blue-300 underline"
-                  href={`/api/operator-actions/file?path=${encodeURIComponent(
-                    result.unsignedTxPath,
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  open raw
-                </a>
-              </div>
-              <div className="text-slate-300 break-all">
-                review manifest:{' '}
-                <a
-                  className="text-blue-300 underline"
-                  href={`/api/operator-actions/file?path=${encodeURIComponent(
-                    result.reviewManifestPath || '',
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  open raw
-                </a>
-              </div>
-            </div>
-          </details>
-
-          <div className="rounded border border-slate-700 bg-slate-900/60 p-3 space-y-2 min-w-0">
-            <div className="text-xs text-slate-300 font-semibold">
-              Human-controlled contract submission
-            </div>
-            <div className="text-xs text-slate-400 break-words">
-              This final step reads the unsigned package, opens MetaMask, and submits the
-              createJob transaction on-chain from your connected wallet.
-            </div>
-
-            <button
-              onClick={handlePushJobOnchain}
-              disabled={pushPending || !walletReady}
-              className="px-3 py-2 rounded bg-violet-600 text-white text-sm disabled:opacity-50"
-            >
-              {pushPending ? 'Opening MetaMask...' : 'Push job on-chain in MetaMask'}
-            </button>
-
-            {pushStatus && (
-              <div className="text-xs text-slate-300 break-words">{pushStatus}</div>
-            )}
-            {pushTxHash && (
-              <div className="text-xs text-emerald-300 break-all">
-                tx hash: {pushTxHash}
-              </div>
-            )}
-          </div>
-
-          {result?.publishPayload && (
-            <details className="min-w-0">
-              <summary className="text-xs text-slate-300 cursor-pointer">
-                View publish payload
-              </summary>
-              <pre className="mt-2 p-2 rounded bg-slate-900 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap break-words">
-                {JSON.stringify(result.publishPayload, null, 2)}
-              </pre>
-            </details>
-          )}
+          <button onClick={handlePushJobOnchain} disabled={pushPending || !walletReady} className="px-3 py-2 rounded bg-violet-600 text-white text-sm disabled:opacity-50">{pushPending ? 'Opening MetaMask...' : 'Push job on-chain in MetaMask'}</button>
+          {pushStatus && <div className="text-xs text-slate-300 break-words">{pushStatus}</div>}
+          {pushTxHash && <div className="text-xs text-emerald-300 break-all">tx hash: {pushTxHash}</div>}
         </div>
       )}
 
-      {error && (
-        <div className="text-xs text-red-400 bg-red-950/30 border border-red-900 rounded p-2 break-words min-w-0">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-xs text-red-400 bg-red-950/30 border border-red-900 rounded p-2 break-words min-w-0">{error}</div>}
     </div>
   )
 }
