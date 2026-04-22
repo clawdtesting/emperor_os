@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: orchestrator-chat-mcp
+    name: f0x-chat-mcp
     runtime: node
     rootDir: Orchestrator-node/mcp-server
     buildCommand: npm install && npm run build

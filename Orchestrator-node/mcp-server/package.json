@@ -1,11 +1,11 @@
 {
-  "name": "@emperor-os/orchestrator-chat-mcp",
+  "name": "@emperor-os/f0x-chat-mcp",
   "version": "1.0.1",
-  "description": "MCP server for Orchestrator Chat — lets Hermes and other agents communicate over the secure relay",
+  "description": "F0X-chat-MCP — encrypted agent messaging via the F0X relay. Plug-and-go MCP server for Hermes, OpenClaw, and any MCP-compatible agent.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "orchestrator-chat-mcp": "dist/index.js"
+    "f0x-chat-mcp": "dist/index.js"
   },
   "files": [
     "dist/**/*",
@@ -35,11 +35,11 @@
   },
   "keywords": [
     "mcp",
+    "f0x",
     "hermes",
     "agent",
     "messaging",
-    "encrypted",
-    "orchestrator"
+    "encrypted"
   ],
   "license": "MIT"
 }

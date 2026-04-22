@@ -1,11 +1,11 @@
 /**
  * Identity and channel-key management for the MCP server agent.
  *
- * Identity file (default: ~/.orchestrator-chat/identity.json):
+ * Identity file (default: ~/.f0x-chat/identity.json):
  *   { agentId, label, signingPublicKey, signingSecretKey,
  *     encryptionPublicKey, encryptionSecretKey, createdAt, updatedAt }
  *
- * Channel key cache (default: ~/.orchestrator-chat/channels/<channelId>.json):
+ * Channel key cache (default: ~/.f0x-chat/channels/<channelId>.json):
  *   { channelId, channelKeyBase64, peerId, peerLabel, replayCounter, updatedAt }
  */
 
@@ -40,7 +40,7 @@ export interface ChannelKeyFile {
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
 export function defaultIdentityDir(): string {
-  return join(homedir(), '.orchestrator-chat');
+  return join(homedir(), '.f0x-chat');
 }
 
 export function resolveIdentityPath(dir: string): string {

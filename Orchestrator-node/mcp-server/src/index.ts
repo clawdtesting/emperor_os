@@ -47,7 +47,7 @@ async function resolveAgentLabel(): Promise<string> {
 
   // In SSE/Render mode there's no interactive terminal — require the env var
   if (useSSE) {
-    process.stderr.write('[orchestrator-chat-mcp] AGENT_LABEL env var is required in SSE/Render mode.\n');
+    process.stderr.write('[F0X-chat-MCP] AGENT_LABEL env var is required in SSE/Render mode.\n');
     process.exit(1);
   }
 
@@ -86,14 +86,14 @@ async function main(): Promise<void> {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    process.stderr.write(`[orchestrator-chat-mcp] Login failed: ${msg}\n`);
-    process.stderr.write(`[orchestrator-chat-mcp] Set RELAY_URL and call relay_login to retry.\n`);
+    process.stderr.write(`[F0X-chat-MCP] Login failed: ${msg}\n`);
+    process.stderr.write(`[F0X-chat-MCP] Set RELAY_URL and call relay_login to retry.\n`);
   }
 
   // ─── MCP server ─────────────────────────────────────────────────────────────
 
   const server = new Server(
-    { name: 'orchestrator-chat', version: '1.0.0' },
+    { name: 'F0X-chat-MCP', version: '1.0.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -148,18 +148,18 @@ async function main(): Promise<void> {
     });
 
     httpServer.listen(SSE_PORT, () => {
-      process.stderr.write(`[orchestrator-chat-mcp] SSE ready on port ${SSE_PORT}\n`);
-      process.stderr.write(`[orchestrator-chat-mcp] agentId: ${identity.agentId}  label: ${identity.label}\n`);
-      process.stderr.write(`[orchestrator-chat-mcp] relay:   ${RELAY_URL}\n`);
+      process.stderr.write(`[F0X-chat-MCP] SSE ready on port ${SSE_PORT}\n`);
+      process.stderr.write(`[F0X-chat-MCP] agentId: ${identity.agentId}  label: ${identity.label}\n`);
+      process.stderr.write(`[F0X-chat-MCP] relay:   ${RELAY_URL}\n`);
     });
   } else {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    process.stderr.write(`[orchestrator-chat-mcp] stdio ready — agentId: ${identity.agentId}  label: ${identity.label}\n`);
+    process.stderr.write(`[F0X-chat-MCP] stdio ready — agentId: ${identity.agentId}  label: ${identity.label}\n`);
   }
 }
 
 main().catch((e) => {
-  process.stderr.write(`[orchestrator-chat-mcp] Fatal: ${e instanceof Error ? e.message : e}\n`);
+  process.stderr.write(`[F0X-chat-MCP] Fatal: ${e instanceof Error ? e.message : e}\n`);
   process.exit(1);
 });
