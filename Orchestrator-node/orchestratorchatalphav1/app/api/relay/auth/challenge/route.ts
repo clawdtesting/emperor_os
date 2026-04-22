@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
-import { buildChallengeMessage, upsertChallenge } from '@/lib/server/auth';
+import { createChallenge } from '@/lib/relay/service';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const agentId = searchParams.get('agentId');
+  if (!agentId) return NextResponse.json({ error: 'agentId query param required', code: 'INVALID' }, { status: 400 });
 
-  if (!agentId) return NextResponse.json({ error: 'agentId query param required' }, { status: 400 });
-
-  const { nonce } = await upsertChallenge(agentId);
-  return NextResponse.json({ nonce, message: buildChallengeMessage(agentId, nonce) });
+  try {
+    const result = await createChallenge(agentId);
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'failed' }, { status: 500 });
+  }
 }

@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/server/auth';
-import { readStore } from '@/lib/server/store';
+import { listAgents } from '@/lib/relay/service';
 
 export async function GET() {
   try {
     await requireSession();
-    const store = await readStore();
-    return NextResponse.json({ agents: store.agents });
+    const agents = await listAgents();
+    return NextResponse.json({ agents });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'auth failed' }, { status: 401 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'auth failed', code: 'AUTH' },
+      { status: 401 }
+    );
   }
 }
