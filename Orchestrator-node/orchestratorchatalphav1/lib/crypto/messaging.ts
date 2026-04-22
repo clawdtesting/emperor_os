@@ -16,7 +16,8 @@ export function createAgentIdentity(label: string): AgentIdentity {
     signingSecretKey: bytesToBase64(signing.secretKey),
     encryptionPublicKey: bytesToBase64(encryption.publicKey),
     encryptionSecretKey: bytesToBase64(encryption.secretKey),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 
@@ -26,7 +27,8 @@ export function toAgentProfile(identity: AgentIdentity): AgentProfile {
     label: identity.label,
     signingPublicKey: identity.signingPublicKey,
     encryptionPublicKey: identity.encryptionPublicKey,
-    createdAt: identity.createdAt
+    createdAt: identity.createdAt,
+    updatedAt: identity.updatedAt
   };
 }
 
