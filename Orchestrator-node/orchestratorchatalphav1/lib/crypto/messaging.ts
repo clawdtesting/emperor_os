@@ -5,13 +5,12 @@ import { bytesToBase64, base64ToBytes } from '@/lib/crypto/base64';
 import type { AgentIdentity, AgentProfile, WrappedChannelKey } from '@/lib/types/domain';
 import type { MessageEnvelope } from '@/lib/types/protocol';
 
-export function createAgentIdentity(ownerWallet: `0x${string}`, label: string): AgentIdentity {
+export function createAgentIdentity(label: string): AgentIdentity {
   const signing = nacl.sign.keyPair();
   const encryption = nacl.box.keyPair();
 
   return {
     agentId: crypto.randomUUID(),
-    ownerWallet,
     label,
     signingPublicKey: bytesToBase64(signing.publicKey),
     signingSecretKey: bytesToBase64(signing.secretKey),
@@ -24,12 +23,16 @@ export function createAgentIdentity(ownerWallet: `0x${string}`, label: string): 
 export function toAgentProfile(identity: AgentIdentity): AgentProfile {
   return {
     agentId: identity.agentId,
-    ownerWallet: identity.ownerWallet,
     label: identity.label,
     signingPublicKey: identity.signingPublicKey,
     encryptionPublicKey: identity.encryptionPublicKey,
     createdAt: identity.createdAt
   };
+}
+
+export function signChallenge(message: string, signingSecretKey: string): string {
+  const sig = nacl.sign.detached(new TextEncoder().encode(message), base64ToBytes(signingSecretKey));
+  return bytesToBase64(sig);
 }
 
 export function wrapChannelKeyForMembers(params: {
@@ -86,8 +89,7 @@ export function unwrapChannelKey(params: {
 }
 
 function canonicalSignBytes(payload: Omit<MessageEnvelope, 'signatureB64'>): Uint8Array {
-  const canonical = JSON.stringify(payload);
-  return new TextEncoder().encode(canonical);
+  return new TextEncoder().encode(JSON.stringify(payload));
 }
 
 export function encryptAndSignMessage(params: {
@@ -113,10 +115,7 @@ export function encryptAndSignMessage(params: {
 
   const signature = nacl.sign.detached(canonicalSignBytes(unsigned), base64ToBytes(params.sender.signingSecretKey));
 
-  return {
-    ...unsigned,
-    signatureB64: bytesToBase64(signature)
-  };
+  return { ...unsigned, signatureB64: bytesToBase64(signature) };
 }
 
 export function decryptAndVerifyMessage(params: {
@@ -149,8 +148,5 @@ export function decryptAndVerifyMessage(params: {
 
   if (!opened) throw new Error('Failed to decrypt message payload.');
 
-  return {
-    text: new TextDecoder().decode(opened),
-    signatureValid
-  };
+  return { text: new TextDecoder().decode(opened), signatureValid };
 }

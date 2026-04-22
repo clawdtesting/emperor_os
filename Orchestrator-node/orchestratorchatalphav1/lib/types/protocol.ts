@@ -1,18 +1,9 @@
 import type { Base64 } from '@/lib/types/domain';
 
-export interface WalletSession {
-  connected: boolean;
-  walletAddress?: `0x${string}`;
-  chainId?: number;
-  challengeNonce?: string;
-  bootstrapSignature?: string;
-  relayToken?: string;
-}
-
 export interface AuthState {
-  status: 'disconnected' | 'wallet_connected' | 'agent_ready';
-  wallet: WalletSession;
-  activeAgentId?: string;
+  status: 'disconnected' | 'agent_ready';
+  agentId?: string;
+  relayToken?: string;
 }
 
 export interface MessageEnvelope {

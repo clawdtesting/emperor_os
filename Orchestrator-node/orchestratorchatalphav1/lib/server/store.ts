@@ -5,7 +5,7 @@ import type { MessageEnvelope } from '@/lib/types/protocol';
 
 export interface RelaySession {
   token: string;
-  wallet: `0x${string}`;
+  agentId: string;
   nonce: string;
   expiresAt: string;
 }

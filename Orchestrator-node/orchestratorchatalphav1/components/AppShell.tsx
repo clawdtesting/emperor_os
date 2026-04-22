@@ -10,10 +10,7 @@ import { loadAgentIdentity, loadAuthState, persistAgentIdentity, persistAuthStat
 import type { AgentIdentity } from '@/lib/types/domain';
 import type { AuthState } from '@/lib/types/protocol';
 
-const defaultAuth: AuthState = {
-  wallet: { connected: false },
-  status: 'disconnected'
-};
+const defaultAuth: AuthState = { status: 'disconnected' };
 
 export function AppShell() {
   const [auth, setAuth] = useState<AuthState>(defaultAuth);
@@ -24,7 +21,6 @@ export function AppShell() {
   useEffect(() => {
     const storedAuth = loadAuthState();
     const storedIdentity = loadAgentIdentity();
-
     if (storedAuth) setAuth(storedAuth);
     if (storedIdentity) setAgentIdentity(storedIdentity);
   }, []);
@@ -36,7 +32,6 @@ export function AppShell() {
       try {
         const health = await checkRelayHealth();
         if (!active) return;
-
         setRelayStatus(health.relay === 'ok' ? 'ok' : 'down');
         setRelayMessage(`Relay reachable · agents ${health.stats.agents} · channels ${health.stats.channels} · envelopes ${health.stats.envelopes}`);
       } catch {
@@ -54,58 +49,46 @@ export function AppShell() {
     };
   }, []);
 
-  const handleWalletConnected = (payload: {
-    address: `0x${string}`;
-    chainId: number;
-    bootstrapSignature: string;
-    relayToken: string;
-    challengeNonce: string;
-  }) => {
-    const nextAuth: AuthState = {
-      wallet: {
-        connected: true,
-        walletAddress: payload.address,
-        chainId: payload.chainId,
-        bootstrapSignature: payload.bootstrapSignature,
-        relayToken: payload.relayToken,
-        challengeNonce: payload.challengeNonce
-      },
-      status: 'wallet_connected'
-    };
-
-    setAuth(nextAuth);
-    persistAuthState(nextAuth);
-  };
-
-  const handleWalletDisconnected = () => {
-    const nextAuth: AuthState = {
-      wallet: { connected: false },
-      status: 'disconnected'
-    };
-    // Also clear agent identity when disconnecting wallet
-    setAgentIdentity(null);
-    persistAgentIdentity(null);
-    setAuth(nextAuth);
-    persistAuthState(nextAuth);
-  };
-
   const handleIdentityCreated = (identity: AgentIdentity) => {
     setAgentIdentity(identity);
     persistAgentIdentity(identity);
-
-    const nextAuth: AuthState = {
-      ...auth,
-      activeAgentId: identity.agentId,
-      status: 'agent_ready'
-    };
-
+    // Clear any existing relay token since new identity needs fresh login
+    const nextAuth: AuthState = { status: 'disconnected' };
     setAuth(nextAuth);
     persistAuthState(nextAuth);
   };
 
-  const walletStateLabel = auth.wallet.connected ? `Connected (${auth.wallet.walletAddress})` : 'Not connected';
-  const agentStateLabel = agentIdentity ? `${agentIdentity.label} (${agentIdentity.agentId})` : 'Not initialized';
-  const relayStateLabel = relayStatus === 'ok' ? 'Connected' : relayStatus === 'down' ? 'Unavailable' : 'Checking';
+  const handleRelayConnected = (token: string) => {
+    if (!agentIdentity) return;
+    const nextAuth: AuthState = {
+      status: 'agent_ready',
+      agentId: agentIdentity.agentId,
+      relayToken: token
+    };
+    setAuth(nextAuth);
+    persistAuthState(nextAuth);
+  };
+
+  const handleDisconnect = () => {
+    const nextAuth: AuthState = { status: 'disconnected' };
+    setAuth(nextAuth);
+    persistAuthState(nextAuth);
+  };
+
+  const handleReset = () => {
+    setAgentIdentity(null);
+    persistAgentIdentity(null);
+    const nextAuth: AuthState = { status: 'disconnected' };
+    setAuth(nextAuth);
+    persistAuthState(nextAuth);
+  };
+
+  const agentStateLabel = agentIdentity
+    ? `${agentIdentity.label} (${agentIdentity.agentId.slice(0, 8)}…)`
+    : 'Not initialized';
+
+  const relayStateLabel =
+    relayStatus === 'ok' ? 'Connected' : relayStatus === 'down' ? 'Unavailable' : 'Checking';
 
   const truthLines = useMemo(
     () => [
@@ -120,44 +103,49 @@ export function AppShell() {
     <main className="container">
       <header>
         <p className="eyebrow">Orchestrator Chat Alpha v1 · Phase 3 Hardened MVP</p>
-        <h1>Secure 1:1 agent messaging (relay-first)</h1>
+        <h1>Secure agent messaging (relay-first)</h1>
         <p className="subtitle">
-          Honest model: wallet authenticates session bootstrap, agent keys encrypt/sign messages, relay routes encrypted envelopes.
+          No wallet required. Agent Ed25519 keypair authenticates the relay session and signs every message.
         </p>
       </header>
 
       <section className="card status-card">
         <h2>Operator status</h2>
         <p><strong>Relay:</strong> <span className={`pill ${relayStatus}`}>{relayStateLabel}</span> {relayMessage}</p>
-        <p><strong>Wallet:</strong> {walletStateLabel}</p>
         <p><strong>Agent identity:</strong> {agentStateLabel}</p>
+        <p><strong>Session:</strong> {auth.status === 'agent_ready' ? 'Authenticated' : 'Not connected'}</p>
+        {agentIdentity ? (
+          <button className="button ghost" onClick={handleReset} style={{ marginTop: '0.5rem' }}>
+            Reset identity
+          </button>
+        ) : null}
       </section>
 
-      <WalletConnectCard 
-        onConnected={handleWalletConnected}
-        isConnected={auth.wallet.connected}
-        onDisconnect={handleWalletDisconnected}
-      />
+      {!agentIdentity ? (
+        <AgentIdentityCard onCreated={handleIdentityCreated} />
+      ) : null}
 
-      {auth.wallet.connected && auth.wallet.walletAddress && auth.wallet.relayToken ? (
-        <AgentIdentityCard
-          walletAddress={auth.wallet.walletAddress}
-          relayToken={auth.wallet.relayToken}
-          onCreated={handleIdentityCreated}
+      {agentIdentity ? (
+        <WalletConnectCard
+          identity={agentIdentity}
+          isConnected={auth.status === 'agent_ready'}
+          onConnected={handleRelayConnected}
+          onDisconnect={handleDisconnect}
         />
       ) : null}
 
-      {agentIdentity && auth.wallet.relayToken ? (
-        <ConversationPlaceholder me={agentIdentity} relayToken={auth.wallet.relayToken} />
+      {agentIdentity && auth.status === 'agent_ready' && auth.relayToken ? (
+        <ConversationPlaceholder me={agentIdentity} relayToken={auth.relayToken} />
       ) : null}
 
       <section className="card muted">
         <h2>Security properties implemented</h2>
         <ul>
-          <li><strong>Wallet bootstrap:</strong> {CRYPTO_STRATEGY.wallet.signingPrimitive}</li>
+          <li><strong>Agent bootstrap:</strong> {CRYPTO_STRATEGY.agentBootstrap.signingPrimitive}</li>
           <li><strong>Message signing:</strong> {CRYPTO_STRATEGY.agentSigning.primitive}</li>
           <li><strong>Message encryption:</strong> {CRYPTO_STRATEGY.agentEncryption.primitive}</li>
           <li><strong>Replay defense:</strong> {CRYPTO_STRATEGY.replayResistance.primitive}</li>
+          <li><strong>Agent memory:</strong> {CRYPTO_STRATEGY.agentMemory.primitive}</li>
         </ul>
       </section>
 
