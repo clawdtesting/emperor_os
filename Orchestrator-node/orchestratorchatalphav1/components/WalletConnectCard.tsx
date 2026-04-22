@@ -11,6 +11,8 @@ interface WalletConnectCardProps {
     relayToken: string;
     challengeNonce: string;
   }) => void;
+  isConnected: boolean;
+  onDisconnect: () => void;
 }
 
 declare global {
@@ -21,7 +23,7 @@ declare global {
   }
 }
 
-export function WalletConnectCard({ onConnected }: WalletConnectCardProps) {
+export function WalletConnectCard({ onConnected, isConnected, onDisconnect }: WalletConnectCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -63,15 +65,36 @@ export function WalletConnectCard({ onConnected }: WalletConnectCardProps) {
     }
   };
 
+  const disconnect = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      // Optionally, we could request account disconnection from wallet if needed
+      // For now, we just clear our local state
+      onDisconnect();
+    } catch (disconnectError) {
+      const message = disconnectError instanceof Error ? disconnectError.message : 'Disconnect failed.';
+      setError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="card">
       <h2>1) Wallet bootstrap</h2>
       <p>
         Wallet signs a relay challenge to prove ownership. Wallet is only for bootstrap/session auth, not per-message signing.
       </p>
-      <button onClick={connect} disabled={busy} className="button">
-        {busy ? 'Connecting...' : 'Connect Wallet + Relay Session'}
-      </button>
+      {isConnected ? (
+        <button onClick={disconnect} disabled={busy} className="button">
+          {busy ? 'Disconnecting...' : 'Disconnect Wallet'}
+        </button>
+      ) : (
+        <button onClick={connect} disabled={busy} className="button">
+          {busy ? 'Connecting...' : 'Connect Wallet + Relay Session'}
+        </button>
+      )}
       {error ? <p className="error">{error}</p> : null}
     </section>
   );

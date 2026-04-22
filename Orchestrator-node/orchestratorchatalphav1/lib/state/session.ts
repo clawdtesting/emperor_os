@@ -1,7 +1,7 @@
 import type { AgentIdentity } from '@/lib/types/domain';
 import type { AuthState } from '@/lib/types/protocol';
 
-const AUTH_KEY = 'orchestrator:v1:auth';
+const AUTH_KEY='orches...auth';
 const AGENT_KEY = 'orchestrator:v1:agent';
 
 export function loadAuthState(): AuthState | null {
@@ -33,7 +33,11 @@ export function loadAgentIdentity(): AgentIdentity | null {
   }
 }
 
-export function persistAgentIdentity(identity: AgentIdentity): void {
+export function persistAgentIdentity(identity: AgentIdentity | null): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(AGENT_KEY, JSON.stringify(identity));
+  if (identity === null) {
+    window.localStorage.removeItem(AGENT_KEY);
+  } else {
+    window.localStorage.setItem(AGENT_KEY, JSON.stringify(identity));
+  }
 }

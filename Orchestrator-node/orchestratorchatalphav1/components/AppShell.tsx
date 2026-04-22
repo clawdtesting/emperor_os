@@ -77,6 +77,18 @@ export function AppShell() {
     persistAuthState(nextAuth);
   };
 
+  const handleWalletDisconnected = () => {
+    const nextAuth: AuthState = {
+      wallet: { connected: false },
+      status: 'disconnected'
+    };
+    // Also clear agent identity when disconnecting wallet
+    setAgentIdentity(null);
+    persistAgentIdentity(null);
+    setAuth(nextAuth);
+    persistAuthState(nextAuth);
+  };
+
   const handleIdentityCreated = (identity: AgentIdentity) => {
     setAgentIdentity(identity);
     persistAgentIdentity(identity);
@@ -121,7 +133,11 @@ export function AppShell() {
         <p><strong>Agent identity:</strong> {agentStateLabel}</p>
       </section>
 
-      <WalletConnectCard onConnected={handleWalletConnected} />
+      <WalletConnectCard 
+        onConnected={handleWalletConnected}
+        isConnected={auth.wallet.connected}
+        onDisconnect={handleWalletDisconnected}
+      />
 
       {auth.wallet.connected && auth.wallet.walletAddress && auth.wallet.relayToken ? (
         <AgentIdentityCard
