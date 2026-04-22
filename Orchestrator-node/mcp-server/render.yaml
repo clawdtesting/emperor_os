@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: orchestrator-chat-mcp
+    runtime: node
+    rootDir: Orchestrator-node/mcp-server
+    buildCommand: npm install && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: RELAY_URL
+        value: https://emperor-os-1.onrender.com
+      - key: AGENT_LABEL
+        sync: false          # Render will prompt you to fill this in the dashboard
+      - key: AGENT_IDENTITY_DIR
+        value: /etc/orchestrator-chat
