@@ -6,7 +6,6 @@ const AGENT_KEY = 'orchestrator:v1:agent';
 
 export function loadAuthState(): AuthState | null {
   if (typeof window === 'undefined') return null;
-
   const raw = window.localStorage.getItem(AUTH_KEY);
   if (!raw) return null;
 

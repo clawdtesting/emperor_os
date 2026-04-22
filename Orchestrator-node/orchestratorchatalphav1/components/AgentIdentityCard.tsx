@@ -1,53 +1,49 @@
 'use client';
 
 import { useState } from 'react';
-import { bytesToHex } from 'viem';
+import { registerAgent } from '@/lib/client/relay-api';
+import { createAgentIdentity, toAgentProfile } from '@/lib/crypto/messaging';
 import type { AgentIdentity } from '@/lib/types/domain';
 
 interface AgentIdentityCardProps {
   walletAddress: `0x${string}`;
+  relayToken: string;
   onCreated: (agent: AgentIdentity) => void;
 }
 
-function randomHex(size: number): `0x${string}` {
-  const bytes = new Uint8Array(size);
-  crypto.getRandomValues(bytes);
-  return bytesToHex(bytes);
-}
-
-export function AgentIdentityCard({ walletAddress, onCreated }: AgentIdentityCardProps) {
+export function AgentIdentityCard({ walletAddress, relayToken, onCreated }: AgentIdentityCardProps) {
   const [label, setLabel] = useState('Hermes-Local');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const createIdentity = () => {
-    const id = randomHex(16);
-
-    const identity: AgentIdentity = {
-      id,
-      label,
-      walletAddress,
-      encryptionPublicKey: randomHex(32),
-      signingPublicKey: randomHex(32),
-      keyVersion: 1,
-      createdAt: new Date().toISOString(),
-      status: 'active'
-    };
-
-    onCreated(identity);
+  const createIdentity = async () => {
+    try {
+      setBusy(true);
+      setError(null);
+      const identity = createAgentIdentity(walletAddress, label.trim() || 'Agent');
+      await registerAgent(relayToken, toAgentProfile(identity));
+      onCreated(identity);
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : 'Agent initialization failed.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <section className="card">
-      <h2>2) Agent identity bootstrap</h2>
+      <h2>2) Agent identity init</h2>
       <p>
-        Agent identity is separate from wallet identity. In Phase 2 this will bind to durable Ed25519/X25519 keys.
+        Creates local browser-stored Ed25519 signing + X25519 encryption keypairs. Public keys are registered with relay; private keys remain in this browser localStorage for MVP.
       </p>
       <label className="label">
         Agent label
-        <input value={label} onChange={(event) => setLabel(event.target.value)} className="input" />
+        <input value={label} onChange={(event) => setLabel(event.target.value)} className="input" disabled={busy} />
       </label>
-      <button className="button" onClick={createIdentity}>
-        Initialize Agent Identity
+      <button className="button" onClick={createIdentity} disabled={busy}>
+        {busy ? 'Initializing...' : 'Initialize Agent Identity'}
       </button>
+      {error ? <p className="error">{error}</p> : null}
     </section>
   );
 }

@@ -1,9 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { fetchChallenge, loginRelay } from '@/lib/client/relay-api';
 
 interface WalletConnectCardProps {
-  onConnected: (details: { address: `0x${string}`; chainId: number; bootstrapSignature: string }) => void;
+  onConnected: (details: {
+    address: `0x${string}`;
+    chainId: number;
+    bootstrapSignature: string;
+    relayToken: string;
+    challengeNonce: string;
+  }) => void;
 }
 
 declare global {
@@ -32,13 +39,22 @@ export function WalletConnectCard({ onConnected }: WalletConnectCardProps) {
       const chainHex = (await window.ethereum.request({ method: 'eth_chainId' })) as string;
       const address = accounts[0] as `0x${string}`;
       const chainId = Number.parseInt(chainHex, 16);
-      const statement = `Orchestrator Chat Alpha v1 bootstrap\nAddress: ${address}\nChainId: ${chainId}\nTimestamp: ${new Date().toISOString()}`;
+
+      const challenge = await fetchChallenge(address);
       const bootstrapSignature = (await window.ethereum.request({
         method: 'personal_sign',
-        params: [statement, address]
+        params: [challenge.message, address]
       })) as string;
 
-      onConnected({ address, chainId, bootstrapSignature });
+      const relayLogin = await loginRelay(address, bootstrapSignature);
+
+      onConnected({
+        address,
+        chainId,
+        bootstrapSignature,
+        relayToken: relayLogin.token,
+        challengeNonce: challenge.nonce
+      });
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Wallet connection failed.';
       setError(message);
@@ -51,10 +67,10 @@ export function WalletConnectCard({ onConnected }: WalletConnectCardProps) {
     <section className="card">
       <h2>1) Wallet bootstrap</h2>
       <p>
-        Connect a wallet to establish operator-controlled identity. This does <strong>not</strong> encrypt messages yet.
+        Wallet signs a relay challenge to prove ownership. Wallet is only for bootstrap/session auth, not per-message signing.
       </p>
       <button onClick={connect} disabled={busy} className="button">
-        {busy ? 'Connecting...' : 'Connect Wallet'}
+        {busy ? 'Connecting...' : 'Connect Wallet + Relay Session'}
       </button>
       {error ? <p className="error">{error}</p> : null}
     </section>

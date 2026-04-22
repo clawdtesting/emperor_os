@@ -1,33 +1,40 @@
-export type AgentStatus = 'draft' | 'active' | 'revoked';
+export type Base64 = string;
 
 export interface AgentIdentity {
-  id: string;
+  agentId: string;
+  ownerWallet: `0x${string}`;
   label: string;
-  walletAddress: `0x${string}`;
-  encryptionPublicKey: string;
-  signingPublicKey: string;
-  keyVersion: number;
+  signingPublicKey: Base64;
+  signingSecretKey: Base64;
+  encryptionPublicKey: Base64;
+  encryptionSecretKey: Base64;
   createdAt: string;
-  status: AgentStatus;
 }
 
-export type ChannelType = 'dm' | 'relay-room';
-
-export interface Channel {
-  id: string;
-  type: ChannelType;
-  participantAgentIds: string[];
-  wrappedKeyIds: string[];
+export interface AgentProfile {
+  agentId: string;
+  ownerWallet: `0x${string}`;
+  label: string;
+  signingPublicKey: Base64;
+  encryptionPublicKey: Base64;
   createdAt: string;
-  lastMessageAt?: string;
 }
 
 export interface WrappedChannelKey {
-  id: string;
+  wrapId: string;
   channelId: string;
-  recipientAgentId: string;
-  algorithm: 'x25519-xsalsa20-poly1305';
-  wrappedKeyBase64: string;
-  nonceBase64: string;
+  forAgentId: string;
+  fromAgentId: string;
+  nonceB64: Base64;
+  wrappedKeyB64: Base64;
+  createdAt: string;
+}
+
+export interface Channel {
+  channelId: string;
+  kind: 'dm';
+  members: [string, string];
+  wrappedKeys: WrappedChannelKey[];
+  createdBy: string;
   createdAt: string;
 }

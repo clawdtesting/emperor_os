@@ -1,35 +1,37 @@
-export type MessageDeliveryState = 'queued' | 'relayed' | 'delivered' | 'failed';
-
-export interface MessageEnvelope {
-  id: string;
-  channelId: string;
-  senderAgentId: string;
-  recipientAgentId: string;
-  sentAt: string;
-  sequence: number;
-  deliveryState: MessageDeliveryState;
-  relayHint?: string;
-  contentType: 'text/plain' | 'application/json';
-  ciphertextBase64: string;
-  nonceBase64: string;
-  signatureHex: string;
-  aad?: {
-    chainId: number;
-    domain: string;
-    walletAddress: `0x${string}`;
-  };
-}
+import type { Base64 } from '@/lib/types/domain';
 
 export interface WalletSession {
+  connected: boolean;
   walletAddress?: `0x${string}`;
   chainId?: number;
+  challengeNonce?: string;
   bootstrapSignature?: string;
-  connected: boolean;
+  relayToken?: string;
 }
 
 export interface AuthState {
-  wallet: WalletSession;
-  agentIdentityId?: string;
-  authenticatedAt?: string;
   status: 'disconnected' | 'wallet_connected' | 'agent_ready';
+  wallet: WalletSession;
+  activeAgentId?: string;
+}
+
+export interface MessageEnvelope {
+  messageId: string;
+  channelId: string;
+  senderAgentId: string;
+  timestamp: string;
+  replayCounter: number;
+  nonceB64: Base64;
+  ciphertextB64: Base64;
+  signatureB64: Base64;
+}
+
+export interface DecryptedMessage {
+  messageId: string;
+  channelId: string;
+  senderAgentId: string;
+  text: string;
+  timestamp: string;
+  replayCounter: number;
+  signatureValid: boolean;
 }

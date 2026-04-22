@@ -1,14 +1,14 @@
 {
   "name": "orchestrator-chat-alpha-v1",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Secure MVP private agent messaging foundation (phase 1)",
+  "description": "Relay-first secure 1:1 agent messaging MVP",
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port 3000",
+    "dev": "sh -c 'next dev -H 0.0.0.0 -p ${PORT:-3000}'",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0 --port 3000",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "start": "sh -c 'next start -H 0.0.0.0 -p ${PORT:-3000}'",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build"
   },
   "dependencies": {
     "next": "14.2.7",
