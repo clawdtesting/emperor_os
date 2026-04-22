@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { fetchEnvelopes, listAgents, listMyChannels, openDmChannel, sendEnvelope } from '@/lib/client/relay-api';
+import {
+  fetchEnvelopes,
+  fetchMemory,
+  listAgents,
+  listMyChannels,
+  openDmChannel,
+  sendEnvelope,
+  updateMemory
+} from '@/lib/client/relay-api';
 import {
   decryptAndVerifyMessage,
   encryptAndSignMessage,
@@ -10,7 +18,7 @@ import {
   wrapChannelKeyForMembers
 } from '@/lib/crypto/messaging';
 import { base64ToBytes, bytesToBase64 } from '@/lib/crypto/base64';
-import type { AgentIdentity, AgentProfile, Channel } from '@/lib/types/domain';
+import type { AgentIdentity, AgentMemory, AgentProfile, Channel } from '@/lib/types/domain';
 import type { DecryptedMessage } from '@/lib/types/protocol';
 import nacl from 'tweetnacl';
 
@@ -35,10 +43,18 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
   const [counterByChannel, setCounterByChannel] = useState<Record<string, number>>({});
   const [channelKeyCache, setChannelKeyCache] = useState<ChannelCache>({});
 
+  // Memory state
+  const [memory, setMemory] = useState<AgentMemory | null>(null);
+  const [memorySummary, setMemorySummary] = useState('');
+  const [memoryFact, setMemoryFact] = useState('');
+  const [memorySaving, setMemorySaving] = useState(false);
+
   const myProfile = useMemo(() => toAgentProfile(me), [me]);
   const peerProfiles = agents.filter((agent) => agent.agentId !== me.agentId);
   const validCount = decrypted.filter((message) => message.signatureValid).length;
   const invalidCount = decrypted.length - validCount;
+
+  const activePeerId = activeChannel?.members.find((m) => m !== me.agentId) ?? null;
 
   const refreshDirectory = async () => {
     setRelaySync('syncing');
@@ -97,6 +113,29 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
     setCounterByChannel((previous) => ({ ...previous, [channel.channelId]: maxCounter }));
     setRelaySync('ok');
     setLastSyncAt(new Date().toISOString());
+  };
+
+  const loadMemoryForPeer = async (peerId: string, peerLabel: string, msgCount: number) => {
+    try {
+      const mem = await fetchMemory(relayToken, peerId);
+      setMemory(mem);
+      setMemorySummary(mem?.summary ?? '');
+      // Auto-update lastSeen and messageCount without overwriting summary/facts
+      if (mem) {
+        await updateMemory(relayToken, peerId, {
+          peerLabel,
+          messageCount: msgCount,
+          summary: mem.summary,
+          sharedFacts: mem.sharedFacts
+        });
+      } else {
+        const created = await updateMemory(relayToken, peerId, { peerLabel, messageCount: msgCount });
+        setMemory(created);
+        setMemorySummary('');
+      }
+    } catch {
+      // Memory is non-critical — don't break the UI
+    }
   };
 
   useEffect(() => {
@@ -164,6 +203,7 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
 
       setActiveChannel(opened);
       await loadMessages(opened);
+      await loadMemoryForPeer(peer.agentId, peer.label, decrypted.length);
     } catch (openError) {
       setRelaySync('error');
       setError(openError instanceof Error ? openError.message : 'Could not open channel.');
@@ -176,7 +216,14 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
     try {
       setError(null);
       setActiveChannel(channel);
+      setMemory(null);
+      setMemorySummary('');
       await loadMessages(channel);
+      const peerId = channel.members.find((m) => m !== me.agentId);
+      const peer = agents.find((a) => a.agentId === peerId);
+      if (peerId && peer) {
+        await loadMemoryForPeer(peerId, peer.label, decrypted.length);
+      }
     } catch (openError) {
       setRelaySync('error');
       setError(openError instanceof Error ? openError.message : 'Could not load channel.');
@@ -188,7 +235,6 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
       setError('Open a channel before sending.');
       return;
     }
-
     if (!draft.trim()) return;
 
     try {
@@ -212,19 +258,39 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
     }
   };
 
+  const saveMemory = async () => {
+    if (!activePeerId) return;
+    setMemorySaving(true);
+    try {
+      const peer = agents.find((a) => a.agentId === activePeerId);
+      const facts = memory?.sharedFacts ?? [];
+      if (memoryFact.trim()) facts.push(memoryFact.trim());
+      const updated = await updateMemory(relayToken, activePeerId, {
+        peerLabel: peer?.label ?? memory?.peerLabel ?? 'Unknown',
+        messageCount: decrypted.length,
+        summary: memorySummary,
+        sharedFacts: facts
+      });
+      setMemory(updated);
+      setMemoryFact('');
+    } catch {
+      // non-critical
+    } finally {
+      setMemorySaving(false);
+    }
+  };
+
   return (
     <section className="card">
       <h2>3) 1:1 private messaging</h2>
       <p>
-        Privacy state: relay stores encrypted envelopes and channel metadata. Relay cannot decrypt message plaintext without client-held channel keys.
+        Privacy state: relay stores encrypted envelopes. Relay cannot decrypt message plaintext without client-held channel keys.
       </p>
       <p>
         Relay sync: <span className={`pill ${relaySync === 'ok' ? 'ok' : relaySync === 'error' ? 'down' : 'unknown'}`}>{relaySync}</span>
         {lastSyncAt ? ` · last sync ${lastSyncAt}` : ''}
       </p>
-      <p>
-        Signature verification: valid {validCount} / invalid {invalidCount}
-      </p>
+      <p>Signature verification: valid {validCount} / invalid {invalidCount}</p>
 
       <div className="row">
         <label className="label grow">
@@ -280,9 +346,55 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
           value={draft}
           placeholder="Type encrypted message"
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendSecureMessage(); } }}
         />
         <button className="button" onClick={sendSecureMessage}>Send encrypted</button>
       </div>
+
+      {activeChannel && activePeerId ? (
+        <details style={{ marginTop: '1rem' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+            Agent memory for this peer {memory ? `· ${decrypted.length} messages · last seen ${memory.lastSeen.slice(0, 10)}` : '· no memory yet'}
+          </summary>
+          <div style={{ marginTop: '0.75rem' }}>
+            <p className="meta">
+              Memory is stored per agent-pair on the relay server, scoped to your agent ID. Only you can read or update it.
+            </p>
+            {memory?.sharedFacts?.length ? (
+              <div>
+                <strong>Shared facts:</strong>
+                <ul className="list">
+                  {memory.sharedFacts.map((fact, index) => (
+                    <li key={index}>{fact}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <label className="label">
+              Summary (injected into LLM context on reconnect)
+              <textarea
+                className="input"
+                rows={3}
+                value={memorySummary}
+                onChange={(event) => setMemorySummary(event.target.value)}
+                placeholder="Describe what you know about this peer and conversation..."
+              />
+            </label>
+            <label className="label">
+              Add a new fact
+              <input
+                className="input"
+                value={memoryFact}
+                onChange={(event) => setMemoryFact(event.target.value)}
+                placeholder="e.g. peer prefers JSON, peer runs UTC timezone..."
+              />
+            </label>
+            <button className="button" onClick={saveMemory} disabled={memorySaving}>
+              {memorySaving ? 'Saving...' : 'Save memory'}
+            </button>
+          </div>
+        </details>
+      ) : null}
 
       {error ? <p className="error">{error}</p> : null}
     </section>

@@ -5,19 +5,13 @@ import type { MessageEnvelope } from '@/lib/types/protocol';
 
 export async function GET(_request: Request, context: { params: { channelId: string } }) {
   try {
-    const { wallet } = await requireSession();
+    const { agentId } = await requireSession();
     const { channelId } = context.params;
     const store = await readStore();
 
-    const myAgentIds = store.agents
-      .filter((agent) => agent.ownerWallet.toLowerCase() === wallet.toLowerCase())
-      .map((agent) => agent.agentId);
-
     const channel = store.channels.find((entry) => entry.channelId === channelId);
     if (!channel) return NextResponse.json({ error: 'channel not found' }, { status: 404 });
-
-    const allowed = channel.members.some((member) => myAgentIds.includes(member));
-    if (!allowed) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    if (!channel.members.includes(agentId)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
     const messages = store.messages.filter((msg) => msg.channelId === channelId);
     return NextResponse.json({ channel, messages });
@@ -28,20 +22,18 @@ export async function GET(_request: Request, context: { params: { channelId: str
 
 export async function POST(request: Request, context: { params: { channelId: string } }) {
   try {
-    const { wallet } = await requireSession();
+    const { agentId } = await requireSession();
     const { channelId } = context.params;
     const envelope = (await request.json()) as MessageEnvelope;
     const store = await readStore();
 
-    const agent = store.agents.find((entry) => entry.agentId === envelope.senderAgentId);
-    if (!agent) return NextResponse.json({ error: 'sender agent not registered' }, { status: 404 });
-    if (agent.ownerWallet.toLowerCase() !== wallet.toLowerCase()) {
-      return NextResponse.json({ error: 'wallet does not own sender agent' }, { status: 403 });
+    if (envelope.senderAgentId !== agentId) {
+      return NextResponse.json({ error: 'senderAgentId must match authenticated agent' }, { status: 403 });
     }
 
     const channel = store.channels.find((entry) => entry.channelId === channelId);
     if (!channel) return NextResponse.json({ error: 'channel not found' }, { status: 404 });
-    if (!channel.members.includes(envelope.senderAgentId)) {
+    if (!channel.members.includes(agentId)) {
       return NextResponse.json({ error: 'sender agent not in channel' }, { status: 403 });
     }
 

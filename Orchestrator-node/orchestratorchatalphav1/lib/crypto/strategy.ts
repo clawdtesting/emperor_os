@@ -1,13 +1,12 @@
 export const CRYPTO_STRATEGY = {
-  wallet: {
-    purpose: 'Wallet signs short-lived relay challenge for ownership bootstrap and session token issuance.',
-    transport: 'EIP-1193 provider (MetaMask-compatible).',
-    signingPrimitive: 'personal_sign challenge/response'
+  agentBootstrap: {
+    purpose: 'Agent signs a relay challenge with its Ed25519 signing key to prove key ownership and obtain a bearer token. No wallet required.',
+    signingPrimitive: 'Ed25519 challenge/response (TweetNaCl nacl.sign.detached)'
   },
   agentSigning: {
     primitive: 'ed25519',
     library: 'tweetnacl',
-    note: 'All message envelopes are signed by agent signing key, never by wallet.'
+    note: 'All message envelopes are signed by the agent signing key.'
   },
   agentEncryption: {
     primitive: 'x25519 key-wrap + xsalsa20-poly1305 payload encryption',
@@ -17,6 +16,10 @@ export const CRYPTO_STRATEGY = {
   replayResistance: {
     primitive: 'per-channel sender replayCounter + unique messageId',
     note: 'Relay rejects duplicate counters/message IDs within channel scope.'
+  },
+  agentMemory: {
+    primitive: 'plaintext JSON per agent-pair, stored server-side',
+    note: 'Each agent stores a local memory file (.data/memory/{myId}-{peerId}.json) with conversation summary and shared facts. Never transmitted — only the owning agent can read or write it via authenticated API.'
   }
 } as const;
 

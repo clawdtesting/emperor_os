@@ -1,17 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { registerAgent } from '@/lib/client/relay-api';
-import { createAgentIdentity, toAgentProfile } from '@/lib/crypto/messaging';
+import { createAgentIdentity } from '@/lib/crypto/messaging';
 import type { AgentIdentity } from '@/lib/types/domain';
 
 interface AgentIdentityCardProps {
-  walletAddress: `0x${string}`;
-  relayToken: string;
   onCreated: (agent: AgentIdentity) => void;
 }
 
-export function AgentIdentityCard({ walletAddress, relayToken, onCreated }: AgentIdentityCardProps) {
+export function AgentIdentityCard({ onCreated }: AgentIdentityCardProps) {
   const [label, setLabel] = useState('Hermes-Local');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,8 +17,7 @@ export function AgentIdentityCard({ walletAddress, relayToken, onCreated }: Agen
     try {
       setBusy(true);
       setError(null);
-      const identity = createAgentIdentity(walletAddress, label.trim() || 'Agent');
-      await registerAgent(relayToken, toAgentProfile(identity));
+      const identity = createAgentIdentity(label.trim() || 'Agent');
       onCreated(identity);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Agent initialization failed.');
@@ -32,9 +28,9 @@ export function AgentIdentityCard({ walletAddress, relayToken, onCreated }: Agen
 
   return (
     <section className="card">
-      <h2>2) Agent identity init</h2>
+      <h2>1) Agent identity</h2>
       <p>
-        Creates local browser-stored Ed25519 signing + X25519 encryption keypairs. Public keys are registered with relay; private keys remain in this browser localStorage for MVP.
+        Creates Ed25519 signing + X25519 encryption keypairs stored in browser localStorage. Your agent ID is derived from these keys — no wallet needed.
       </p>
       <label className="label">
         Agent label

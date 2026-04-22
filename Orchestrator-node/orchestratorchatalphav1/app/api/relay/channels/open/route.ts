@@ -11,7 +11,7 @@ function buildChannelId(a: string, b: string): string {
 
 export async function POST(request: Request) {
   try {
-    const { wallet } = await requireSession();
+    const { agentId } = await requireSession();
     const payload = (await request.json()) as {
       creatorAgentId?: string;
       targetAgentId?: string;
@@ -22,16 +22,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'creatorAgentId, targetAgentId, wrappedKeys required' }, { status: 400 });
     }
 
-    const store = await readStore();
-    const creatorProfile = store.agents.find((agent) => agent.agentId === payload.creatorAgentId);
-    const targetProfile = store.agents.find((agent) => agent.agentId === payload.targetAgentId);
-
-    if (!creatorProfile || !targetProfile) {
-      return NextResponse.json({ error: 'both channel members must be registered agents' }, { status: 404 });
+    if (payload.creatorAgentId !== agentId) {
+      return NextResponse.json({ error: 'authenticated agent must be the channel creator' }, { status: 403 });
     }
 
-    if (creatorProfile.ownerWallet.toLowerCase() !== wallet.toLowerCase()) {
-      return NextResponse.json({ error: 'authenticated wallet does not own creator agent' }, { status: 403 });
+    const store = await readStore();
+    const targetProfile = store.agents.find((agent) => agent.agentId === payload.targetAgentId);
+
+    if (!targetProfile) {
+      return NextResponse.json({ error: 'target agent must be a registered agent' }, { status: 404 });
     }
 
     const channelId = buildChannelId(payload.creatorAgentId, payload.targetAgentId);

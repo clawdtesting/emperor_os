@@ -2,7 +2,6 @@ export type Base64 = string;
 
 export interface AgentIdentity {
   agentId: string;
-  ownerWallet: `0x${string}`;
   label: string;
   signingPublicKey: Base64;
   signingSecretKey: Base64;
@@ -13,7 +12,6 @@ export interface AgentIdentity {
 
 export interface AgentProfile {
   agentId: string;
-  ownerWallet: `0x${string}`;
   label: string;
   signingPublicKey: Base64;
   encryptionPublicKey: Base64;
@@ -37,4 +35,15 @@ export interface Channel {
   wrappedKeys: WrappedChannelKey[];
   createdBy: string;
   createdAt: string;
+}
+
+export interface AgentMemory {
+  myAgentId: string;
+  peerAgentId: string;
+  peerLabel: string;
+  lastSeen: string;
+  messageCount: number;
+  summary: string;
+  sharedFacts: string[];
+  updatedAt: string;
 }

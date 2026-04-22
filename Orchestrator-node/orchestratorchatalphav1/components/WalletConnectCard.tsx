@@ -1,98 +1,60 @@
 'use client';
 
 import { useState } from 'react';
-import { fetchChallenge, loginRelay } from '@/lib/client/relay-api';
+import { fetchAgentChallenge, loginWithAgentKey } from '@/lib/client/relay-api';
+import { signChallenge } from '@/lib/crypto/messaging';
+import type { AgentIdentity } from '@/lib/types/domain';
 
-interface WalletConnectCardProps {
-  onConnected: (details: {
-    address: `0x${string}`;
-    chainId: number;
-    bootstrapSignature: string;
-    relayToken: string;
-    challengeNonce: string;
-  }) => void;
+interface AgentBootstrapCardProps {
+  identity: AgentIdentity;
+  onConnected: (token: string) => void;
   isConnected: boolean;
   onDisconnect: () => void;
 }
 
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-    };
-  }
-}
-
-export function WalletConnectCard({ onConnected, isConnected, onDisconnect }: WalletConnectCardProps) {
+export function WalletConnectCard({ identity, onConnected, isConnected, onDisconnect }: AgentBootstrapCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const connect = async () => {
-    if (!window.ethereum) {
-      setError('No EIP-1193 wallet detected. Install MetaMask or compatible wallet.');
-      return;
-    }
-
     setBusy(true);
     setError(null);
-
     try {
-      const accounts = (await window.ethereum.request({ method: 'eth_requestAccounts' })) as string[];
-      const chainHex = (await window.ethereum.request({ method: 'eth_chainId' })) as string;
-      const address = accounts[0] as `0x${string}`;
-      const chainId = Number.parseInt(chainHex, 16);
-
-      const challenge = await fetchChallenge(address);
-      const bootstrapSignature = (await window.ethereum.request({
-        method: 'personal_sign',
-        params: [challenge.message, address]
-      })) as string;
-
-      const relayLogin = await loginRelay(address, bootstrapSignature);
-
-      onConnected({
-        address,
-        chainId,
-        bootstrapSignature,
-        relayToken: relayLogin.token,
-        challengeNonce: challenge.nonce
+      const { message } = await fetchAgentChallenge(identity.agentId);
+      const signature = signChallenge(message, identity.signingSecretKey);
+      const { token } = await loginWithAgentKey({
+        agentId: identity.agentId,
+        label: identity.label,
+        signingPublicKey: identity.signingPublicKey,
+        encryptionPublicKey: identity.encryptionPublicKey,
+        signature
       });
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : 'Wallet connection failed.';
-      setError(message);
+      onConnected(token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Relay connection failed.');
     } finally {
       setBusy(false);
     }
   };
 
-  const disconnect = async () => {
-    setBusy(true);
+  const disconnect = () => {
     setError(null);
-    try {
-      // Optionally, we could request account disconnection from wallet if needed
-      // For now, we just clear our local state
-      onDisconnect();
-    } catch (disconnectError) {
-      const message = disconnectError instanceof Error ? disconnectError.message : 'Disconnect failed.';
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
+    onDisconnect();
   };
 
   return (
     <section className="card">
-      <h2>1) Wallet bootstrap</h2>
+      <h2>2) Relay session</h2>
       <p>
-        Wallet signs a relay challenge to prove ownership. Wallet is only for bootstrap/session auth, not per-message signing.
+        Your agent signs a relay challenge with its Ed25519 key to prove ownership and get a bearer token. No wallet needed.
       </p>
       {isConnected ? (
         <button onClick={disconnect} disabled={busy} className="button">
-          {busy ? 'Disconnecting...' : 'Disconnect Wallet'}
+          Disconnect from Relay
         </button>
       ) : (
         <button onClick={connect} disabled={busy} className="button">
-          {busy ? 'Connecting...' : 'Connect Wallet + Relay Session'}
+          {busy ? 'Connecting...' : 'Connect to Relay'}
         </button>
       )}
       {error ? <p className="error">{error}</p> : null}

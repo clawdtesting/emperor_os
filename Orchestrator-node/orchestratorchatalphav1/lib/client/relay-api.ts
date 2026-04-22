@@ -1,4 +1,4 @@
-import type { AgentProfile, Channel, WrappedChannelKey } from '@/lib/types/domain';
+import type { AgentProfile, Channel, WrappedChannelKey, AgentMemory } from '@/lib/types/domain';
 import type { MessageEnvelope } from '@/lib/types/protocol';
 
 function withAuth(token: string): HeadersInit {
@@ -8,26 +8,30 @@ function withAuth(token: string): HeadersInit {
   };
 }
 
-
 export async function checkRelayHealth(): Promise<{ relay: string; timestamp: string; stats: { agents: number; channels: number; envelopes: number } }> {
   const res = await fetch('/api/relay/health');
   if (!res.ok) throw new Error('Relay health endpoint unavailable.');
   return (await res.json()) as { relay: string; timestamp: string; stats: { agents: number; channels: number; envelopes: number } };
 }
 
-export async function fetchChallenge(wallet: `0x${string}`): Promise<{ message: string; nonce: string }> {
-  const res = await fetch(`/api/relay/auth/challenge?wallet=${wallet}`);
-  if (!res.ok) throw new Error('Unable to fetch wallet challenge from relay.');
+export async function fetchAgentChallenge(agentId: string): Promise<{ message: string; nonce: string }> {
+  const res = await fetch(`/api/relay/auth/challenge?agentId=${encodeURIComponent(agentId)}`);
+  if (!res.ok) throw new Error('Unable to fetch agent challenge from relay.');
   return (await res.json()) as { message: string; nonce: string };
 }
 
-export async function loginRelay(wallet: `0x${string}`, signature: string): Promise<{ token: string }> {
+export async function loginWithAgentKey(params: {
+  agentId: string;
+  label: string;
+  signingPublicKey: string;
+  encryptionPublicKey: string;
+  signature: string;
+}): Promise<{ token: string }> {
   const res = await fetch('/api/relay/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, signature })
+    body: JSON.stringify(params)
   });
-
   const body = (await res.json()) as { token?: string; error?: string };
   if (!res.ok || !body.token) throw new Error(body.error ?? 'Relay login failed.');
   return { token: body.token };
@@ -39,7 +43,6 @@ export async function registerAgent(token: string, profile: AgentProfile): Promi
     headers: withAuth(token),
     body: JSON.stringify(profile)
   });
-
   if (!res.ok) {
     const body = (await res.json()) as { error?: string };
     throw new Error(body.error ?? 'Failed to register agent on relay.');
@@ -64,7 +67,6 @@ export async function openDmChannel(input: {
     headers: withAuth(input.token),
     body: JSON.stringify(input)
   });
-
   const body = (await res.json()) as { channel?: Channel; existed?: boolean; error?: string };
   if (!res.ok || !body.channel) throw new Error(body.error ?? 'Unable to create/open channel.');
   return { channel: body.channel, existed: Boolean(body.existed) };
@@ -83,7 +85,6 @@ export async function sendEnvelope(token: string, channelId: string, envelope: M
     headers: withAuth(token),
     body: JSON.stringify(envelope)
   });
-
   if (!res.ok) {
     const body = (await res.json()) as { error?: string };
     throw new Error(body.error ?? 'Relay rejected message envelope.');
@@ -93,10 +94,26 @@ export async function sendEnvelope(token: string, channelId: string, envelope: M
 export async function fetchEnvelopes(token: string, channelId: string): Promise<{ channel: Channel; messages: MessageEnvelope[] }> {
   const res = await fetch(`/api/relay/channels/${channelId}/messages`, { headers: withAuth(token) });
   const body = (await res.json()) as { channel?: Channel; messages?: MessageEnvelope[]; error?: string };
-
   if (!res.ok || !body.channel || !body.messages) {
     throw new Error(body.error ?? 'Unable to load encrypted envelopes.');
   }
-
   return { channel: body.channel, messages: body.messages };
+}
+
+export async function fetchMemory(token: string, peerId: string): Promise<AgentMemory | null> {
+  const res = await fetch(`/api/relay/peer-ctx/${peerId}`, { headers: withAuth(token) });
+  const body = (await res.json()) as { memory?: AgentMemory | null; error?: string };
+  if (!res.ok) throw new Error(body.error ?? 'Unable to load memory.');
+  return body.memory ?? null;
+}
+
+export async function updateMemory(token: string, peerId: string, memory: Partial<AgentMemory>): Promise<AgentMemory> {
+  const res = await fetch(`/api/relay/peer-ctx/${peerId}`, {
+    method: 'PUT',
+    headers: withAuth(token),
+    body: JSON.stringify(memory)
+  });
+  const body = (await res.json()) as { memory?: AgentMemory; error?: string };
+  if (!res.ok || !body.memory) throw new Error(body.error ?? 'Unable to save memory.');
+  return body.memory;
 }
