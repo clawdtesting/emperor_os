@@ -11,9 +11,9 @@
  *
  * Environment variables:
  *   RELAY_URL          Relay base URL (default: http://localhost:3000)
- *   AGENT_LABEL        Agent display name (default: hermes-agent)
- *   AGENT_IDENTITY_DIR Path for identity + channel key files
- *                      (default: ~/.orchestrator-chat)
+ *   AGENT_LABEL        Agent display name — if unset, will be prompted interactively
+ *   AGENT_IDENTITY_DIR Path for identity + channel key files (default: ~/.orchestrator-chat)
+ *   PORT               When set (e.g. on Render), enables SSE mode automatically on that port
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -21,6 +21,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createInterface } from 'node:readline';
 
 import { RelayClient } from './relay-client.js';
 import { loadOrCreateIdentity, defaultIdentityDir } from './identity.js';
@@ -29,28 +30,52 @@ import { TOOL_DEFINITIONS, handleTool, type ToolContext } from './tools.js';
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const RELAY_URL = process.env['RELAY_URL'] ?? 'http://localhost:3000';
-const AGENT_LABEL = process.env['AGENT_LABEL'] ?? 'hermes-agent';
 const IDENTITY_DIR = process.env['AGENT_IDENTITY_DIR'] ?? defaultIdentityDir();
 
-const args = process.argv.slice(2);
-const useSSE = args.includes('--sse');
-const ssePortArg = args.find((a) => a.startsWith('--sse-port='));
-const SSE_PORT = ssePortArg ? parseInt(ssePortArg.split('=')[1]!, 10) : 3001;
+const cliArgs = process.argv.slice(2);
 
-// ─── Bootstrap ───────────────────────────────────────────────────────────────
+// PORT env var is set automatically by Render — use it to auto-enable SSE
+const renderPort = process.env['PORT'] ? parseInt(process.env['PORT'], 10) : undefined;
+const useSSE = cliArgs.includes('--sse') || renderPort !== undefined;
+const ssePortArg = cliArgs.find((a) => a.startsWith('--sse-port='));
+const SSE_PORT = renderPort ?? (ssePortArg ? parseInt(ssePortArg.split('=')[1]!, 10) : 3001);
 
-const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
-const relay = new RelayClient({ relayUrl: RELAY_URL });
+// ─── Interactive label prompt ─────────────────────────────────────────────────
 
-// Auto-login
-async function ensureAuthenticated(): Promise<void> {
+async function resolveAgentLabel(): Promise<string> {
+  if (process.env['AGENT_LABEL']) return process.env['AGENT_LABEL'];
+
+  // In SSE/Render mode there's no interactive terminal — require the env var
+  if (useSSE) {
+    process.stderr.write('[orchestrator-chat-mcp] AGENT_LABEL env var is required in SSE/Render mode.\n');
+    process.exit(1);
+  }
+
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    process.stderr.write('\n');
+    rl.question('  What should your agent be called? (display name): ', (answer) => {
+      rl.close();
+      const label = answer.trim() || 'hermes-agent';
+      process.stderr.write(`  Agent label set to: "${label}"\n\n`);
+      resolve(label);
+    });
+  });
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const AGENT_LABEL = await resolveAgentLabel();
+
+  const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
+  const relay = new RelayClient({ relayUrl: RELAY_URL });
+
+  // Auto-login
   try {
     const challenge = await relay.getChallenge(identity.agentId);
-
-    // Sign with Ed25519 signing key
     const { signChallenge } = await import('./crypto.js');
     const signature = signChallenge(challenge.message, identity.signingSecretKey);
-
     await relay.login({
       agentId: identity.agentId,
       label: identity.label,
@@ -62,34 +87,29 @@ async function ensureAuthenticated(): Promise<void> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     process.stderr.write(`[orchestrator-chat-mcp] Login failed: ${msg}\n`);
-    process.stderr.write(`[orchestrator-chat-mcp] Set RELAY_URL env var and call relay_login tool to retry.\n`);
+    process.stderr.write(`[orchestrator-chat-mcp] Set RELAY_URL and call relay_login to retry.\n`);
   }
-}
 
-// ─── MCP server ───────────────────────────────────────────────────────────────
+  // ─── MCP server ─────────────────────────────────────────────────────────────
 
-const server = new Server(
-  { name: 'orchestrator-chat', version: '1.0.0' },
-  { capabilities: { tools: {} } }
-);
+  const server = new Server(
+    { name: 'orchestrator-chat', version: '1.0.0' },
+    { capabilities: { tools: {} } }
+  );
 
-const ctx: ToolContext = { relay, identity, identityDir: IDENTITY_DIR };
+  const ctx: ToolContext = { relay, identity, identityDir: IDENTITY_DIR };
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFINITIONS }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFINITIONS }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: rawArgs } = request.params;
-  const args = (rawArgs ?? {}) as Record<string, unknown>;
-  return handleTool(name, args, ctx);
-});
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: rawArgs } = request.params;
+    const args = (rawArgs ?? {}) as Record<string, unknown>;
+    return handleTool(name, args, ctx);
+  });
 
-// ─── Transport ────────────────────────────────────────────────────────────────
-
-async function main(): Promise<void> {
-  await ensureAuthenticated();
+  // ─── Transport ──────────────────────────────────────────────────────────────
 
   if (useSSE) {
-    // SSE transport — Hermes connects via HTTP
     const sseTransports = new Map<string, SSEServerTransport>();
 
     const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -99,9 +119,7 @@ async function main(): Promise<void> {
         const transport = new SSEServerTransport('/messages', res);
         const sessionId = transport.sessionId;
         sseTransports.set(sessionId, transport);
-
         res.on('close', () => sseTransports.delete(sessionId));
-
         await server.connect(transport);
         return;
       }
@@ -110,7 +128,6 @@ async function main(): Promise<void> {
         const params = new URLSearchParams(url.split('?')[1] ?? '');
         const sessionId = params.get('sessionId');
         const transport = sessionId ? sseTransports.get(sessionId) : undefined;
-
         if (transport) {
           await transport.handlePostMessage(req, res);
         } else {
@@ -122,7 +139,7 @@ async function main(): Promise<void> {
 
       if (url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', agentId: identity.agentId, relayUrl: RELAY_URL }));
+        res.end(JSON.stringify({ status: 'ok', agentId: identity.agentId, label: identity.label, relayUrl: RELAY_URL }));
         return;
       }
 
@@ -131,15 +148,14 @@ async function main(): Promise<void> {
     });
 
     httpServer.listen(SSE_PORT, () => {
-      process.stderr.write(`[orchestrator-chat-mcp] SSE transport listening on port ${SSE_PORT}\n`);
-      process.stderr.write(`[orchestrator-chat-mcp] agentId: ${identity.agentId}\n`);
+      process.stderr.write(`[orchestrator-chat-mcp] SSE ready on port ${SSE_PORT}\n`);
+      process.stderr.write(`[orchestrator-chat-mcp] agentId: ${identity.agentId}  label: ${identity.label}\n`);
       process.stderr.write(`[orchestrator-chat-mcp] relay:   ${RELAY_URL}\n`);
     });
   } else {
-    // stdio transport — Hermes spawns this process
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    process.stderr.write(`[orchestrator-chat-mcp] stdio ready — agentId: ${identity.agentId}\n`);
+    process.stderr.write(`[orchestrator-chat-mcp] stdio ready — agentId: ${identity.agentId}  label: ${identity.label}\n`);
   }
 }
 
