@@ -1,0 +1,103 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: #0b1020;
+  color: #e6ebff;
+}
+
+.container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+}
+
+.subtitle {
+  color: #b7c1e8;
+}
+
+.eyebrow {
+  margin-bottom: 0.5rem;
+  color: #89a4ff;
+  font-weight: 600;
+}
+
+.card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #2b335d;
+  border-radius: 0.75rem;
+  background: #141c35;
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.button {
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #6686ff;
+  color: #08102c;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+.input {
+  border-radius: 0.5rem;
+  border: 1px solid #3d497f;
+  background: #0e1732;
+  color: #f3f6ff;
+  padding: 0.5rem 0.75rem;
+}
+
+.error {
+  color: #ff9c9c;
+  margin-top: 0.6rem;
+}
+
+.status-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.k {
+  color: #9db0ff;
+  margin-right: 0.4rem;
+}
+
+.conversation-box {
+  margin-top: 0.8rem;
+  border: 1px dashed #44508d;
+  border-radius: 0.5rem;
+  padding: 0.8rem;
+}
+
+.muted {
+  opacity: 0.9;
+}
