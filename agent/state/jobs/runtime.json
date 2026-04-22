@@ -1,0 +1,73 @@
+{
+  "id": "runtime",
+  "jobId": "runtime",
+  "status": "SUBMISSION_READY",
+  "createdAt": "2026-04-22T19:53:04.210Z",
+  "updatedAt": "2026-04-22T19:53:04.224Z",
+  "retrievalComplete": true,
+  "statusHistory": [
+    {
+      "status": "EVALUATED",
+      "at": "2026-04-22T19:53:04.212Z",
+      "metadata": {
+        "stage": "discover"
+      }
+    },
+    {
+      "status": "APPLY_READY",
+      "at": "2026-04-22T19:53:04.212Z",
+      "metadata": {
+        "stage": "evaluate"
+      }
+    },
+    {
+      "status": "APPLIED_UNSIGNED",
+      "at": "2026-04-22T19:53:04.214Z",
+      "metadata": {
+        "stage": "apply"
+      }
+    },
+    {
+      "status": "APPLIED_CONFIRMED",
+      "at": "2026-04-22T19:53:04.215Z",
+      "metadata": {
+        "stage": "confirm"
+      }
+    },
+    {
+      "status": "EXECUTION_READY",
+      "at": "2026-04-22T19:53:04.216Z",
+      "metadata": {
+        "stage": "auto-ready"
+      }
+    },
+    {
+      "status": "EXECUTED",
+      "at": "2026-04-22T19:53:04.221Z",
+      "metadata": {
+        "stage": "execute"
+      }
+    },
+    {
+      "status": "VALIDATED",
+      "at": "2026-04-22T19:53:04.222Z",
+      "metadata": {
+        "stage": "validate"
+      }
+    },
+    {
+      "status": "PUBLISHED",
+      "at": "2026-04-22T19:53:04.223Z",
+      "metadata": {
+        "stage": "publish"
+      }
+    },
+    {
+      "status": "SUBMISSION_READY",
+      "at": "2026-04-22T19:53:04.224Z",
+      "metadata": {
+        "stage": "auto-ready"
+      }
+    }
+  ]
+}

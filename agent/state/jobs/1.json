@@ -39,9 +39,17 @@
     }
   ],
   "receipts": [],
-  "status": "completion_pending_review",
+  "status": "deliverable_ready",
   "completionURI": "ipfs://bafkreieqa2rbx3ic5ojtecod3am7kg4ylhtxr4e6cixfg6nwfem77weyja",
   "employer": "",
   "assignedAgent": "",
-  "updatedAt": "2026-04-15T22:46:33.850Z"
+  "updatedAt": "2026-04-22T19:53:04.206Z",
+  "recoveryNote": "Recovered: completion_pending_review with missing signing artifacts -> deliverable_ready",
+  "attempts": {},
+  "statusHistory": [
+    {
+      "status": "deliverable_ready",
+      "at": "2026-04-22T19:53:04.206Z"
+    }
+  ]
 }
