@@ -1,8 +1,72 @@
-export const CHAT_TOPIC = "universal-connectivity"
-export const CHAT_FILE_TOPIC = "universal-connectivity-file"
-export const FILE_EXCHANGE_PROTOCOL = "/universal-connectivity-file/1"
+import { bootstrap } from '@libp2p/bootstrap'
+import { kadDHT } from '@libp2p/kad-dht'
+import { webRTC } from '@libp2p/webrtc'
+import { webSockets } from '@libp2p/websockets'
+import { webTransport } from '@libp2p/webtransport'
+import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+import { noise } from '@chainsafe/libp2p-noise'
+import { yamux } from '@chainsafe/libp2p-yamux'
+import type { Connection } from '@libp2p/interface/connection'
+import type { Multiaddr } from '@multiformats/multiaddr'
+import { createLibp2p, type Libp2p } from 'libp2p'
 
-export const CIRCUIT_RELAY_CODE = 290
+import {
+  CHAT_FILE_TOPIC,
+  CHAT_TOPIC,
+  CIRCUIT_RELAY_CODE,
+  WEBRTC_BOOTSTRAP_NODE,
+  WEBTRANSPORT_BOOTSTRAP_NODE,
+} from './constants'
 
-export const WEBRTC_BOOTSTRAP_NODE = "/dns4/relay.username.rs/tcp/443/wss/p2p/12D3KooWDoap6J1qAP17dvR8KgaknSZSFSamxFeggEc5Qzecqto3"
-export const WEBTRANSPORT_BOOTSTRAP_NODE = ""
+export {
+  CHAT_FILE_TOPIC,
+  CHAT_TOPIC,
+  CIRCUIT_RELAY_CODE,
+  FILE_EXCHANGE_PROTOCOL,
+  WEBRTC_BOOTSTRAP_NODE,
+  WEBTRANSPORT_BOOTSTRAP_NODE,
+} from './constants'
+
+export async function startLibp2p(): Promise<Libp2p> {
+  const bootstrapList = [WEBRTC_BOOTSTRAP_NODE, WEBTRANSPORT_BOOTSTRAP_NODE].filter(Boolean)
+
+  const node = await createLibp2p({
+    addresses: {
+      listen: ['/webrtc', '/wss', '/webtransport'],
+    },
+    transports: [webRTC(), webTransport(), webSockets()],
+    connectionEncryption: [noise()],
+    streamMuxers: [yamux()],
+    peerDiscovery: bootstrapList.length
+      ? [
+          bootstrap({
+            list: bootstrapList,
+          }),
+        ]
+      : [],
+    services: {
+      pubsub: gossipsub({
+        allowPublishToZeroPeers: true,
+      }),
+      dht: kadDHT(),
+    },
+    connectionGater: {
+      denyDialMultiaddr: async (ma: Multiaddr) => {
+        return ma.protoCodes().includes(CIRCUIT_RELAY_CODE)
+      },
+    },
+  })
+
+  await node.start()
+
+  await node.services.pubsub.subscribe(CHAT_TOPIC)
+  await node.services.pubsub.subscribe(CHAT_FILE_TOPIC)
+
+  return node
+}
+
+export const connectToMultiaddr =
+  (libp2p: Libp2p) =>
+  async (addr: Multiaddr): Promise<Connection> => {
+    return libp2p.dial(addr)
+  }
