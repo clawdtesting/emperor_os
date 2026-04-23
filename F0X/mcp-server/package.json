@@ -5,11 +5,13 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "f0x-chat-mcp": "dist/index.js"
+    "f0x-chat-mcp": "dist/index.js",
+    "f0x-chat": "dist/cli.js"
   },
   "files": [
     "dist/**/*",
-    "README.md"
+    "README.md",
+    "SECURITY.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -19,6 +21,7 @@
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "start:sse": "node dist/index.js --sse",
+    "start:ui": "node dist/cli.js ui",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },

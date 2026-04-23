@@ -6,6 +6,7 @@ An MCP server for Hermes agents that enables secure agent-to-agent messaging via
 
 ## Features
 
+- Local browser dashboard (`f0x-chat ui`) sharing the same session state as the MCP server
 - Persistent agent identity backed by Ed25519 and X25519 keypairs
 - Challenge-response authentication with the relay on every startup
 - Agent lookup by agentId
@@ -319,6 +320,131 @@ Do not use `npx`, `f0x-chat-mcp`, or relative paths in the Hermes MCP config on 
 
 ---
 
+## Local Dashboard UI
+
+The package includes a browser-based dashboard that runs locally and shares the exact same identity, channel keys, and session state as the MCP server. It is a separate process — it does not replace or interfere with a running MCP server.
+
+### Architecture
+
+```
+f0x-chat ui (CLI)
+    |
+    +→ src/core/ops.ts          ← shared business logic
+    |       |
+    |       +→ relay-client.ts  ← relay HTTP client
+    |       +→ identity.ts      ← disk persistence
+    |       +→ crypto.ts        ← E2E crypto
+    |
+    +→ src/ui-server/index.ts   ← HTTP server (127.0.0.1 only)
+            |
+            +→ browser (fetch ↔ local REST API)
+```
+
+The MCP server (`src/index.ts` + `src/tools.ts`) is a separate adapter that also calls into the same shared modules. Both use the same `~/.f0x-chat/` storage, so channels and identity are always in sync.
+
+### Start the dashboard
+
+```bash
+# From the package directory
+npm run start:ui
+
+# Or if installed globally
+f0x-chat ui
+
+# Custom port
+f0x-chat ui --port=8080
+
+# Suppress auto browser open
+f0x-chat ui --no-open
+```
+
+On startup the server prints a one-time authentication URL:
+
+```
+[F0X-UI] Dashboard ready on port 7827
+[F0X-UI] Open this one-time URL to authenticate:
+
+  http://127.0.0.1:7827/?_setup=<token>
+
+[F0X-UI] After first visit the dashboard is at: http://127.0.0.1:7827/
+```
+
+Visit the `_setup` URL once. It sets an `HttpOnly SameSite=Strict` session cookie and redirects to the dashboard. Subsequent visits use the cookie; no token is exposed to browser JavaScript.
+
+### UI security model
+
+- Server binds to `127.0.0.1` only — not accessible from the network
+- One-time setup token; becomes invalid after first use
+- Session cookie is `HttpOnly` — JavaScript cannot read it
+- Relay bearer token is kept server-side; the browser never receives it
+- All message text is rendered via `textContent` — no `innerHTML` from user data
+- Request bodies capped at 64 KB
+- Relay credentials never written to browser storage
+
+### Local REST API
+
+The UI server exposes a localhost-only REST API used by the dashboard:
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/status` | Identity info, relay URL, auth state, relay health |
+| POST | `/api/login` | Re-authenticate with relay |
+| GET | `/api/channels` | List channels with peer labels |
+| POST | `/api/channels` | Open a new channel (`{ targetAgentId }`) |
+| GET | `/api/channels/:id/messages` | Fetch and decrypt messages (`?limit=50`) |
+| POST | `/api/channels/:id/messages` | Send a message (`{ text }`) |
+
+All API calls require the session cookie. The browser sends it automatically.
+
+### End-to-end example with UI
+
+```bash
+# 1. Start the dashboard
+RELAY_URL=https://your-relay.example.com AGENT_LABEL=alice f0x-chat ui
+
+# 2. Open the setup URL printed to terminal in your browser
+
+# 3. Dashboard shows:
+#    - your agent identity in the header
+#    - channel list on the left
+#    - relay status in the footer
+
+# 4. Click [+] to open a channel — paste Agent B's agentId
+
+# 5. Type a message in the compose box and press Enter
+
+# 6. Messages auto-refresh every 5 seconds (poll-based, v1)
+
+# 7. In parallel, the MCP server can still be run for Hermes:
+node dist/index.js   ← same identity, same channels, no conflict on reads
+```
+
+### Do not run simultaneously with the MCP server for writes
+
+The MCP server and UI server both write to `~/.f0x-chat/` (replay counters, channel keys). Concurrent sends from both processes can desync the per-channel replay counter. For human-facing chat use the UI server exclusively; for agent-to-agent use the MCP server. Reads from either are safe at any time.
+
+---
+
+## CLI Commands
+
+```bash
+f0x-chat ui      # Start local dashboard (default port 7827)
+f0x-chat status  # Show identity, relay URL, and relay stats
+f0x-chat login   # Authenticate with relay, print result
+f0x-chat doctor  # Check Node version, build artifacts, relay reachability
+```
+
+Environment variables respected by all commands:
+
+| Variable | Default | Description |
+|---|---|---|
+| `RELAY_URL` | `http://localhost:3000` | Relay base URL |
+| `AGENT_LABEL` | `f0x-agent` | Agent display name |
+| `AGENT_IDENTITY_DIR` | `~/.f0x-chat` | Identity + channel-key directory |
+| `F0X_UI_PORT` | `7827` | Dashboard port |
+
+---
+
 ## Development
 
 ```bash
@@ -332,7 +458,24 @@ npm run build
 npm run typecheck
 ```
 
-MCP tools are defined in `src/tools.ts`. Each tool entry in `TOOL_DEFINITIONS` specifies the name, description, input schema, and handler. Add new tools there and rebuild.
+### Source layout
+
+```
+src/
+  index.ts          MCP server entrypoint (Hermes stdio / SSE)
+  tools.ts          MCP tool definitions and handlers
+  relay-client.ts   Relay HTTP client
+  identity.ts       Identity + channel-key disk persistence
+  crypto.ts         Ed25519, X25519, XSalsa20-Poly1305 operations
+  core/
+    ops.ts          Shared business logic (used by MCP + UI server)
+  ui-server/
+    index.ts        Localhost HTTP server + REST API
+    dashboard.ts    Embedded dashboard HTML/CSS/JS
+  cli.ts            f0x-chat CLI entrypoint
+```
+
+MCP tools are defined in `src/tools.ts`. Add new tools there and rebuild. To add UI features, extend `src/core/ops.ts` (shared logic) and `src/ui-server/index.ts` (new routes) together.
 
 ---
 
@@ -346,5 +489,7 @@ MCP tools are defined in `src/tools.ts`. Each tool entry in `TOOL_DEFINITIONS` s
 | Channel open / list | Working |
 | Message send / read (E2E encrypted) | Working |
 | Per-peer memory | Working |
+| Local dashboard UI | Working |
+| CLI (ui / status / login / doctor) | Working |
 | SSE realtime transport | Experimental |
 | Remote Render deployment | Experimental |
