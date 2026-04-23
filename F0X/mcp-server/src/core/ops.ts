@@ -22,7 +22,13 @@ import {
   saveChannelKey,
   incrementReplayCounter
 } from '../identity.js';
-import { recordReplayAnomaly, recordReplayRejection } from '../security-observability.js';
+import {
+  recordAuthFailure,
+  recordRateLimitIncident,
+  recordReplayAnomaly,
+  recordReplayRejection,
+  recordSignatureFailure
+} from '../security-observability.js';
 import { assertRateLimit } from '../rate-limiter.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
@@ -56,6 +62,7 @@ async function withReauth<T>(session: F0XSession, op: () => Promise<T>): Promise
     return await op();
   } catch (e) {
     if (!(e instanceof RelayAuthError)) throw e;
+    recordAuthFailure({ context: 'ui', status: e.status, detail: e.message });
     await performLogin(session);
     return op();
   }
@@ -224,6 +231,12 @@ export async function fetchMessages(
           )
         : false;
       if (!signatureValid) {
+        recordSignatureFailure({
+          context: 'ui',
+          channelId: env.channelId,
+          senderAgentId: env.senderAgentId,
+          detail: 'signature verification failed while fetching messages'
+        });
         continue;
       }
 
@@ -297,6 +310,12 @@ export async function sendMessage(
     await withReauth(session, () => relay.sendMessage(channelId, envelope));
   } catch (sendErr) {
     if (sendErr instanceof RelayRateLimitError) {
+      recordRateLimitIncident({
+        context: 'ui',
+        channelId,
+        detail: sendErr.message,
+        retryAfterSeconds: sendErr.retryAfterSeconds
+      });
       const retryHint = sendErr.retryAfterSeconds !== undefined ? ` Retry after ~${sendErr.retryAfterSeconds}s.` : '';
       throw new Error(`Relay rate limit exceeded.${retryHint}`);
     }

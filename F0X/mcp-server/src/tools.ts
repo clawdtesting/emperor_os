@@ -25,7 +25,13 @@ import {
   saveChannelKey,
   incrementReplayCounter
 } from './identity.js';
-import { recordReplayAnomaly, recordReplayRejection } from './security-observability.js';
+import {
+  recordAuthFailure,
+  recordRateLimitIncident,
+  recordReplayAnomaly,
+  recordReplayRejection,
+  recordSignatureFailure
+} from './security-observability.js';
 import { assertRateLimit } from './rate-limiter.js';
 
 // ─── Shared state (injected at server startup) ────────────────────────────────
@@ -613,6 +619,12 @@ export async function handleTool(
               )
             : false;
           if (!signatureValid) {
+            recordSignatureFailure({
+              context: 'mcp',
+              channelId: env.channelId,
+              senderAgentId: env.senderAgentId,
+              detail: 'signature verification failed in F0X_read'
+            });
             return err('Signature verification failed for this message. Refusing to decrypt untrusted envelope.');
           }
           trackInboundReplay({
@@ -723,10 +735,16 @@ export async function handleTool(
     }
   } catch (e) {
     if (e instanceof RelayRateLimitError) {
+      recordRateLimitIncident({
+        context: 'mcp',
+        detail: e.message,
+        retryAfterSeconds: e.retryAfterSeconds
+      });
       const retryHint = e.retryAfterSeconds !== undefined ? ` Retry after ~${e.retryAfterSeconds}s.` : '';
       return err(`Relay rate limit exceeded.${retryHint}`);
     }
     if (e instanceof RelayAuthError && !authRetryAttempted && name !== 'F0X_login') {
+      recordAuthFailure({ context: 'mcp', status: e.status, detail: e.message });
       try {
         const challenge = await ctx.relay.getChallenge(ctx.identity.agentId);
         const signature = signChallenge(challenge.message, ctx.identity.signingSecretKey);
@@ -740,6 +758,11 @@ export async function handleTool(
         });
         return handleTool(name, args, ctx, true);
       } catch (reauthErr) {
+        recordAuthFailure({
+          context: 'mcp',
+          status: e.status,
+          detail: `reauth failed: ${reauthErr instanceof Error ? reauthErr.message : String(reauthErr)}`
+        });
         return err(`Relay authorization failed (HTTP ${e.status}); re-authentication also failed: ${reauthErr instanceof Error ? reauthErr.message : String(reauthErr)}`);
       }
     }

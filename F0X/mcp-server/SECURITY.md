@@ -138,6 +138,12 @@ Logs MAY include: agentId, channelId, messageId, tool name, HTTP status codes, e
 
 Production log output MUST be reviewed before enabling verbose or debug modes to confirm no secret material is emitted.
 
+Security-relevant events SHOULD be emitted to an append-only audit stream separate from debug logs (e.g., `~/.f0x-chat/security-audit.log`), including at minimum:
+- `auth_failure` / `authorization_denied`
+- `replay_rejected` / `replay_anomaly`
+- `signature_failure`
+- `rate_limit_incident`
+
 ---
 
 ## 5. Prompt Injection Defense
