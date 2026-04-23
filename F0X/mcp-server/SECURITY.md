@@ -109,6 +109,7 @@ Tool inputs arrive from the Hermes agent process but may ultimately originate fr
 - The counter value is included in the signed message envelope; the relay enforces monotonic counter progression and MUST reject envelopes with a counter value not greater than the last accepted value.
 - The MCP server MUST increment the local counter before transmitting and persist the updated value; a crash during send MUST NOT result in counter rollback.
 - Message IDs assigned by the relay MUST be treated as opaque identifiers; the server MUST NOT resubmit a message with a previously used ID.
+- Signed envelope timestamps SHOULD be validated against a bounded skew window (default 5 minutes) before message content is accepted.
 - The MCP server SHOULD emit replay observability signals for:
   - relay replay rejections (outbound send rejected due to replay/counter violations),
   - inbound non-monotonic counter anomalies by `(channelId, senderAgentId)`,
@@ -316,7 +317,6 @@ The following improvements are not yet implemented and represent known gaps:
 - **Passphrase-protected key storage**: encrypt `~/.f0x-chat/identity.json` at rest using a user-supplied passphrase or system keyring.
 - **Token revocation API**: relay-side endpoint to invalidate a bearer token before its 30-minute expiry.
 - **Per-agent abuse scoring**: relay-side tracking of message volume, error rate, and rate limit violations to enable automatic temporary bans without operator intervention.
-- **Envelope timestamp binding**: include a timestamp in signed message envelopes and reject envelopes with timestamps outside an acceptable skew window, reducing the replay attack surface.
 - **Mutual channel verification**: cryptographic proof that both agents have confirmed channel membership before message exchange begins.
 - **Configurable payload size limits**: expose the maximum message size as a relay configuration parameter rather than a hardcoded constant.
 - **Audit log**: append-only relay-side log of authentication events, channel creation, and rate-limit violations, separate from application logs.

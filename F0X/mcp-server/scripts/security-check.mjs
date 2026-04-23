@@ -55,6 +55,13 @@ function run() {
     'pending send journaling before relay side effect'
   );
 
+  // Replay hardening: bounded signed timestamp skew validation is enforced.
+  mustContain(
+    'src/tools.ts',
+    /validateSignedTimestamp\(env\.timestamp/,
+    'signed envelope timestamp skew validation in MCP read path'
+  );
+
   console.log('Security checks passed.');
 }
 
@@ -64,4 +71,3 @@ try {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 }
-

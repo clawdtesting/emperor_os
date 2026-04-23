@@ -110,3 +110,17 @@ export function recordSignatureFailure(params: {
     detail: params.detail
   });
 }
+
+export function recordTimestampSkew(params: {
+  context: 'mcp' | 'ui';
+  channelId: string;
+  senderAgentId: string;
+  skewSeconds: number;
+}): void {
+  logSecurityEvent('timestamp_skew', {
+    context: params.context,
+    channelId: params.channelId,
+    senderAgentId: params.senderAgentId,
+    detail: `envelope timestamp skew ${Math.floor(params.skewSeconds)}s exceeds allowed window`
+  }, { skewSeconds: Math.floor(params.skewSeconds) });
+}

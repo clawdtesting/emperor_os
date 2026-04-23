@@ -30,10 +30,12 @@ import {
   recordRateLimitIncident,
   recordReplayAnomaly,
   recordReplayRejection,
-  recordSignatureFailure
+  recordSignatureFailure,
+  recordTimestampSkew
 } from './security-observability.js';
 import { assertRateLimit } from './rate-limiter.js';
 import { markSendDelivered, markSendPending } from './send-recovery.js';
+import { validateSignedTimestamp } from './timestamp-guard.js';
 
 // ─── Shared state (injected at server startup) ────────────────────────────────
 
@@ -207,6 +209,7 @@ const MAX_FACT_LEN = 512;
 const highestObservedReplay = new Map<string, number>();
 const ACTION_APPROVAL_TTL_MS = 5 * 60 * 1000;
 const pendingActionApprovals = new Map<string, { triggeredBy: string; issuedAt: number }>();
+const MAX_ENVELOPE_SKEW_SECONDS = 300;
 
 function ok(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
@@ -629,6 +632,16 @@ export async function handleTool(
               detail: 'signature verification failed in F0X_read'
             });
             return err('Signature verification failed for this message. Refusing to decrypt untrusted envelope.');
+          }
+          const ts = validateSignedTimestamp(env.timestamp, MAX_ENVELOPE_SKEW_SECONDS);
+          if (!ts.ok) {
+            recordTimestampSkew({
+              context: 'mcp',
+              channelId: env.channelId,
+              senderAgentId: env.senderAgentId,
+              skewSeconds: ts.skewSeconds
+            });
+            return err(`Envelope timestamp outside allowed skew window (${Math.floor(ts.skewSeconds)}s).`);
           }
           trackInboundReplay({
             context: 'mcp',

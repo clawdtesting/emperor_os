@@ -27,10 +27,12 @@ import {
   recordRateLimitIncident,
   recordReplayAnomaly,
   recordReplayRejection,
-  recordSignatureFailure
+  recordSignatureFailure,
+  recordTimestampSkew
 } from '../security-observability.js';
 import { assertRateLimit } from '../rate-limiter.js';
 import { markSendDelivered, markSendPending } from '../send-recovery.js';
+import { validateSignedTimestamp } from '../timestamp-guard.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,7 @@ export interface F0XSession {
   relayUrl: string;
 }
 const highestObservedReplay = new Map<string, number>();
+const MAX_ENVELOPE_SKEW_SECONDS = 300;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -237,6 +240,16 @@ export async function fetchMessages(
           channelId: env.channelId,
           senderAgentId: env.senderAgentId,
           detail: 'signature verification failed while fetching messages'
+        });
+        continue;
+      }
+      const ts = validateSignedTimestamp(env.timestamp, MAX_ENVELOPE_SKEW_SECONDS);
+      if (!ts.ok) {
+        recordTimestampSkew({
+          context: 'ui',
+          channelId: env.channelId,
+          senderAgentId: env.senderAgentId,
+          skewSeconds: ts.skewSeconds
         });
         continue;
       }
