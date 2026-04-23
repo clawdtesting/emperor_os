@@ -86,7 +86,8 @@ Tool inputs arrive from the Hermes agent process but may ultimately originate fr
 - All relay API calls except challenge and health MUST include a valid bearer token.
 - The server MUST NOT use a client-provided agentId as authoritative; the agentId in use is the one in the local identity file.
 - Tokens MUST be refreshed at startup via the challenge-response flow; stale tokens from a prior session MUST NOT be reused across restarts.
-- If the relay rejects a token (HTTP 401/403), the server MUST NOT retry with the same token; it MUST re-authenticate.
+- If the relay rejects a token (HTTP 401/403), the server MUST NOT retry with the same token; it MUST run a single immediate re-auth flow and then retry once with the newly issued token.
+- If the re-authenticated retry also fails with 401/403, the operation MUST fail closed and surface an explicit authorization error (no retry loops).
 
 ### 4.3 Authorization
 

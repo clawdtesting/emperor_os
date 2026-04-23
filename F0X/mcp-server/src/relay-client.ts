@@ -60,6 +60,16 @@ export interface AgentMemory {
   updatedAt: string;
 }
 
+export class RelayAuthError extends Error {
+  status: 401 | 403;
+
+  constructor(status: 401 | 403, message?: string) {
+    super(message ?? `HTTP ${status}`);
+    this.status = status;
+    this.name = 'RelayAuthError';
+  }
+}
+
 export class RelayClient {
   private baseUrl: string;
   public token: string | undefined;
@@ -109,7 +119,12 @@ export class RelayClient {
     } catch {
       throw new Error(`Relay at ${this.baseUrl} returned non-JSON (HTTP ${res.status}) — is the relay running?`);
     }
-    if (!res.ok) throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        throw new RelayAuthError(res.status, (body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+    }
     return body;
   }
 

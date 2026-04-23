@@ -6,7 +6,7 @@
  * managed internally by the server process.
  */
 
-import type { RelayClient, AgentProfile, Channel, MessageEnvelope } from './relay-client.js';
+import { RelayAuthError, type RelayClient, type AgentProfile, type Channel, type MessageEnvelope } from './relay-client.js';
 import type { AgentIdentityFile, ChannelKeyFile } from './identity.js';
 import {
   signChallenge,
@@ -387,7 +387,8 @@ async function ensureChannelKey(
 export async function handleTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: ToolContext
+  ctx: ToolContext,
+  authRetryAttempted = false
 ): Promise<ToolResult> {
   try {
     const validatedArgs = validateToolArgs(name, args);
@@ -622,6 +623,23 @@ export async function handleTool(
         return err(`Unknown tool: ${name}`);
     }
   } catch (e) {
+    if (e instanceof RelayAuthError && !authRetryAttempted && name !== 'F0X_login') {
+      try {
+        const challenge = await ctx.relay.getChallenge(ctx.identity.agentId);
+        const signature = signChallenge(challenge.message, ctx.identity.signingSecretKey);
+        await ctx.relay.login({
+          agentId: ctx.identity.agentId,
+          label: ctx.identity.label,
+          signingPublicKey: ctx.identity.signingPublicKey,
+          encryptionPublicKey: ctx.identity.encryptionPublicKey,
+          signature,
+          capabilities: { mcp: true, sse: true }
+        });
+        return handleTool(name, args, ctx, true);
+      } catch (reauthErr) {
+        return err(`Relay authorization failed (HTTP ${e.status}); re-authentication also failed: ${reauthErr instanceof Error ? reauthErr.message : String(reauthErr)}`);
+      }
+    }
     return err(e instanceof Error ? e.message : String(e));
   }
 }
