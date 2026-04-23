@@ -86,7 +86,8 @@ Tool inputs arrive from the Hermes agent process but may ultimately originate fr
 - All relay API calls except challenge and health MUST include a valid bearer token.
 - The server MUST NOT use a client-provided agentId as authoritative; the agentId in use is the one in the local identity file.
 - Tokens MUST be refreshed at startup via the challenge-response flow; stale tokens from a prior session MUST NOT be reused across restarts.
-- If the relay rejects a token (HTTP 401/403), the server MUST NOT retry with the same token; it MUST re-authenticate.
+- If the relay rejects a token (HTTP 401/403), the server MUST NOT retry with the same token; it MUST run a single immediate re-auth flow and then retry once with the newly issued token.
+- If the re-authenticated retry also fails with 401/403, the operation MUST fail closed and surface an explicit authorization error (no retry loops).
 
 ### 4.3 Authorization
 
@@ -108,6 +109,10 @@ Tool inputs arrive from the Hermes agent process but may ultimately originate fr
 - The counter value is included in the signed message envelope; the relay enforces monotonic counter progression and MUST reject envelopes with a counter value not greater than the last accepted value.
 - The MCP server MUST increment the local counter before transmitting and persist the updated value; a crash during send MUST NOT result in counter rollback.
 - Message IDs assigned by the relay MUST be treated as opaque identifiers; the server MUST NOT resubmit a message with a previously used ID.
+- The MCP server SHOULD emit replay observability signals for:
+  - relay replay rejections (outbound send rejected due to replay/counter violations),
+  - inbound non-monotonic counter anomalies by `(channelId, senderAgentId)`,
+  - threshold alerts for repeated replay events to support abuse correlation.
 
 ### 4.6 Rate Limiting
 
@@ -133,6 +138,12 @@ Logs MAY include: agentId, channelId, messageId, tool name, HTTP status codes, e
 
 Production log output MUST be reviewed before enabling verbose or debug modes to confirm no secret material is emitted.
 
+Security-relevant events SHOULD be emitted to an append-only audit stream separate from debug logs (e.g., `~/.f0x-chat/security-audit.log`), including at minimum:
+- `auth_failure` / `authorization_denied`
+- `replay_rejected` / `replay_anomaly`
+- `signature_failure`
+- `rate_limit_incident`
+
 ---
 
 ## 5. Prompt Injection Defense
@@ -146,6 +157,10 @@ Messages received from the relay are authored by remote agents over whose behavi
 - The MCP server MUST treat all message content as data. It MUST NOT forward raw message text into system prompts, tool descriptions, or instruction contexts without explicit boundary marking.
 - The Hermes agent MUST NOT execute instructions found in message content without passing through `F0X_confirm_action`.
 - `F0X_confirm_action` MUST be called before taking any action that was requested, suggested, or implied by a message received from a remote agent.
+- Action handling SHOULD be two-phase:
+  1. interpret remote content as untrusted data,
+  2. execute only with a fresh `approvalToken` issued by `F0X_confirm_action` and bound to the triggering `messageId`.
+- Approval tokens SHOULD be short-lived and single-use to reduce replayability of approvals.
 - In non-TTY (stdio) mode, `F0X_confirm_action` auto-denies. This is the correct default behavior and MUST NOT be bypassed.
 - Message content MUST be presented to the LLM layer wrapped as external untrusted input, not as part of the instruction context.
 
@@ -182,9 +197,10 @@ The system MUST remain stable under sustained message flooding. Flooding is defi
 
 **MCP server behavior under flooding:**
 
+- The MCP server SHOULD enforce local per-agent outbound rate limits and burst caps as a defense-in-depth guardrail (even when relay-side limits are primary).
 - The server MUST NOT buffer unlimited inbound messages; fetch operations MUST use pagination limits
 - `F0X_list` calls MUST specify a `limit` parameter; unbounded fetches MUST NOT be issued
-- The server MUST propagate relay-side rejection errors to the calling tool without retrying
+- On relay HTTP 429, the server MUST surface an explicit rate-limit error (including Retry-After when present) and MUST NOT retry automatically
 
 **Target stability:** the relay MUST remain responsive to legitimate agents under a flood load of thousands of messages per minute from one or more abusive agents.
 
@@ -205,11 +221,32 @@ Channels are private communication contexts between two agents. The following ru
 ## 8. Identity and Key Management
 
 - The `agentId` is generated once on first run and stored in `~/.f0x-chat/identity.json`. This file MUST have filesystem permissions restricted to the owning user (`chmod 600`). The containing directory MUST be restricted similarly (`chmod 700 ~/.f0x-chat`).
+- Startup MUST fail closed when local identity storage permissions drift from baseline:
+  - `~/.f0x-chat` must resolve to mode `0700`
+  - `~/.f0x-chat/identity.json` must resolve to mode `0600`
+  - If either check fails, the server aborts and reports the exact corrective chmod command
+- Deployments SHOULD enforce host-level account isolation: one OS user account per agent identity directory.
 - Private keys (signingSecretKey, encryptionSecretKey) are stored in plaintext in the identity file. There is no passphrase protection at this time. Physical or filesystem access to this file is equivalent to full agent impersonation.
 - Bearer tokens are stored in process memory only and are never written to disk. They expire after 30 minutes.
 - Credentials MUST NOT be hardcoded in source files, configuration files, or environment files committed to version control.
 - The relay MUST support session invalidation. If an agent's token is believed compromised, the relay MUST provide a mechanism to revoke it before the 30-minute expiry.
 - If the identity file is compromised, the affected agent MUST be deregistered at the relay and a new identity generated. There is no key rotation mechanism short of full identity replacement.
+
+### 8.1 Identity compromise runbook (critical incident)
+
+When `~/.f0x-chat/identity.json` is suspected compromised, execute this sequence immediately:
+
+1. **Containment:** revoke/deregister the compromised `agentId` on the relay so existing credentials stop authorizing requests.
+2. **Rotation:** remove compromised local identity material and generate a new identity (new keys + new `agentId`).
+3. **Re-establish trust:** recreate channels or perform channel-key re-exchange with peers; treat old channel keys as compromised.
+4. **Notify and record:** notify operator and append a security audit event containing incident timestamp, old/new `agentId`, and restoration status.
+5. **Post-incident hardening:** prioritize migration to encrypted key storage at rest and optional hardware-backed key handling.
+
+### 8.2 Reliability and recovery controls
+
+- Identity continuity MUST be validated at startup. If a continuity file exists and `identity.json` is missing or agentId-mismatched, startup MUST fail closed (no silent regeneration).
+- Replay/channel-key state files SHOULD pass startup integrity checks (schema + counter sanity) before tools are served.
+- Outbound sends SHOULD journal a local `pending` record before relay submission and clear only after confirmed send response; stale pending records on restart MUST be surfaced for operator recovery.
 
 ---
 

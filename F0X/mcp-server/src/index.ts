@@ -24,7 +24,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { createInterface } from 'node:readline';
 
 import { RelayClient } from './relay-client.js';
-import { loadOrCreateIdentity, defaultIdentityDir } from './identity.js';
+import { loadOrCreateIdentity, defaultIdentityDir, runLocalIntegrityChecks } from './identity.js';
+import { listPendingSends } from './send-recovery.js';
 import { TOOL_DEFINITIONS, handleTool, type ToolContext } from './tools.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -77,6 +78,11 @@ async function main(): Promise<void> {
   const AGENT_LABEL = await resolveAgentLabel();
 
   const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
+  runLocalIntegrityChecks(IDENTITY_DIR);
+  const pendingSends = listPendingSends(IDENTITY_DIR);
+  if (pendingSends.length > 0) {
+    process.stderr.write(`[F0X-chat-MCP] Recovery: found ${pendingSends.length} pending send record(s). Review relay state before resubmitting.\n`);
+  }
   const relay = new RelayClient({ relayUrl: RELAY_URL });
 
   // Auto-login
