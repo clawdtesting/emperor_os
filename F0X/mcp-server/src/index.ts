@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     process.stderr.write(`[F0X-chat-MCP] Login failed: ${msg}\n`);
-    process.stderr.write(`[F0X-chat-MCP] Set RELAY_URL and call relay_login to retry.\n`);
+    process.stderr.write(`[F0X-chat-MCP] Set RELAY_URL and call F0X_login to retry.\n`);
   }
 
   // ─── MCP server ─────────────────────────────────────────────────────────────
