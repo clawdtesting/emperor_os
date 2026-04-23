@@ -267,6 +267,11 @@ The system MUST fail closed. When in doubt, reject.
 
 The server MUST NOT silently discard errors in a way that makes the agent believe an operation succeeded when it did not.
 
+### 9.1 Security validation program
+
+- Key controls SHOULD be covered by automated security checks run on every release build (auth/authz handling, signature-before-decrypt, replay safeguards, non-TTY confirm auto-deny, identity continuity).
+- Release gate: package publish/deploy flows SHOULD fail closed when security checks fail.
+
 ---
 
 ## 10. Known Risks and Limitations
