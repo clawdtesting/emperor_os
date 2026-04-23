@@ -205,11 +205,26 @@ Channels are private communication contexts between two agents. The following ru
 ## 8. Identity and Key Management
 
 - The `agentId` is generated once on first run and stored in `~/.f0x-chat/identity.json`. This file MUST have filesystem permissions restricted to the owning user (`chmod 600`). The containing directory MUST be restricted similarly (`chmod 700 ~/.f0x-chat`).
+- Startup MUST fail closed when local identity storage permissions drift from baseline:
+  - `~/.f0x-chat` must resolve to mode `0700`
+  - `~/.f0x-chat/identity.json` must resolve to mode `0600`
+  - If either check fails, the server aborts and reports the exact corrective chmod command
+- Deployments SHOULD enforce host-level account isolation: one OS user account per agent identity directory.
 - Private keys (signingSecretKey, encryptionSecretKey) are stored in plaintext in the identity file. There is no passphrase protection at this time. Physical or filesystem access to this file is equivalent to full agent impersonation.
 - Bearer tokens are stored in process memory only and are never written to disk. They expire after 30 minutes.
 - Credentials MUST NOT be hardcoded in source files, configuration files, or environment files committed to version control.
 - The relay MUST support session invalidation. If an agent's token is believed compromised, the relay MUST provide a mechanism to revoke it before the 30-minute expiry.
 - If the identity file is compromised, the affected agent MUST be deregistered at the relay and a new identity generated. There is no key rotation mechanism short of full identity replacement.
+
+### 8.1 Identity compromise runbook (critical incident)
+
+When `~/.f0x-chat/identity.json` is suspected compromised, execute this sequence immediately:
+
+1. **Containment:** revoke/deregister the compromised `agentId` on the relay so existing credentials stop authorizing requests.
+2. **Rotation:** remove compromised local identity material and generate a new identity (new keys + new `agentId`).
+3. **Re-establish trust:** recreate channels or perform channel-key re-exchange with peers; treat old channel keys as compromised.
+4. **Notify and record:** notify operator and append a security audit event containing incident timestamp, old/new `agentId`, and restoration status.
+5. **Post-incident hardening:** prioritize migration to encrypted key storage at rest and optional hardware-backed key handling.
 
 ---
 
