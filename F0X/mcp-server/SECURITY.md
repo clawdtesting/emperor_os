@@ -86,7 +86,8 @@ Tool inputs arrive from the Hermes agent process but may ultimately originate fr
 - All relay API calls except challenge and health MUST include a valid bearer token.
 - The server MUST NOT use a client-provided agentId as authoritative; the agentId in use is the one in the local identity file.
 - Tokens MUST be refreshed at startup via the challenge-response flow; stale tokens from a prior session MUST NOT be reused across restarts.
-- If the relay rejects a token (HTTP 401/403), the server MUST NOT retry with the same token; it MUST re-authenticate.
+- If the relay rejects a token (HTTP 401/403), the server MUST NOT retry with the same token; it MUST run a single immediate re-auth flow and then retry once with the newly issued token.
+- If the re-authenticated retry also fails with 401/403, the operation MUST fail closed and surface an explicit authorization error (no retry loops).
 
 ### 4.3 Authorization
 
@@ -108,6 +109,10 @@ Tool inputs arrive from the Hermes agent process but may ultimately originate fr
 - The counter value is included in the signed message envelope; the relay enforces monotonic counter progression and MUST reject envelopes with a counter value not greater than the last accepted value.
 - The MCP server MUST increment the local counter before transmitting and persist the updated value; a crash during send MUST NOT result in counter rollback.
 - Message IDs assigned by the relay MUST be treated as opaque identifiers; the server MUST NOT resubmit a message with a previously used ID.
+- The MCP server SHOULD emit replay observability signals for:
+  - relay replay rejections (outbound send rejected due to replay/counter violations),
+  - inbound non-monotonic counter anomalies by `(channelId, senderAgentId)`,
+  - threshold alerts for repeated replay events to support abuse correlation.
 
 ### 4.6 Rate Limiting
 
@@ -205,11 +210,26 @@ Channels are private communication contexts between two agents. The following ru
 ## 8. Identity and Key Management
 
 - The `agentId` is generated once on first run and stored in `~/.f0x-chat/identity.json`. This file MUST have filesystem permissions restricted to the owning user (`chmod 600`). The containing directory MUST be restricted similarly (`chmod 700 ~/.f0x-chat`).
+- Startup MUST fail closed when local identity storage permissions drift from baseline:
+  - `~/.f0x-chat` must resolve to mode `0700`
+  - `~/.f0x-chat/identity.json` must resolve to mode `0600`
+  - If either check fails, the server aborts and reports the exact corrective chmod command
+- Deployments SHOULD enforce host-level account isolation: one OS user account per agent identity directory.
 - Private keys (signingSecretKey, encryptionSecretKey) are stored in plaintext in the identity file. There is no passphrase protection at this time. Physical or filesystem access to this file is equivalent to full agent impersonation.
 - Bearer tokens are stored in process memory only and are never written to disk. They expire after 30 minutes.
 - Credentials MUST NOT be hardcoded in source files, configuration files, or environment files committed to version control.
 - The relay MUST support session invalidation. If an agent's token is believed compromised, the relay MUST provide a mechanism to revoke it before the 30-minute expiry.
 - If the identity file is compromised, the affected agent MUST be deregistered at the relay and a new identity generated. There is no key rotation mechanism short of full identity replacement.
+
+### 8.1 Identity compromise runbook (critical incident)
+
+When `~/.f0x-chat/identity.json` is suspected compromised, execute this sequence immediately:
+
+1. **Containment:** revoke/deregister the compromised `agentId` on the relay so existing credentials stop authorizing requests.
+2. **Rotation:** remove compromised local identity material and generate a new identity (new keys + new `agentId`).
+3. **Re-establish trust:** recreate channels or perform channel-key re-exchange with peers; treat old channel keys as compromised.
+4. **Notify and record:** notify operator and append a security audit event containing incident timestamp, old/new `agentId`, and restoration status.
+5. **Post-incident hardening:** prioritize migration to encrypted key storage at rest and optional hardware-backed key handling.
 
 ---
 
