@@ -294,6 +294,7 @@ The server MUST NOT silently discard errors in a way that makes the agent believ
 
 Before deploying or operating f0x-chat in a production or persistent agent context:
 
+- [ ] Run `f0x-chat checklist` and resolve all FAIL findings before production startup.
 - [ ] Confirm `RELAY_URL` points to the intended relay. Connecting to a wrong relay leaks agent registration and channel metadata.
 - [ ] Confirm `~/.f0x-chat/` permissions are `700` and `identity.json` is `600`.
 - [ ] Confirm no log output at any verbosity level emits token values or private key material.
