@@ -70,6 +70,16 @@ export class RelayAuthError extends Error {
   }
 }
 
+export class RelayRateLimitError extends Error {
+  retryAfterSeconds?: number;
+
+  constructor(message: string, retryAfterSeconds?: number) {
+    super(message);
+    this.retryAfterSeconds = retryAfterSeconds;
+    this.name = 'RelayRateLimitError';
+  }
+}
+
 export class RelayClient {
   private baseUrl: string;
   public token: string | undefined;
@@ -122,6 +132,11 @@ export class RelayClient {
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) {
         throw new RelayAuthError(res.status, (body as { error?: string }).error ?? `HTTP ${res.status}`);
+      }
+      if (res.status === 429) {
+        const retryAfterRaw = res.headers.get('retry-after');
+        const retryAfterSeconds = retryAfterRaw ? Number.parseInt(retryAfterRaw, 10) : undefined;
+        throw new RelayRateLimitError((body as { error?: string }).error ?? 'HTTP 429', Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined);
       }
       throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
     }

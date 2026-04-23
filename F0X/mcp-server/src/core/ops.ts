@@ -4,7 +4,7 @@
  * Returns plain typed values — no MCP formatting here.
  */
 
-import { RelayAuthError, type RelayClient, type Channel, type MessageEnvelope } from '../relay-client.js';
+import { RelayAuthError, RelayRateLimitError, type RelayClient, type Channel, type MessageEnvelope } from '../relay-client.js';
 import type { AgentIdentityFile } from '../identity.js';
 import {
   signChallenge,
@@ -23,6 +23,7 @@ import {
   incrementReplayCounter
 } from '../identity.js';
 import { recordReplayAnomaly, recordReplayRejection } from '../security-observability.js';
+import { assertRateLimit } from '../rate-limiter.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ export interface OpenChannelResult {
 
 export async function openChannel(session: F0XSession, targetAgentId: string): Promise<OpenChannelResult> {
   const { relay, identity, identityDir } = session;
+  assertRateLimit(`ui:open_channel:${identity.agentId}`, { windowMs: 60_000, maxInWindow: 6, burstWindowMs: 10_000, burstMax: 2 });
 
   const target = await withReauth(session, () => relay.getAgent(targetAgentId));
   if (!target) throw new Error(`Agent ${targetAgentId} not found.`);
@@ -274,6 +276,7 @@ export async function sendMessage(
   if (text.length > 32768) throw new Error('Message too long (max 32768 characters).');
 
   const { relay, identity, identityDir } = session;
+  assertRateLimit(`ui:send:${identity.agentId}`, { windowMs: 60_000, maxInWindow: 60, burstWindowMs: 1_000, burstMax: 10 });
   const { channel } = await withReauth(session, () => relay.listMessages(channelId, { limit: 1 }));
   const channelKey = await ensureChannelKey(session, channel);
 
@@ -293,6 +296,10 @@ export async function sendMessage(
   try {
     await withReauth(session, () => relay.sendMessage(channelId, envelope));
   } catch (sendErr) {
+    if (sendErr instanceof RelayRateLimitError) {
+      const retryHint = sendErr.retryAfterSeconds !== undefined ? ` Retry after ~${sendErr.retryAfterSeconds}s.` : '';
+      throw new Error(`Relay rate limit exceeded.${retryHint}`);
+    }
     if (sendErr instanceof Error && /replay/i.test(sendErr.message)) {
       recordReplayRejection({
         context: 'ui',

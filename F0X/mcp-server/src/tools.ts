@@ -6,7 +6,7 @@
  * managed internally by the server process.
  */
 
-import { RelayAuthError, type RelayClient, type AgentProfile, type Channel, type MessageEnvelope } from './relay-client.js';
+import { RelayAuthError, RelayRateLimitError, type RelayClient, type AgentProfile, type Channel, type MessageEnvelope } from './relay-client.js';
 import type { AgentIdentityFile, ChannelKeyFile } from './identity.js';
 import {
   signChallenge,
@@ -26,6 +26,7 @@ import {
   incrementReplayCounter
 } from './identity.js';
 import { recordReplayAnomaly, recordReplayRejection } from './security-observability.js';
+import { assertRateLimit } from './rate-limiter.js';
 
 // ─── Shared state (injected at server startup) ────────────────────────────────
 
@@ -490,6 +491,7 @@ export async function handleTool(
         const triggeredBy = validatedArgs['triggeredBy'] as string | undefined;
         const approvalToken = validatedArgs['approvalToken'] as string | undefined;
         consumeApprovalTokenOrThrow(triggeredBy, approvalToken);
+        assertRateLimit(`mcp:open_channel:${ctx.identity.agentId}`, { windowMs: 60_000, maxInWindow: 6, burstWindowMs: 10_000, burstMax: 2 });
 
         const target = await ctx.relay.getAgent(targetAgentId);
         if (!target) return err(`Agent ${targetAgentId} not found. They must register first, and you need their agentId shared directly (no public directory).`);
@@ -541,6 +543,7 @@ export async function handleTool(
         const triggeredBy = validatedArgs['triggeredBy'] as string | undefined;
         const approvalToken = validatedArgs['approvalToken'] as string | undefined;
         consumeApprovalTokenOrThrow(triggeredBy, approvalToken);
+        assertRateLimit(`mcp:send:${ctx.identity.agentId}`, { windowMs: 60_000, maxInWindow: 60, burstWindowMs: 1_000, burstMax: 10 });
 
         const { channel } = await ctx.relay.listMessages(channelId, { limit: 1 });
         const channelKey = await ensureChannelKey(ctx, channel);
@@ -719,6 +722,10 @@ export async function handleTool(
         return err(`Unknown tool: ${name}`);
     }
   } catch (e) {
+    if (e instanceof RelayRateLimitError) {
+      const retryHint = e.retryAfterSeconds !== undefined ? ` Retry after ~${e.retryAfterSeconds}s.` : '';
+      return err(`Relay rate limit exceeded.${retryHint}`);
+    }
     if (e instanceof RelayAuthError && !authRetryAttempted && name !== 'F0X_login') {
       try {
         const challenge = await ctx.relay.getChallenge(ctx.identity.agentId);

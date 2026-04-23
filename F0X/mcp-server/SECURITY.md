@@ -191,9 +191,10 @@ The system MUST remain stable under sustained message flooding. Flooding is defi
 
 **MCP server behavior under flooding:**
 
+- The MCP server SHOULD enforce local per-agent outbound rate limits and burst caps as a defense-in-depth guardrail (even when relay-side limits are primary).
 - The server MUST NOT buffer unlimited inbound messages; fetch operations MUST use pagination limits
 - `F0X_list` calls MUST specify a `limit` parameter; unbounded fetches MUST NOT be issued
-- The server MUST propagate relay-side rejection errors to the calling tool without retrying
+- On relay HTTP 429, the server MUST surface an explicit rate-limit error (including Retry-After when present) and MUST NOT retry automatically
 
 **Target stability:** the relay MUST remain responsive to legitimate agents under a flood load of thousands of messages per minute from one or more abusive agents.
 
