@@ -26,12 +26,14 @@ import { createInterface } from 'node:readline';
 import { RelayClient } from './relay-client.js';
 import { loadOrCreateIdentity, defaultIdentityDir, runLocalIntegrityChecks } from './identity.js';
 import { listPendingSends } from './send-recovery.js';
+import { enforceSecurityProfile, resolveSecurityProfile } from './security-profile.js';
 import { TOOL_DEFINITIONS, handleTool, type ToolContext } from './tools.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const RELAY_URL = process.env['RELAY_URL'] ?? 'http://localhost:3000';
 const IDENTITY_DIR = process.env['AGENT_IDENTITY_DIR'] ?? defaultIdentityDir();
+const SECURITY_PROFILE = resolveSecurityProfile();
 
 const cliArgs = process.argv.slice(2);
 
@@ -75,6 +77,13 @@ async function resolveAgentLabel(): Promise<string> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  enforceSecurityProfile({
+    profile: SECURITY_PROFILE,
+    relayUrl: RELAY_URL,
+    identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
+    agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined
+  });
+
   const AGENT_LABEL = await resolveAgentLabel();
 
   const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);

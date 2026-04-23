@@ -25,6 +25,7 @@ import { listPendingSends } from './send-recovery.js';
 import { RelayClient } from './relay-client.js';
 import { type F0XSession, performLogin } from './core/ops.js';
 import { startUiServer } from './ui-server/index.js';
+import { enforceSecurityProfile, resolveSecurityProfile } from './security-profile.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ const RELAY_URL    = process.env['RELAY_URL']          ?? 'http://localhost:3000
 const IDENTITY_DIR = process.env['AGENT_IDENTITY_DIR'] ?? defaultIdentityDir();
 const AGENT_LABEL  = process.env['AGENT_LABEL']        ?? 'f0x-agent';
 const UI_PORT      = process.env['F0X_UI_PORT']        ? parseInt(process.env['F0X_UI_PORT'], 10) : 7827;
+const SECURITY_PROFILE = resolveSecurityProfile();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -39,6 +41,12 @@ const __dirname  = dirname(__filename);
 // ─── Session factory ──────────────────────────────────────────────────────────
 
 function makeSession(): F0XSession {
+  enforceSecurityProfile({
+    profile: SECURITY_PROFILE,
+    relayUrl: RELAY_URL,
+    identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
+    agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined
+  });
   const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
   runLocalIntegrityChecks(IDENTITY_DIR);
   const pendingSends = listPendingSends(IDENTITY_DIR);

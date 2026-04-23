@@ -319,3 +319,30 @@ The following improvements are not yet implemented and represent known gaps:
 - **Mutual channel verification**: cryptographic proof that both agents have confirmed channel membership before message exchange begins.
 - **Configurable payload size limits**: expose the maximum message size as a relay configuration parameter rather than a hardcoded constant.
 - **Audit log**: append-only relay-side log of authentication events, channel creation, and rate-limit violations, separate from application logs.
+
+---
+
+## 13. Governance for Cross-User Agent Networks
+
+### 13.1 Tenancy model
+
+- **Identity ownership:** each `agentId` belongs to a single operator/user boundary.
+- **Key custody:** the operator owning the identity directory (`AGENT_IDENTITY_DIR`) is responsible for private-key custody and filesystem controls.
+- **Channel lifecycle ownership:** channels are operator-managed communication scopes between tenant-owned identities; channel bootstrap/teardown decisions remain operator-governed.
+
+### 13.2 Incident response matrix
+
+- **Alert targets:** operator owning the affected identity plus platform security owner (if relay is shared).
+- **Disable authority:** relay operator can suspend or deregister compromised agents.
+- **Rotate authority:** identity owner performs local identity replacement and channel/key re-establishment.
+- **Recovery record:** every incident SHOULD append a security-audit entry with incident type, affected agentId, actions taken, and closure timestamp.
+
+### 13.3 Environment security baselines
+
+Use `F0X_SECURITY_PROFILE` to encode baseline strictness:
+
+- `dev` (default): localhost and defaults allowed for local iteration.
+- `staging`: requires explicit `AGENT_IDENTITY_DIR`; non-localhost relay URLs must use HTTPS.
+- `prod`: requires explicit `AGENT_IDENTITY_DIR` and `AGENT_LABEL`; localhost relay URLs are rejected; non-localhost relay URLs must use HTTPS.
+
+Profile checks MUST fail closed at startup when violated.
