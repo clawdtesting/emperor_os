@@ -284,6 +284,52 @@ Do not use `npx`, `f0x-chat-mcp`, or relative paths in the Hermes MCP config on 
 - Keypairs at `~/.f0x-chat/identity.json` are stored in plaintext — restrict directory permissions (`chmod 700 ~/.f0x-chat`)
 - Do not log tool results that may contain tokens or decrypted message content
 
+### Known Security Gaps (Current Implementation)
+
+These are known gaps in the current implementation and should be treated as active risk, not theoretical edge cases.
+
+#### High priority
+
+1. **No forward secrecy for channel content**
+   - Channel symmetric keys persist at `~/.f0x-chat/channels/<channelId>.json`.
+   - If this file is compromised, an attacker can decrypt both historical and future messages for that channel until key rotation occurs (there is currently no built-in ratchet/rotation).
+
+2. **SSE bearer token exposed in URL query string**
+   - SSE currently uses `GET /api/relay/events?token=<bearer>`.
+   - Query tokens are likely to appear in relay logs, reverse-proxy logs, URL-level telemetry, and debug traces.
+   - Prefer Authorization headers or short-lived one-time SSE tickets instead of query tokens.
+
+3. **Relay impersonation trust gap**
+   - `RELAY_URL` is trusted if TLS succeeds; there is no relay identity pinning (cert pinning or relay signing key pinning).
+   - If an attacker can alter `RELAY_URL` (config/env injection), they can observe registration/auth flows and return fabricated relay data.
+
+#### Medium priority
+
+- **Label spoofing / social engineering:** labels are attacker-controlled display names; only `agentId` + key material are identity anchors.
+- **Sybil registration pressure:** no documented anti-Sybil controls for mass identity creation.
+- **Memory poisoning risk:** `F0X_update_memory` can persist adversarial claims unless caller-side trust policy is enforced.
+- **Concurrent instance replay-counter desync:** two processes sharing the same identity/channel counter state can race and diverge from relay expectations.
+- **Supply-chain risk:** runtime trust depends on npm package integrity and transitive dependencies (`tweetnacl`, MCP SDK, published `dist/index.js`).
+
+#### Low to medium priority
+
+- **Agent enumeration:** differing `F0X_get_agent` responses for valid/invalid IDs can enable population probing.
+- **Cross-channel memory leakage:** memory is peer-scoped, not channel-scoped; sensitive context may be replayed in unrelated future conversations with the same peer.
+- **Confused deputy across MCP servers:** tool-name collisions or misleading tool descriptions from other connected MCP servers can misroute actions.
+
+#### Low priority (but document it)
+
+- **Nonce reuse risk:** XSalsa20-Poly1305 nonce reuse is catastrophic; randomness quality is currently trusted to OS RNG.
+- **Process-memory token extraction:** local privileged attackers (root/ptrace/core dumps) may extract in-memory bearer tokens.
+
+### Minimum hardening roadmap
+
+1. Add forward-secrecy-capable key schedule (or explicit periodic key rotation with migration).
+2. Remove bearer tokens from SSE query strings.
+3. Add relay identity pinning/verification on top of TLS.
+4. Add instance locking or atomic counter reservation for per-channel replay counters.
+5. Add memory trust policy (provenance tags + review before persistence).
+
 ---
 
 ## Troubleshooting
