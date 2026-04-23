@@ -184,12 +184,130 @@ export const TOOL_DEFINITIONS = [
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
+const MAX_ID_LEN = 256;
+const MAX_MESSAGE_LEN = 8000;
+const MAX_MEMORY_SUMMARY_LEN = 16000;
+const MAX_FACTS = 200;
+const MAX_FACT_LEN = 512;
+
 function ok(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
 }
 
 function err(message: string): ToolResult {
   return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readStringArg(
+  args: Record<string, unknown>,
+  key: string,
+  options: { required?: boolean; maxLen?: number } = {}
+): string | undefined {
+  const value = args[key];
+  if (value === undefined) {
+    if (options.required) throw new Error(`${key} is required`);
+    return undefined;
+  }
+  if (typeof value !== 'string') throw new Error(`${key} must be a string`);
+  const trimmed = value.trim();
+  if (options.required && !trimmed) throw new Error(`${key} is required`);
+  const maxLen = options.maxLen ?? MAX_ID_LEN;
+  if (trimmed.length > maxLen) throw new Error(`${key} exceeds max length (${maxLen})`);
+  return trimmed;
+}
+
+function validateToolArgs(name: string, rawArgs: Record<string, unknown>): Record<string, unknown> {
+  if (!isPlainObject(rawArgs)) throw new Error('Tool arguments must be an object');
+  const args = { ...rawArgs };
+
+  const allowOnly = (keys: string[]): void => {
+    const unknown = Object.keys(args).filter((k) => !keys.includes(k));
+    if (unknown.length > 0) throw new Error(`Unknown argument(s): ${unknown.join(', ')}`);
+  };
+
+  switch (name) {
+    case 'F0X_whoami':
+    case 'F0X_login':
+    case 'F0X_health':
+    case 'F0X_list_channels':
+    case 'F0X_subscribe_sse':
+      allowOnly([]);
+      return args;
+
+    case 'F0X_get_agent':
+      allowOnly(['agentId']);
+      args['agentId'] = readStringArg(args, 'agentId', { required: true, maxLen: MAX_ID_LEN });
+      return args;
+
+    case 'F0X_open_channel':
+      allowOnly(['targetAgentId']);
+      args['targetAgentId'] = readStringArg(args, 'targetAgentId', { required: true, maxLen: MAX_ID_LEN });
+      return args;
+
+    case 'F0X_send':
+      allowOnly(['channelId', 'text']);
+      args['channelId'] = readStringArg(args, 'channelId', { required: true, maxLen: MAX_ID_LEN });
+      args['text'] = readStringArg(args, 'text', { required: true, maxLen: MAX_MESSAGE_LEN });
+      return args;
+
+    case 'F0X_list': {
+      allowOnly(['channelId', 'limit', 'before']);
+      args['channelId'] = readStringArg(args, 'channelId', { required: true, maxLen: MAX_ID_LEN });
+      if (args['before'] !== undefined) {
+        args['before'] = readStringArg(args, 'before', { required: true, maxLen: MAX_ID_LEN });
+      }
+      if (args['limit'] !== undefined) {
+        if (typeof args['limit'] !== 'number' || !Number.isInteger(args['limit'])) throw new Error('limit must be an integer');
+        if ((args['limit'] as number) < 1 || (args['limit'] as number) > 200) throw new Error('limit must be between 1 and 200');
+      }
+      return args;
+    }
+
+    case 'F0X_read':
+      allowOnly(['channelId', 'messageId']);
+      args['channelId'] = readStringArg(args, 'channelId', { required: true, maxLen: MAX_ID_LEN });
+      args['messageId'] = readStringArg(args, 'messageId', { required: true, maxLen: MAX_ID_LEN });
+      return args;
+
+    case 'F0X_get_memory':
+      allowOnly(['peerId']);
+      args['peerId'] = readStringArg(args, 'peerId', { required: true, maxLen: MAX_ID_LEN });
+      return args;
+
+    case 'F0X_update_memory': {
+      allowOnly(['peerId', 'summary', 'facts']);
+      args['peerId'] = readStringArg(args, 'peerId', { required: true, maxLen: MAX_ID_LEN });
+      if (args['summary'] !== undefined) {
+        args['summary'] = readStringArg(args, 'summary', { required: false, maxLen: MAX_MEMORY_SUMMARY_LEN });
+      }
+      if (args['facts'] !== undefined) {
+        if (!Array.isArray(args['facts'])) throw new Error('facts must be an array of strings');
+        if (args['facts'].length > MAX_FACTS) throw new Error(`facts exceeds max entries (${MAX_FACTS})`);
+        args['facts'] = args['facts'].map((fact, i) => {
+          if (typeof fact !== 'string') throw new Error(`facts[${i}] must be a string`);
+          const trimmed = fact.trim();
+          if (!trimmed) throw new Error(`facts[${i}] must not be empty`);
+          if (trimmed.length > MAX_FACT_LEN) throw new Error(`facts[${i}] exceeds max length (${MAX_FACT_LEN})`);
+          return trimmed;
+        });
+      }
+      return args;
+    }
+
+    case 'F0X_confirm_action':
+      allowOnly(['action', 'triggeredBy', 'senderLabel']);
+      args['action'] = readStringArg(args, 'action', { required: true, maxLen: 2000 });
+      args['triggeredBy'] = readStringArg(args, 'triggeredBy', { required: true, maxLen: MAX_ID_LEN });
+      args['senderLabel'] = readStringArg(args, 'senderLabel', { required: true, maxLen: 256 });
+      return args;
+
+    default:
+      return args;
+  }
 }
 
 // Strip non-printable characters (except tab/newline) and cap length.
@@ -272,6 +390,7 @@ export async function handleTool(
   ctx: ToolContext
 ): Promise<ToolResult> {
   try {
+    const validatedArgs = validateToolArgs(name, args);
     switch (name) {
       case 'F0X_whoami': {
         return ok(JSON.stringify({
@@ -302,16 +421,14 @@ export async function handleTool(
       }
 
       case 'F0X_get_agent': {
-        const agentId = args['agentId'] as string;
-        if (!agentId) return err('agentId is required');
+        const agentId = validatedArgs['agentId'] as string;
         const agent = await ctx.relay.getAgent(agentId);
         if (!agent) return err('Agent not found or not accessible. You can only look up yourself or agents you already share a channel with. Exchange agentIds out-of-band first.');
         return ok(JSON.stringify({ agentId: agent.agentId, label: agent.label, capabilities: agent.capabilities ?? {} }, null, 2));
       }
 
       case 'F0X_open_channel': {
-        const targetAgentId = args['targetAgentId'] as string;
-        if (!targetAgentId) return err('targetAgentId is required');
+        const targetAgentId = validatedArgs['targetAgentId'] as string;
 
         const target = await ctx.relay.getAgent(targetAgentId);
         if (!target) return err(`Agent ${targetAgentId} not found. They must register first, and you need their agentId shared directly (no public directory).`);
@@ -358,9 +475,8 @@ export async function handleTool(
       }
 
       case 'F0X_send': {
-        const channelId = args['channelId'] as string;
-        const text = args['text'] as string;
-        if (!channelId || !text) return err('channelId and text are required');
+        const channelId = validatedArgs['channelId'] as string;
+        const text = validatedArgs['text'] as string;
 
         const { channel } = await ctx.relay.listMessages(channelId, { limit: 1 });
         const channelKey = await ensureChannelKey(ctx, channel);
@@ -381,10 +497,9 @@ export async function handleTool(
 
       case 'F0X_list': {
         // Returns metadata only — no message content exposed to LLM context
-        const channelId = args['channelId'] as string;
-        const limit = typeof args['limit'] === 'number' ? args['limit'] : 20;
-        const before = args['before'] as string | undefined;
-        if (!channelId) return err('channelId is required');
+        const channelId = validatedArgs['channelId'] as string;
+        const limit = typeof validatedArgs['limit'] === 'number' ? validatedArgs['limit'] : 20;
+        const before = validatedArgs['before'] as string | undefined;
 
         const { channel, messages } = await ctx.relay.listMessages(channelId, { limit, before });
         await ensureChannelKey(ctx, channel);
@@ -400,9 +515,8 @@ export async function handleTool(
       }
 
       case 'F0X_read': {
-        const channelId = args['channelId'] as string;
-        const messageId = args['messageId'] as string;
-        if (!channelId || !messageId) return err('channelId and messageId are required');
+        const channelId = validatedArgs['channelId'] as string;
+        const messageId = validatedArgs['messageId'] as string;
 
         const { channel, messages } = await ctx.relay.listMessages(channelId, { limit: 200 });
         const env = messages.find((m: MessageEnvelope) => m.messageId === messageId);
@@ -440,17 +554,15 @@ export async function handleTool(
       }
 
       case 'F0X_get_memory': {
-        const peerId = args['peerId'] as string;
-        if (!peerId) return err('peerId is required');
+        const peerId = validatedArgs['peerId'] as string;
         const mem = await ctx.relay.getMemory(peerId);
         return ok(JSON.stringify(mem ?? { message: 'No memory stored for this peer yet.' }, null, 2));
       }
 
       case 'F0X_update_memory': {
-        const peerId = args['peerId'] as string;
-        if (!peerId) return err('peerId is required');
-        const summary = args['summary'] as string | undefined;
-        const facts = args['facts'] as string[] | undefined;
+        const peerId = validatedArgs['peerId'] as string;
+        const summary = validatedArgs['summary'] as string | undefined;
+        const facts = validatedArgs['facts'] as string[] | undefined;
         const updated = await ctx.relay.setMemory(peerId, { summary, sharedFacts: facts });
         return ok(JSON.stringify(updated, null, 2));
       }
@@ -464,10 +576,9 @@ export async function handleTool(
       }
 
       case 'F0X_confirm_action': {
-        const action = args['action'] as string;
-        const triggeredBy = args['triggeredBy'] as string;
-        const senderLabel = args['senderLabel'] as string;
-        if (!action || !triggeredBy || !senderLabel) return err('action, triggeredBy, and senderLabel are required');
+        const action = validatedArgs['action'] as string;
+        const triggeredBy = validatedArgs['triggeredBy'] as string;
+        const senderLabel = validatedArgs['senderLabel'] as string;
 
         // In TTY mode: ask the local user interactively
         if (process.stdin.isTTY && process.stdout.isTTY) {
