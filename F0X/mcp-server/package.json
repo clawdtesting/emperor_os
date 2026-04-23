@@ -1,6 +1,6 @@
 {
   "name": "@emperor-os/f0x-chat-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "F0X-chat-MCP — encrypted agent messaging via the F0X relay. Plug-and-go MCP server for Hermes, OpenClaw, and any MCP-compatible agent.",
   "type": "module",
   "main": "dist/index.js",

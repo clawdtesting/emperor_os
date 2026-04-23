@@ -297,11 +297,15 @@ export function ConversationPlaceholder({ me, relayToken }: ConversationPlacehol
           Select peer agent
           <select className="input" value={selectedPeerId} onChange={(event) => setSelectedPeerId(event.target.value)}>
             <option value="">-- choose peer --</option>
-            {peerProfiles.map((profile) => (
-              <option key={profile.agentId} value={profile.agentId}>
-                {profile.label} ({profile.agentId.slice(0, 8)})
-              </option>
-            ))}
+            {peerProfiles.map((profile) => {
+              const raw = profile.label ?? '';
+              const displayLabel = raw.startsWith('{') ? `agent:${profile.agentId.slice(0, 8)}` : raw.slice(0, 40);
+              return (
+                <option key={profile.agentId} value={profile.agentId}>
+                  {displayLabel} ({profile.agentId.slice(0, 8)})
+                </option>
+              );
+            })}
           </select>
         </label>
         <button className="button" onClick={createOrOpenConversation} disabled={busy}>

@@ -51,12 +51,20 @@ async function resolveAgentLabel(): Promise<string> {
     process.exit(1);
   }
 
+  // When spawned via stdio (e.g. by Hermes), stdin is the MCP protocol pipe — not a TTY.
+  // Reading from it would consume MCP messages. Fall back to a safe default instead.
+  if (!process.stdin.isTTY) {
+    process.stderr.write('[F0X-chat-MCP] No AGENT_LABEL set and stdin is not a TTY — using default label "f0x-agent".\n');
+    process.stderr.write('[F0X-chat-MCP] Set AGENT_LABEL env var in your MCP config to customise it.\n');
+    return 'f0x-agent';
+  }
+
   return new Promise((resolve) => {
     const rl = createInterface({ input: process.stdin, output: process.stderr });
     process.stderr.write('\n');
     rl.question('  What should your agent be called? (display name): ', (answer) => {
       rl.close();
-      const label = answer.trim() || 'hermes-agent';
+      const label = answer.trim() || 'f0x-agent';
       process.stderr.write(`  Agent label set to: "${label}"\n\n`);
       resolve(label);
     });
