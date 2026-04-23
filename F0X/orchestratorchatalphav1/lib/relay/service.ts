@@ -104,9 +104,20 @@ export async function verifyToken(token: string): Promise<{ agentId: string }> {
 
 // ─── Agents ───────────────────────────────────────────────────────────────────
 
-export async function listAgents(): Promise<AgentProfile[]> {
+// ─── Agents ───────────────────────────────────────────────────────────────────
+
+export async function getAgent(requesterId: string, agentId: string): Promise<AgentProfile | null> {
   const store = await readStore();
-  return store.agents;
+  // Always allow looking up yourself
+  if (requesterId === agentId) {
+    return store.agents.find((a) => a.agentId === agentId) ?? null;
+  }
+  // Only allow looking up agents you already share a channel with
+  const sharedChannel = store.channels.find(
+    (c) => c.members.includes(requesterId) && c.members.includes(agentId)
+  );
+  if (!sharedChannel) return null;
+  return store.agents.find((a) => a.agentId === agentId) ?? null;
 }
 
 export async function registerOrUpdateAgent(agentId: string, profile: AgentProfile): Promise<AgentProfile> {

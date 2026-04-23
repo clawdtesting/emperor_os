@@ -112,10 +112,11 @@ export class RelayClient {
 
   // ─── Agents ─────────────────────────────────────────────────────────────────
 
-  async listAgents(): Promise<AgentProfile[]> {
-    const res = await fetch(`${this.baseUrl}/api/relay/agents`, { headers: this.authHeaders() });
-    const body = await this.json<{ agents: AgentProfile[] }>(res);
-    return body.agents;
+  async getAgent(agentId: string): Promise<AgentProfile | null> {
+    const res = await fetch(`${this.baseUrl}/api/relay/agents?agentId=${encodeURIComponent(agentId)}`, { headers: this.authHeaders() });
+    if (res.status === 404) return null;
+    const body = await this.json<{ agent: AgentProfile }>(res);
+    return body.agent;
   }
 
   // ─── Channels ───────────────────────────────────────────────────────────────
