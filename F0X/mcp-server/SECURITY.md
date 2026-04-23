@@ -242,6 +242,12 @@ When `~/.f0x-chat/identity.json` is suspected compromised, execute this sequence
 4. **Notify and record:** notify operator and append a security audit event containing incident timestamp, old/new `agentId`, and restoration status.
 5. **Post-incident hardening:** prioritize migration to encrypted key storage at rest and optional hardware-backed key handling.
 
+### 8.2 Reliability and recovery controls
+
+- Identity continuity MUST be validated at startup. If a continuity file exists and `identity.json` is missing or agentId-mismatched, startup MUST fail closed (no silent regeneration).
+- Replay/channel-key state files SHOULD pass startup integrity checks (schema + counter sanity) before tools are served.
+- Outbound sends SHOULD journal a local `pending` record before relay submission and clear only after confirmed send response; stale pending records on restart MUST be surfaced for operator recovery.
+
 ---
 
 ## 9. Failure Modes

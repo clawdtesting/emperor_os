@@ -15,7 +15,8 @@ import {
   mkdirSync,
   existsSync,
   chmodSync,
-  statSync
+  statSync,
+  readdirSync
 } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -44,6 +45,12 @@ export interface ChannelKeyFile {
   updatedAt: string;
 }
 
+interface IdentityContinuityFile {
+  expectedAgentId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Paths ────────────────────────────────────────────────────────────────────
 
 export function defaultIdentityDir(): string {
@@ -56,6 +63,10 @@ export function resolveIdentityPath(dir: string): string {
 
 export function resolveChannelKeyPath(dir: string, channelId: string): string {
   return join(dir, 'channels', `${channelId}.json`);
+}
+
+function resolveContinuityPath(dir: string): string {
+  return join(dir, 'identity-continuity.json');
 }
 
 // ─── Permission checks ───────────────────────────────────────────────────────
@@ -90,6 +101,38 @@ function ensureFileMode(path: string, expectedMode: number): void {
   }
 }
 
+function writeContinuityFile(identityDir: string, agentId: string): void {
+  const continuityPath = resolveContinuityPath(identityDir);
+  const now = new Date().toISOString();
+  const payload: IdentityContinuityFile = {
+    expectedAgentId: agentId,
+    createdAt: now,
+    updatedAt: now
+  };
+  writeFileSync(continuityPath, JSON.stringify(payload, null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
+  chmodSync(continuityPath, FILE_MODE_600);
+}
+
+function enforceIdentityContinuity(identityDir: string, identityPath: string): void {
+  const continuityPath = resolveContinuityPath(identityDir);
+  if (!existsSync(continuityPath)) return;
+  ensureFileMode(continuityPath, FILE_MODE_600);
+  const continuity = JSON.parse(readFileSync(continuityPath, 'utf8')) as IdentityContinuityFile;
+  if (!existsSync(identityPath)) {
+    throw new Error(
+      `Identity continuity check failed: ${identityPath} is missing while continuity file exists. ` +
+      'Refusing to silently regenerate identity; restore original identity file or rotate explicitly.'
+    );
+  }
+  const identity = JSON.parse(readFileSync(identityPath, 'utf8')) as AgentIdentityFile;
+  if (identity.agentId !== continuity.expectedAgentId) {
+    throw new Error(
+      `Identity continuity check failed: expected agentId ${continuity.expectedAgentId}, found ${identity.agentId}. ` +
+      'Refusing to continue with mismatched identity.'
+    );
+  }
+}
+
 // ─── Identity ─────────────────────────────────────────────────────────────────
 
 export function loadOrCreateIdentity(identityDir: string, defaultLabel = 'hermes-agent'): AgentIdentityFile {
@@ -97,10 +140,15 @@ export function loadOrCreateIdentity(identityDir: string, defaultLabel = 'hermes
   chmodSync(identityDir, DIR_MODE_700);
   ensureDirMode(identityDir, DIR_MODE_700);
   const identityPath = resolveIdentityPath(identityDir);
+  enforceIdentityContinuity(identityDir, identityPath);
 
   if (existsSync(identityPath)) {
     ensureFileMode(identityPath, FILE_MODE_600);
-    return JSON.parse(readFileSync(identityPath, 'utf8')) as AgentIdentityFile;
+    const loaded = JSON.parse(readFileSync(identityPath, 'utf8')) as AgentIdentityFile;
+    if (!existsSync(resolveContinuityPath(identityDir))) {
+      writeContinuityFile(identityDir, loaded.agentId);
+    }
+    return loaded;
   }
 
   const now = new Date().toISOString();
@@ -121,6 +169,7 @@ export function loadOrCreateIdentity(identityDir: string, defaultLabel = 'hermes
   writeFileSync(identityPath, JSON.stringify(identity, null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
   chmodSync(identityPath, FILE_MODE_600);
   ensureFileMode(identityPath, FILE_MODE_600);
+  writeContinuityFile(identityDir, identity.agentId);
   return identity;
 }
 
@@ -133,6 +182,7 @@ export function saveIdentity(identityDir: string, identity: AgentIdentityFile): 
   writeFileSync(identityPath, JSON.stringify(identity, null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
   chmodSync(identityPath, FILE_MODE_600);
   ensureFileMode(identityPath, FILE_MODE_600);
+  writeContinuityFile(identityDir, identity.agentId);
 }
 
 // ─── Channel keys ─────────────────────────────────────────────────────────────
@@ -156,4 +206,24 @@ export function incrementReplayCounter(identityDir: string, channelId: string): 
   existing.replayCounter += 1;
   saveChannelKey(identityDir, existing);
   return existing.replayCounter;
+}
+
+export function runLocalIntegrityChecks(identityDir: string): void {
+  const channelDir = join(identityDir, 'channels');
+  if (!existsSync(channelDir)) return;
+  const entries = readdirSync(channelDir).filter((f) => f.endsWith('.json'));
+  for (const entry of entries) {
+    const path = join(channelDir, entry);
+    try {
+      const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<ChannelKeyFile>;
+      if (typeof parsed.channelId !== 'string' || !parsed.channelId) throw new Error('missing channelId');
+      if (typeof parsed.channelKeyBase64 !== 'string' || !parsed.channelKeyBase64) throw new Error('missing channelKeyBase64');
+      if (typeof parsed.peerId !== 'string' || !parsed.peerId) throw new Error('missing peerId');
+      if (typeof parsed.replayCounter !== 'number' || !Number.isInteger(parsed.replayCounter) || parsed.replayCounter < 0) {
+        throw new Error('invalid replayCounter');
+      }
+    } catch (err) {
+      throw new Error(`Channel key integrity check failed for ${path}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }

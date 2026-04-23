@@ -20,7 +20,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
-import { loadOrCreateIdentity, defaultIdentityDir, resolveIdentityPath } from './identity.js';
+import { loadOrCreateIdentity, defaultIdentityDir, resolveIdentityPath, runLocalIntegrityChecks } from './identity.js';
+import { listPendingSends } from './send-recovery.js';
 import { RelayClient } from './relay-client.js';
 import { type F0XSession, performLogin } from './core/ops.js';
 import { startUiServer } from './ui-server/index.js';
@@ -39,6 +40,11 @@ const __dirname  = dirname(__filename);
 
 function makeSession(): F0XSession {
   const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
+  runLocalIntegrityChecks(IDENTITY_DIR);
+  const pendingSends = listPendingSends(IDENTITY_DIR);
+  if (pendingSends.length > 0) {
+    process.stderr.write(`[F0X] Recovery: found ${pendingSends.length} pending send record(s) in local state.\n`);
+  }
   const relay    = new RelayClient({ relayUrl: RELAY_URL });
   return { relay, identity, identityDir: IDENTITY_DIR, relayUrl: RELAY_URL };
 }

@@ -33,6 +33,7 @@ import {
   recordSignatureFailure
 } from './security-observability.js';
 import { assertRateLimit } from './rate-limiter.js';
+import { markSendDelivered, markSendPending } from './send-recovery.js';
 
 // ─── Shared state (injected at server startup) ────────────────────────────────
 
@@ -563,8 +564,10 @@ export async function handleTool(
         const signatureB64 = signEnvelope(payload, ctx.identity.signingSecretKey);
 
         const envelope: MessageEnvelope = { ...payload, signatureB64 };
+        markSendPending(ctx.identityDir, messageId, channelId);
         try {
           await ctx.relay.sendMessage(channelId, envelope);
+          markSendDelivered(ctx.identityDir, messageId, channelId);
         } catch (sendErr) {
           if (sendErr instanceof Error && /replay/i.test(sendErr.message)) {
             recordReplayRejection({

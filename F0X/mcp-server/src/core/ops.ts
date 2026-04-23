@@ -30,6 +30,7 @@ import {
   recordSignatureFailure
 } from '../security-observability.js';
 import { assertRateLimit } from '../rate-limiter.js';
+import { markSendDelivered, markSendPending } from '../send-recovery.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
@@ -306,8 +307,10 @@ export async function sendMessage(
   const signatureB64 = signEnvelope(payload, identity.signingSecretKey);
   const envelope: MessageEnvelope = { ...payload, signatureB64 };
 
+  markSendPending(identityDir, messageId, channelId);
   try {
     await withReauth(session, () => relay.sendMessage(channelId, envelope));
+    markSendDelivered(identityDir, messageId, channelId);
   } catch (sendErr) {
     if (sendErr instanceof RelayRateLimitError) {
       recordRateLimitIncident({
