@@ -4,7 +4,7 @@
  * Returns plain typed values — no MCP formatting here.
  */
 
-import type { RelayClient, Channel, MessageEnvelope } from '../relay-client.js';
+import { RelayAuthError, type RelayClient, type Channel, type MessageEnvelope } from '../relay-client.js';
 import type { AgentIdentityFile } from '../identity.js';
 import {
   signChallenge,
@@ -22,6 +22,7 @@ import {
   saveChannelKey,
   incrementReplayCounter
 } from '../identity.js';
+import { recordReplayAnomaly, recordReplayRejection } from '../security-observability.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ export interface F0XSession {
   identityDir: string;
   relayUrl: string;
 }
+const highestObservedReplay = new Map<string, number>();
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,16 @@ export async function performLogin(session: F0XSession): Promise<{ token: string
     signature,
     capabilities: { mcp: true, sse: true }
   });
+}
+
+async function withReauth<T>(session: F0XSession, op: () => Promise<T>): Promise<T> {
+  try {
+    return await op();
+  } catch (e) {
+    if (!(e instanceof RelayAuthError)) throw e;
+    await performLogin(session);
+    return op();
+  }
 }
 
 // ─── Channel key resolution ───────────────────────────────────────────────────
@@ -100,10 +112,10 @@ export interface ChannelSummary {
 
 export async function listChannels(session: F0XSession): Promise<ChannelSummary[]> {
   const { relay, identity } = session;
-  const channels = await relay.listChannels();
+  const channels = await withReauth(session, () => relay.listChannels());
   return Promise.all(channels.map(async (c) => {
     const peerId = c.members.find((m) => m !== identity.agentId) ?? '';
-    const peer = await relay.getAgent(peerId);
+    const peer = await withReauth(session, () => relay.getAgent(peerId));
     return { channelId: c.channelId, peerId, peerLabel: peer?.label ?? '(unknown)' };
   }));
 }
@@ -118,7 +130,7 @@ export interface OpenChannelResult {
 export async function openChannel(session: F0XSession, targetAgentId: string): Promise<OpenChannelResult> {
   const { relay, identity, identityDir } = session;
 
-  const target = await relay.getAgent(targetAgentId);
+  const target = await withReauth(session, () => relay.getAgent(targetAgentId));
   if (!target) throw new Error(`Agent ${targetAgentId} not found.`);
 
   const channelKey = generateChannelKey();
@@ -132,11 +144,11 @@ export async function openChannel(session: F0XSession, targetAgentId: string): P
     { wrapId: wrapForSelf.wrapId,   channelId: 'pending', forAgentId: identity.agentId,    fromAgentId: identity.agentId, nonceB64: wrapForSelf.nonceB64,   wrappedKeyB64: wrapForSelf.wrappedKeyB64,   createdAt: now }
   ];
 
-  const { channel, existed } = await relay.openDmChannel({
+  const { channel, existed } = await withReauth(session, () => relay.openDmChannel({
     creatorAgentId: identity.agentId,
     targetAgentId,
     wrappedKeys
-  });
+  }));
 
   if (!existed) {
     saveChannelKey(identityDir, {
@@ -176,10 +188,10 @@ export async function fetchMessages(
   opts: { limit?: number; before?: string } = {}
 ): Promise<DecryptedMessage[]> {
   const { relay, identity } = session;
-  const { channel, messages } = await relay.listMessages(channelId, {
+  const { channel, messages } = await withReauth(session, () => relay.listMessages(channelId, {
     limit: opts.limit ?? 50,
     before: opts.before
-  });
+  }));
 
   const channelKey = await ensureChannelKey(session, channel);
 
@@ -187,7 +199,7 @@ export async function fetchMessages(
   const profileCache = new Map<string, { label: string; signingPublicKey: string } | null>();
   async function getSender(agentId: string) {
     if (!profileCache.has(agentId)) {
-      const p = await relay.getAgent(agentId);
+      const p = await withReauth(session, () => relay.getAgent(agentId));
       profileCache.set(agentId, p ? { label: p.label, signingPublicKey: p.signingPublicKey } : null);
     }
     return profileCache.get(agentId) ?? null;
@@ -196,7 +208,6 @@ export async function fetchMessages(
   const results: DecryptedMessage[] = [];
   for (const env of messages) {
     try {
-      const rawText = decryptMessage(env.ciphertextB64, env.nonceB64, channelKey);
       const sender = await getSender(env.senderAgentId);
       const signatureValid = sender
         ? verifyEnvelopeSignature(
@@ -210,6 +221,26 @@ export async function fetchMessages(
             sender.signingPublicKey
           )
         : false;
+      if (!signatureValid) {
+        continue;
+      }
+
+      const replayKey = `${env.channelId}:${env.senderAgentId}`;
+      const previousCounter = highestObservedReplay.get(replayKey);
+      if (previousCounter !== undefined && env.replayCounter <= previousCounter) {
+        recordReplayAnomaly({
+          context: 'ui',
+          channelId: env.channelId,
+          senderAgentId: env.senderAgentId,
+          replayCounter: env.replayCounter,
+          previousCounter,
+          detail: 'non-monotonic replay counter observed while fetching messages'
+        });
+        continue;
+      }
+      highestObservedReplay.set(replayKey, env.replayCounter);
+
+      const rawText = decryptMessage(env.ciphertextB64, env.nonceB64, channelKey);
 
       results.push({
         messageId: env.messageId,
@@ -243,7 +274,7 @@ export async function sendMessage(
   if (text.length > 32768) throw new Error('Message too long (max 32768 characters).');
 
   const { relay, identity, identityDir } = session;
-  const { channel } = await relay.listMessages(channelId, { limit: 1 });
+  const { channel } = await withReauth(session, () => relay.listMessages(channelId, { limit: 1 }));
   const channelKey = await ensureChannelKey(session, channel);
 
   const { nonceB64, ciphertextB64 } = encryptMessage(text, channelKey);
@@ -259,6 +290,18 @@ export async function sendMessage(
   const signatureB64 = signEnvelope(payload, identity.signingSecretKey);
   const envelope: MessageEnvelope = { ...payload, signatureB64 };
 
-  await relay.sendMessage(channelId, envelope);
+  try {
+    await withReauth(session, () => relay.sendMessage(channelId, envelope));
+  } catch (sendErr) {
+    if (sendErr instanceof Error && /replay/i.test(sendErr.message)) {
+      recordReplayRejection({
+        context: 'ui',
+        channelId,
+        senderAgentId: identity.agentId,
+        detail: sendErr.message
+      });
+    }
+    throw sendErr;
+  }
   return { messageId, channelId, timestamp };
 }

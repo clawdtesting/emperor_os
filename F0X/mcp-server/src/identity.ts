@@ -9,7 +9,14 @@
  *   { channelId, channelKeyBase64, peerId, peerLabel, replayCounter, updatedAt }
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  chmodSync,
+  statSync
+} from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -51,13 +58,48 @@ export function resolveChannelKeyPath(dir: string, channelId: string): string {
   return join(dir, 'channels', `${channelId}.json`);
 }
 
+// ─── Permission checks ───────────────────────────────────────────────────────
+
+const DIR_MODE_700 = 0o700;
+const FILE_MODE_600 = 0o600;
+const PERMISSION_MASK = 0o777;
+
+function formatMode(mode: number): string {
+  return `0${(mode & PERMISSION_MASK).toString(8)}`;
+}
+
+function ensureDirMode(path: string, expectedMode: number): void {
+  const currentMode = statSync(path).mode & PERMISSION_MASK;
+  if (currentMode !== expectedMode) {
+    throw new Error(
+      `Insecure identity directory permissions for ${path}. ` +
+      `Expected ${formatMode(expectedMode)}, found ${formatMode(currentMode)}. ` +
+      'Run: chmod 700 ~/.f0x-chat'
+    );
+  }
+}
+
+function ensureFileMode(path: string, expectedMode: number): void {
+  const currentMode = statSync(path).mode & PERMISSION_MASK;
+  if (currentMode !== expectedMode) {
+    throw new Error(
+      `Insecure identity file permissions for ${path}. ` +
+      `Expected ${formatMode(expectedMode)}, found ${formatMode(currentMode)}. ` +
+      'Run: chmod 600 ~/.f0x-chat/identity.json'
+    );
+  }
+}
+
 // ─── Identity ─────────────────────────────────────────────────────────────────
 
 export function loadOrCreateIdentity(identityDir: string, defaultLabel = 'hermes-agent'): AgentIdentityFile {
   mkdirSync(identityDir, { recursive: true });
+  chmodSync(identityDir, DIR_MODE_700);
+  ensureDirMode(identityDir, DIR_MODE_700);
   const identityPath = resolveIdentityPath(identityDir);
 
   if (existsSync(identityPath)) {
+    ensureFileMode(identityPath, FILE_MODE_600);
     return JSON.parse(readFileSync(identityPath, 'utf8')) as AgentIdentityFile;
   }
 
@@ -76,14 +118,21 @@ export function loadOrCreateIdentity(identityDir: string, defaultLabel = 'hermes
     updatedAt: now
   };
 
-  writeFileSync(identityPath, JSON.stringify(identity, null, 2), 'utf8');
+  writeFileSync(identityPath, JSON.stringify(identity, null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
+  chmodSync(identityPath, FILE_MODE_600);
+  ensureFileMode(identityPath, FILE_MODE_600);
   return identity;
 }
 
 export function saveIdentity(identityDir: string, identity: AgentIdentityFile): void {
   mkdirSync(identityDir, { recursive: true });
+  chmodSync(identityDir, DIR_MODE_700);
+  ensureDirMode(identityDir, DIR_MODE_700);
   identity.updatedAt = new Date().toISOString();
-  writeFileSync(resolveIdentityPath(identityDir), JSON.stringify(identity, null, 2), 'utf8');
+  const identityPath = resolveIdentityPath(identityDir);
+  writeFileSync(identityPath, JSON.stringify(identity, null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
+  chmodSync(identityPath, FILE_MODE_600);
+  ensureFileMode(identityPath, FILE_MODE_600);
 }
 
 // ─── Channel keys ─────────────────────────────────────────────────────────────
