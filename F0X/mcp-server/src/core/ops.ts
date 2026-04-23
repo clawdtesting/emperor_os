@@ -22,6 +22,7 @@ import {
   saveChannelKey,
   incrementReplayCounter
 } from '../identity.js';
+import { recordReplayAnomaly, recordReplayRejection } from '../security-observability.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ export interface F0XSession {
   identityDir: string;
   relayUrl: string;
 }
+const highestObservedReplay = new Map<string, number>();
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -206,7 +208,6 @@ export async function fetchMessages(
   const results: DecryptedMessage[] = [];
   for (const env of messages) {
     try {
-      const rawText = decryptMessage(env.ciphertextB64, env.nonceB64, channelKey);
       const sender = await getSender(env.senderAgentId);
       const signatureValid = sender
         ? verifyEnvelopeSignature(
@@ -220,6 +221,26 @@ export async function fetchMessages(
             sender.signingPublicKey
           )
         : false;
+      if (!signatureValid) {
+        continue;
+      }
+
+      const replayKey = `${env.channelId}:${env.senderAgentId}`;
+      const previousCounter = highestObservedReplay.get(replayKey);
+      if (previousCounter !== undefined && env.replayCounter <= previousCounter) {
+        recordReplayAnomaly({
+          context: 'ui',
+          channelId: env.channelId,
+          senderAgentId: env.senderAgentId,
+          replayCounter: env.replayCounter,
+          previousCounter,
+          detail: 'non-monotonic replay counter observed while fetching messages'
+        });
+        continue;
+      }
+      highestObservedReplay.set(replayKey, env.replayCounter);
+
+      const rawText = decryptMessage(env.ciphertextB64, env.nonceB64, channelKey);
 
       results.push({
         messageId: env.messageId,
@@ -269,6 +290,18 @@ export async function sendMessage(
   const signatureB64 = signEnvelope(payload, identity.signingSecretKey);
   const envelope: MessageEnvelope = { ...payload, signatureB64 };
 
-  await withReauth(session, () => relay.sendMessage(channelId, envelope));
+  try {
+    await withReauth(session, () => relay.sendMessage(channelId, envelope));
+  } catch (sendErr) {
+    if (sendErr instanceof Error && /replay/i.test(sendErr.message)) {
+      recordReplayRejection({
+        context: 'ui',
+        channelId,
+        senderAgentId: identity.agentId,
+        detail: sendErr.message
+      });
+    }
+    throw sendErr;
+  }
   return { messageId, channelId, timestamp };
 }

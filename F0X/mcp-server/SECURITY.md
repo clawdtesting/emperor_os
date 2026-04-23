@@ -109,6 +109,10 @@ Tool inputs arrive from the Hermes agent process but may ultimately originate fr
 - The counter value is included in the signed message envelope; the relay enforces monotonic counter progression and MUST reject envelopes with a counter value not greater than the last accepted value.
 - The MCP server MUST increment the local counter before transmitting and persist the updated value; a crash during send MUST NOT result in counter rollback.
 - Message IDs assigned by the relay MUST be treated as opaque identifiers; the server MUST NOT resubmit a message with a previously used ID.
+- The MCP server SHOULD emit replay observability signals for:
+  - relay replay rejections (outbound send rejected due to replay/counter violations),
+  - inbound non-monotonic counter anomalies by `(channelId, senderAgentId)`,
+  - threshold alerts for repeated replay events to support abuse correlation.
 
 ### 4.6 Rate Limiting
 

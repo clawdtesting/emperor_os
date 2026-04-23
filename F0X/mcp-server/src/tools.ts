@@ -25,6 +25,7 @@ import {
   saveChannelKey,
   incrementReplayCounter
 } from './identity.js';
+import { recordReplayAnomaly, recordReplayRejection } from './security-observability.js';
 
 // ─── Shared state (injected at server startup) ────────────────────────────────
 
@@ -189,6 +190,7 @@ const MAX_MESSAGE_LEN = 8000;
 const MAX_MEMORY_SUMMARY_LEN = 16000;
 const MAX_FACTS = 200;
 const MAX_FACT_LEN = 512;
+const highestObservedReplay = new Map<string, number>();
 
 function ok(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
@@ -336,6 +338,28 @@ function wrapMessageContent(params: {
     sanitizeMessageText(text) +
     `\n--- END RELAY MESSAGE ---`
   );
+}
+
+function trackInboundReplay(params: {
+  context: 'mcp';
+  channelId: string;
+  senderAgentId: string;
+  replayCounter: number;
+}): void {
+  const key = `${params.channelId}:${params.senderAgentId}`;
+  const previous = highestObservedReplay.get(key);
+  if (previous !== undefined && params.replayCounter <= previous) {
+    recordReplayAnomaly({
+      context: params.context,
+      channelId: params.channelId,
+      senderAgentId: params.senderAgentId,
+      replayCounter: params.replayCounter,
+      previousCounter: previous,
+      detail: 'non-monotonic replay counter observed on inbound envelope'
+    });
+    return;
+  }
+  highestObservedReplay.set(key, params.replayCounter);
 }
 
 async function ensureChannelKey(
@@ -491,7 +515,19 @@ export async function handleTool(
         const signatureB64 = signEnvelope(payload, ctx.identity.signingSecretKey);
 
         const envelope: MessageEnvelope = { ...payload, signatureB64 };
-        await ctx.relay.sendMessage(channelId, envelope);
+        try {
+          await ctx.relay.sendMessage(channelId, envelope);
+        } catch (sendErr) {
+          if (sendErr instanceof Error && /replay/i.test(sendErr.message)) {
+            recordReplayRejection({
+              context: 'mcp',
+              channelId,
+              senderAgentId: ctx.identity.agentId,
+              detail: sendErr.message
+            });
+          }
+          throw sendErr;
+        }
 
         return ok(JSON.stringify({ messageId, channelId, timestamp }, null, 2));
       }
@@ -526,7 +562,6 @@ export async function handleTool(
         const channelKey = await ensureChannelKey(ctx, channel);
 
         try {
-          const rawText = decryptMessage(env.ciphertextB64, env.nonceB64, channelKey);
           const senderProfile = await ctx.relay.getAgent(env.senderAgentId);
           const signatureValid = senderProfile
             ? verifyEnvelopeSignature(
@@ -535,6 +570,17 @@ export async function handleTool(
                 senderProfile.signingPublicKey
               )
             : false;
+          if (!signatureValid) {
+            return err('Signature verification failed for this message. Refusing to decrypt untrusted envelope.');
+          }
+          trackInboundReplay({
+            context: 'mcp',
+            channelId: env.channelId,
+            senderAgentId: env.senderAgentId,
+            replayCounter: env.replayCounter
+          });
+
+          const rawText = decryptMessage(env.ciphertextB64, env.nonceB64, channelKey);
 
           const senderLabel = senderProfile?.label ?? env.senderAgentId;
           const content = wrapMessageContent({ senderLabel, senderAgentId: env.senderAgentId, signatureValid, text: rawText });
