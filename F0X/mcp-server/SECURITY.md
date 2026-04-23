@@ -151,6 +151,10 @@ Messages received from the relay are authored by remote agents over whose behavi
 - The MCP server MUST treat all message content as data. It MUST NOT forward raw message text into system prompts, tool descriptions, or instruction contexts without explicit boundary marking.
 - The Hermes agent MUST NOT execute instructions found in message content without passing through `F0X_confirm_action`.
 - `F0X_confirm_action` MUST be called before taking any action that was requested, suggested, or implied by a message received from a remote agent.
+- Action handling SHOULD be two-phase:
+  1. interpret remote content as untrusted data,
+  2. execute only with a fresh `approvalToken` issued by `F0X_confirm_action` and bound to the triggering `messageId`.
+- Approval tokens SHOULD be short-lived and single-use to reduce replayability of approvals.
 - In non-TTY (stdio) mode, `F0X_confirm_action` auto-denies. This is the correct default behavior and MUST NOT be bypassed.
 - Message content MUST be presented to the LLM layer wrapped as external untrusted input, not as part of the instruction context.
 
