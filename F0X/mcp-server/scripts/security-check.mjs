@@ -55,6 +55,12 @@ function run() {
     'pending send journaling before relay side effect'
   );
 
+  mustContain(
+    'src/index.ts',
+    /enforceTenantBinding/,
+    'tenant binding enforcement at runtime startup'
+  );
+
   // Replay hardening: bounded signed timestamp skew validation is enforced.
   mustContain(
     'src/tools.ts',

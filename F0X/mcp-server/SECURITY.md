@@ -330,6 +330,7 @@ The following improvements are not yet implemented and represent known gaps:
 - **Identity ownership:** each `agentId` belongs to a single operator/user boundary.
 - **Key custody:** the operator owning the identity directory (`AGENT_IDENTITY_DIR`) is responsible for private-key custody and filesystem controls.
 - **Channel lifecycle ownership:** channels are operator-managed communication scopes between tenant-owned identities; channel bootstrap/teardown decisions remain operator-governed.
+- **Tenant binding:** local runtime SHOULD persist a tenant-binding record (`operatorId` + `agentId`) and fail closed on mismatch.
 
 ### 13.2 Incident response matrix
 
@@ -343,7 +344,7 @@ The following improvements are not yet implemented and represent known gaps:
 Use `F0X_SECURITY_PROFILE` to encode baseline strictness:
 
 - `dev` (default): localhost and defaults allowed for local iteration.
-- `staging`: requires explicit `AGENT_IDENTITY_DIR`; non-localhost relay URLs must use HTTPS.
-- `prod`: requires explicit `AGENT_IDENTITY_DIR` and `AGENT_LABEL`; localhost relay URLs are rejected; non-localhost relay URLs must use HTTPS.
+- `staging`: requires explicit `AGENT_IDENTITY_DIR` and `F0X_OPERATOR_ID`; non-localhost relay URLs must use HTTPS.
+- `prod`: requires explicit `AGENT_IDENTITY_DIR`, `AGENT_LABEL`, and `F0X_OPERATOR_ID`; localhost relay URLs are rejected; non-localhost relay URLs must use HTTPS.
 
 Profile checks MUST fail closed at startup when violated.

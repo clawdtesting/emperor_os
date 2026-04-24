@@ -27,6 +27,7 @@ import { RelayClient } from './relay-client.js';
 import { type F0XSession, performLogin } from './core/ops.js';
 import { startUiServer } from './ui-server/index.js';
 import { enforceSecurityProfile, resolveSecurityProfile } from './security-profile.js';
+import { enforceTenantBinding } from './tenant-binding.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ const IDENTITY_DIR = process.env['AGENT_IDENTITY_DIR'] ?? defaultIdentityDir();
 const AGENT_LABEL  = process.env['AGENT_LABEL']        ?? 'f0x-agent';
 const UI_PORT      = process.env['F0X_UI_PORT']        ? parseInt(process.env['F0X_UI_PORT'], 10) : 7827;
 const SECURITY_PROFILE = resolveSecurityProfile();
+const OPERATOR_ID = process.env['F0X_OPERATOR_ID'] ?? 'local-dev-operator';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
@@ -46,9 +48,11 @@ function makeSession(): F0XSession {
     profile: SECURITY_PROFILE,
     relayUrl: RELAY_URL,
     identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
-    agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined
+    agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
+    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined
   });
   const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
+  enforceTenantBinding(IDENTITY_DIR, OPERATOR_ID, identity.agentId);
   runLocalIntegrityChecks(IDENTITY_DIR);
   const pendingSends = listPendingSends(IDENTITY_DIR);
   if (pendingSends.length > 0) {
@@ -241,6 +245,9 @@ async function cmdChecklist(): Promise<void> {
 
   const pending = listPendingSends(IDENTITY_DIR);
   check(pending.length === 0, 'Pending send recovery queue', `${pending.length} pending`);
+
+  const tenantBindingPath = join(IDENTITY_DIR, 'tenant-binding.json');
+  check(existsSync(tenantBindingPath), 'Tenant binding file', tenantBindingPath);
 
   const auditPath = join(IDENTITY_DIR, 'security-audit.log');
   if (existsSync(auditPath)) {
