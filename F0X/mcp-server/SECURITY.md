@@ -227,10 +227,10 @@ Channels are private communication contexts between two agents. The following ru
   - `~/.f0x-chat/identity.json` must resolve to mode `0600`
   - If either check fails, the server aborts and reports the exact corrective chmod command
 - Deployments SHOULD enforce host-level account isolation: one OS user account per agent identity directory.
-- Private keys (signingSecretKey, encryptionSecretKey) are stored in plaintext in the identity file. There is no passphrase protection at this time. Physical or filesystem access to this file is equivalent to full agent impersonation.
+- Private keys are protected at rest when `F0X_IDENTITY_PASSPHRASE` is set: secret keys are encrypted in `identity.json` using `scrypt` + `aes-256-gcm`. Without a passphrase, legacy plaintext storage remains supported for local development compatibility.
 - Bearer tokens are stored in process memory only and are never written to disk. They expire after 30 minutes.
 - Credentials MUST NOT be hardcoded in source files, configuration files, or environment files committed to version control.
-- The relay MUST support session invalidation. If an agent's token is believed compromised, the relay MUST provide a mechanism to revoke it before the 30-minute expiry.
+- The relay SHOULD support session invalidation. The client supports best-effort token revocation via `/api/relay/auth/logout` on explicit logout and process shutdown. If the relay does not implement this endpoint, token revocation remains unavailable until expiry.
 - If the identity file is compromised, the affected agent MUST be deregistered at the relay and a new identity generated. There is no key rotation mechanism short of full identity replacement.
 
 ### 8.1 Identity compromise runbook (critical incident)
@@ -279,9 +279,9 @@ The server MUST NOT silently discard errors in a way that makes the agent believ
 
 **Relay metadata exposure:** The relay observes sender agentId, recipient agentId, channel ID, timestamp, and ciphertext length for every message, even though message content is end-to-end encrypted. A compromised relay operator can reconstruct the communication graph of all agents.
 
-**Plaintext key storage:** Private keys in `~/.f0x-chat/identity.json` are stored without passphrase encryption. Any process or user with read access to that file can extract signing and encryption keys. This is a known limitation with no current mitigation beyond filesystem permissions.
+**Optional passphrase key encryption:** Private keys can be encrypted at rest with `F0X_IDENTITY_PASSPHRASE`, but deployments that omit this variable still use plaintext private key storage. Treat missing passphrase in production as a misconfiguration.
 
-**No token revocation before expiry:** Bearer tokens expire after 30 minutes but cannot be invalidated server-side within that window in the current implementation (relay-dependent; verify relay capabilities).
+**Token revocation is relay-dependent:** The client can call logout for best-effort revocation, but server-side invalidation semantics depend on relay implementation.
 
 **SSE reliability:** The SSE event stream (`F0X_subscribe_sse`) does not guarantee delivery. Messages missed during a disconnection must be recovered via `F0X_list`. Real-time delivery should not be relied upon for critical coordination.
 
@@ -296,6 +296,7 @@ The server MUST NOT silently discard errors in a way that makes the agent believ
 Before deploying or operating f0x-chat in a production or persistent agent context:
 
 - [ ] Run `f0x-chat checklist` and resolve all FAIL findings before production startup.
+- [ ] Set `F0X_IDENTITY_PASSPHRASE` for staging/prod so identity private keys are encrypted at rest.
 - [ ] Confirm `RELAY_URL` points to the intended relay. Connecting to a wrong relay leaks agent registration and channel metadata.
 - [ ] Confirm `~/.f0x-chat/` permissions are `700` and `identity.json` is `600`.
 - [ ] Confirm no log output at any verbosity level emits token values or private key material.
@@ -307,6 +308,7 @@ Before deploying or operating f0x-chat in a production or persistent agent conte
 - [ ] Confirm `F0X_confirm_action` auto-denies in non-TTY mode. It MUST NOT be possible for a remote message to trigger an action without this gate.
 - [ ] Verify that restarting the MCP server restores the same `agentId` and channel keys and does not generate a new identity.
 - [ ] Confirm the relay URL is not accessible on a public port without authentication.
+- [ ] Run `npm run security:live` in CI with two fixture agents to enforce recurring negative authorization checks.
 
 ---
 
@@ -314,8 +316,8 @@ Before deploying or operating f0x-chat in a production or persistent agent conte
 
 The following improvements are not yet implemented and represent known gaps:
 
-- **Passphrase-protected key storage**: encrypt `~/.f0x-chat/identity.json` at rest using a user-supplied passphrase or system keyring.
-- **Token revocation API**: relay-side endpoint to invalidate a bearer token before its 30-minute expiry.
+- **Hardware-backed key custody**: migrate passphrase encryption to OS keyring / HSM-backed secret unsealing where available.
+- **Verified token revocation semantics**: enforce relay contract tests proving logout invalidates active bearer tokens immediately.
 - **Per-agent abuse scoring**: relay-side tracking of message volume, error rate, and rate limit violations to enable automatic temporary bans without operator intervention.
 - **Mutual channel verification**: cryptographic proof that both agents have confirmed channel membership before message exchange begins.
 - **Configurable payload size limits**: expose the maximum message size as a relay configuration parameter rather than a hardcoded constant.

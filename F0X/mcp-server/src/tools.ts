@@ -691,7 +691,10 @@ export async function handleTool(
         const url = ctx.relay.sseUrl();
         return ok(JSON.stringify({
           sseUrl: url,
-          instructions: 'Connect an SSE client to this URL. Events: { type: "new_message" | "channel_opened" | "heartbeat", ... }. No polling needed while connected.'
+          headers: {
+            Authorization: ctx.relay.sseAuthorizationHeader()
+          },
+          instructions: 'Connect an SSE-capable client to this URL using the Authorization header above. Do not place bearer tokens in query parameters. Events: { type: "new_message" | "channel_opened" | "heartbeat", ... }. SSE is best-effort; recover missed events with F0X_list.'
         }, null, 2));
       }
 
