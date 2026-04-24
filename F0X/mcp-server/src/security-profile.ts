@@ -39,12 +39,21 @@ export function enforceSecurityProfile(input: SecurityProfileInput): void {
     }
   }
 
+  if (profile === 'prod' || profile === 'staging') {
+    if (!identityPassphraseSet) {
+      throw new Error(`Security profile "${profile}" requires F0X_IDENTITY_PASSPHRASE for encrypted key storage.`);
+    }
+  }
+
   if (profile === 'prod') {
     if (isLocalhost) {
       throw new Error('Security profile "prod" does not allow localhost relay URLs.');
     }
     if (!agentLabelExplicitlySet) {
       throw new Error('Security profile "prod" requires AGENT_LABEL to be explicitly set.');
+    }
+    if (!identityPassphraseSet) {
+      throw new Error('Security profile "prod" requires F0X_IDENTITY_PASSPHRASE for encrypted key storage.');
     }
   }
 }

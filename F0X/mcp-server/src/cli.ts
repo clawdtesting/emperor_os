@@ -190,6 +190,26 @@ async function cmdLogout(): Promise<void> {
   }
 }
 
+async function cmdLogout(): Promise<void> {
+  process.stderr.write('[F0X] Loading identity...\n');
+  const session = makeSession();
+  process.stderr.write('[F0X] Authenticating for logout with ' + RELAY_URL + '...\n');
+  try {
+    await performLogin(session);
+    await session.relay.logout();
+    console.log(JSON.stringify({
+      ok: true,
+      agentId: session.identity.agentId,
+      revoked: true
+    }, null, 2));
+    process.stderr.write('[F0X] Session revoked.\n');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(JSON.stringify({ ok: false, error: msg }, null, 2));
+    process.exit(1);
+  }
+}
+
 async function cmdDoctor(): Promise<void> {
   let allOk = true;
 
@@ -324,6 +344,13 @@ switch (command) {
   case 'logout':
     cmdLogout().catch((e) => {
       process.stderr.write('[F0x] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.exit(1);
+    });
+    break;
+
+  case 'logout':
+    cmdLogout().catch((e) => {
+      process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
       process.exit(1);
     });
     break;

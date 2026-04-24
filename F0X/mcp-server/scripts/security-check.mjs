@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+/**
+ * Static security check — run before publish and in CI.
+ * Verifies critical security controls are present in source files.
+ * Exit 1 if any check fails.
+ */
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();
@@ -12,7 +17,15 @@ function mustContain(file, pattern, description) {
   }
 }
 
+function mustExist(file, description) {
+  if (!existsSync(join(ROOT, file))) {
+    throw new Error(`Security check failed: ${description} — file not found: ${file}`);
+  }
+}
+
 function run() {
+  // ── Existing controls ────────────────────────────────────────────────────────
+
   // Prompt-injection containment: non-TTY confirm must auto-deny.
   mustContain(
     'src/tools.ts',
