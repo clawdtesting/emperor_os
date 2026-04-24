@@ -46,5 +46,8 @@ export function enforceSecurityProfile(input: SecurityProfileInput): void {
     if (!agentLabelExplicitlySet) {
       throw new Error('Security profile "prod" requires AGENT_LABEL to be explicitly set.');
     }
+    if (!identityPassphraseSet) {
+      throw new Error('Security profile "prod" requires F0X_IDENTITY_PASSPHRASE for encrypted key storage.');
+    }
   }
 }
