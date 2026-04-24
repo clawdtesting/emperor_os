@@ -41,7 +41,7 @@ function logSecurityEvent(event: string, signal: ReplaySignal, extra: Record<str
     ...extra
   };
   const stderrPayload = JSON.stringify(payload);
-  process.stderr.write(`[F0X-security] ${stderrPayload}\n`);
+  process.stderr.write(`[F0x-security] ${stderrPayload}\n`);
   appendAudit(payload);
 }
 

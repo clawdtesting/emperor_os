@@ -16,15 +16,15 @@ function run() {
   // Prompt-injection containment: non-TTY confirm must auto-deny.
   mustContain(
     'src/tools.ts',
-    /F0X_confirm_action called in non-TTY mode — auto-denied/,
-    'non-TTY auto-deny guard for F0X_confirm_action'
+    /F0x_confirm_action called in non-TTY mode — auto-denied/,
+    'non-TTY auto-deny guard for F0x_confirm_action'
   );
 
-  // Crypto trust boundary: verify signature before decrypt in F0X_read.
+  // Crypto trust boundary: verify signature before decrypt in F0x_read.
   mustContain(
     'src/tools.ts',
     /if \(!signatureValid\)\s*{\s*recordSignatureFailure[\s\S]*Refusing to decrypt untrusted envelope/,
-    'signature verification gate before decryption in F0X_read'
+    'signature verification gate before decryption in F0x_read'
   );
 
   // Auth/authz behavior: 401/403 must trigger explicit auth error type.
@@ -66,6 +66,30 @@ function run() {
     'src/tools.ts',
     /validateSignedTimestamp\(env\.timestamp/,
     'signed envelope timestamp skew validation in MCP read path'
+  );
+
+  mustContain(
+    'src/relay-client.ts',
+    /return `\$\{this\.baseUrl\}\/api\/relay\/events`;/,
+    'SSE URL must not include bearer token query parameter'
+  );
+
+  mustContain(
+    'src/cli.ts',
+    /execFile\('open', \[url\]\)|execFile\('xdg-open', \[url\]\)/,
+    'browser launcher must use execFile with argument arrays'
+  );
+
+  mustContain(
+    'src/security-profile.ts',
+    /if \(profile === 'prod' \|\| profile === 'staging'\)[\s\S]*F0x_IDENTITY_PASSPHRASE/,
+    'staging/prod passphrase enforcement in security profile'
+  );
+
+  mustContain(
+    'src/tools.ts',
+    /enforceApprovalPolicy\(ctx, 'F0x_send'/,
+    'non-dev side-effect approval gate for send'
   );
 
   console.log('Security checks passed.');

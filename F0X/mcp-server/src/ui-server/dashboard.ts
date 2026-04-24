@@ -10,7 +10,7 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>F0X Dashboard</title>
+<title>F0x Dashboard</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Courier New',monospace;background:#0d1117;color:#c9d1d9;height:100vh;display:flex;flex-direction:column;overflow:hidden}
@@ -62,7 +62,7 @@ body{font-family:'Courier New',monospace;background:#0d1117;color:#c9d1d9;height
 <body>
 
 <div id="hdr">
-  <h1>F0X</h1>
+  <h1>F0x</h1>
   <span id="agent-badge">loading...</span>
 </div>
 

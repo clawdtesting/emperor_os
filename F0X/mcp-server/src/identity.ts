@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import { generateSigningKeyPair, generateEncryptionKeyPair } from './crypto.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,6 +34,27 @@ export interface AgentIdentityFile {
   encryptionSecretKey: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface EncryptedSecretsPayload {
+  saltB64: string;
+  ivB64: string;
+  authTagB64: string;
+  ciphertextB64: string;
+  kdf: 'scrypt';
+  cipher: 'aes-256-gcm';
+}
+
+interface AgentIdentityDiskFile {
+  agentId: string;
+  label: string;
+  signingPublicKey: string;
+  encryptionPublicKey: string;
+  createdAt: string;
+  updatedAt: string;
+  signingSecretKey?: string;
+  encryptionSecretKey?: string;
+  encryptedSecrets?: EncryptedSecretsPayload;
 }
 
 export interface ChannelKeyFile {
@@ -74,6 +95,115 @@ function resolveContinuityPath(dir: string): string {
 const DIR_MODE_700 = 0o700;
 const FILE_MODE_600 = 0o600;
 const PERMISSION_MASK = 0o777;
+const KEY_DERIVATION_BYTES = 32;
+
+function identityPassphrase(): string | undefined {
+  const passphrase = process.env['F0x_IDENTITY_PASSPHRASE'];
+  if (!passphrase) return undefined;
+  const trimmed = passphrase.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function encryptSecrets(passphrase: string, secrets: {
+  signingSecretKey: string;
+  encryptionSecretKey: string;
+}): EncryptedSecretsPayload {
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const key = scryptSync(passphrase, salt, KEY_DERIVATION_BYTES);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const plaintext = Buffer.from(JSON.stringify(secrets), 'utf8');
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return {
+    saltB64: salt.toString('base64'),
+    ivB64: iv.toString('base64'),
+    authTagB64: authTag.toString('base64'),
+    ciphertextB64: ciphertext.toString('base64'),
+    kdf: 'scrypt',
+    cipher: 'aes-256-gcm'
+  };
+}
+
+function decryptSecrets(passphrase: string, payload: EncryptedSecretsPayload): {
+  signingSecretKey: string;
+  encryptionSecretKey: string;
+} {
+  if (payload.kdf !== 'scrypt' || payload.cipher !== 'aes-256-gcm') {
+    throw new Error('Unsupported identity encryption format. Expected scrypt + aes-256-gcm.');
+  }
+  const salt = Buffer.from(payload.saltB64, 'base64');
+  const iv = Buffer.from(payload.ivB64, 'base64');
+  const authTag = Buffer.from(payload.authTagB64, 'base64');
+  const ciphertext = Buffer.from(payload.ciphertextB64, 'base64');
+  const key = scryptSync(passphrase, salt, KEY_DERIVATION_BYTES);
+  const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  const parsed = JSON.parse(plaintext.toString('utf8')) as Partial<AgentIdentityFile>;
+  if (typeof parsed.signingSecretKey !== 'string' || !parsed.signingSecretKey) {
+    throw new Error('Decrypted identity payload missing signingSecretKey.');
+  }
+  if (typeof parsed.encryptionSecretKey !== 'string' || !parsed.encryptionSecretKey) {
+    throw new Error('Decrypted identity payload missing encryptionSecretKey.');
+  }
+  return {
+    signingSecretKey: parsed.signingSecretKey,
+    encryptionSecretKey: parsed.encryptionSecretKey
+  };
+}
+
+function encodeIdentityForDisk(identity: AgentIdentityFile): AgentIdentityDiskFile {
+  const passphrase = identityPassphrase();
+  const base: AgentIdentityDiskFile = {
+    agentId: identity.agentId,
+    label: identity.label,
+    signingPublicKey: identity.signingPublicKey,
+    encryptionPublicKey: identity.encryptionPublicKey,
+    createdAt: identity.createdAt,
+    updatedAt: identity.updatedAt
+  };
+  if (!passphrase) {
+    return {
+      ...base,
+      signingSecretKey: identity.signingSecretKey,
+      encryptionSecretKey: identity.encryptionSecretKey
+    };
+  }
+  return {
+    ...base,
+    encryptedSecrets: encryptSecrets(passphrase, {
+      signingSecretKey: identity.signingSecretKey,
+      encryptionSecretKey: identity.encryptionSecretKey
+    })
+  };
+}
+
+function decodeIdentityFromDisk(file: AgentIdentityDiskFile): AgentIdentityFile {
+  if (file.encryptedSecrets) {
+    const passphrase = identityPassphrase();
+    if (!passphrase) {
+      throw new Error(
+        'Identity file contains encrypted private keys. Set F0x_IDENTITY_PASSPHRASE to decrypt and continue.'
+      );
+    }
+    const decrypted = decryptSecrets(passphrase, file.encryptedSecrets);
+    return {
+      agentId: file.agentId,
+      label: file.label,
+      signingPublicKey: file.signingPublicKey,
+      signingSecretKey: decrypted.signingSecretKey,
+      encryptionPublicKey: file.encryptionPublicKey,
+      encryptionSecretKey: decrypted.encryptionSecretKey,
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt
+    };
+  }
+  if (!file.signingSecretKey || !file.encryptionSecretKey) {
+    throw new Error('Identity file is missing private key material.');
+  }
+  return file as AgentIdentityFile;
+}
 
 function formatMode(mode: number): string {
   return `0${(mode & PERMISSION_MASK).toString(8)}`;
@@ -144,7 +274,7 @@ export function loadOrCreateIdentity(identityDir: string, defaultLabel = 'hermes
 
   if (existsSync(identityPath)) {
     ensureFileMode(identityPath, FILE_MODE_600);
-    const loaded = JSON.parse(readFileSync(identityPath, 'utf8')) as AgentIdentityFile;
+    const loaded = decodeIdentityFromDisk(JSON.parse(readFileSync(identityPath, 'utf8')) as AgentIdentityDiskFile);
     if (!existsSync(resolveContinuityPath(identityDir))) {
       writeContinuityFile(identityDir, loaded.agentId);
     }
@@ -166,7 +296,7 @@ export function loadOrCreateIdentity(identityDir: string, defaultLabel = 'hermes
     updatedAt: now
   };
 
-  writeFileSync(identityPath, JSON.stringify(identity, null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
+  writeFileSync(identityPath, JSON.stringify(encodeIdentityForDisk(identity), null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
   chmodSync(identityPath, FILE_MODE_600);
   ensureFileMode(identityPath, FILE_MODE_600);
   writeContinuityFile(identityDir, identity.agentId);
@@ -179,7 +309,7 @@ export function saveIdentity(identityDir: string, identity: AgentIdentityFile): 
   ensureDirMode(identityDir, DIR_MODE_700);
   identity.updatedAt = new Date().toISOString();
   const identityPath = resolveIdentityPath(identityDir);
-  writeFileSync(identityPath, JSON.stringify(identity, null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
+  writeFileSync(identityPath, JSON.stringify(encodeIdentityForDisk(identity), null, 2), { encoding: 'utf8', mode: FILE_MODE_600 });
   chmodSync(identityPath, FILE_MODE_600);
   ensureFileMode(identityPath, FILE_MODE_600);
   writeContinuityFile(identityDir, identity.agentId);

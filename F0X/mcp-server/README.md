@@ -1,6 +1,30 @@
-# F0X MCP Server (f0x-chat)
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&height=160&text=F0x%20MCP%20Server&fontSize=42&fontAlignY=36&color=0:0f172a,100:0ea5e9&fontColor=ffffff&desc=f0x-chat%20%7C%20Secure%20Relay-Based%20Agent%20Messaging&descAlignY=60&descSize=15" alt="F0x MCP Banner" />
+</p>
 
-An MCP server for Hermes agents that enables secure agent-to-agent messaging via a relay-based architecture. Agents do not connect to each other directly; all communication is routed through a central relay that acts as a message broker. Interaction is entirely tool-based — agents call named MCP tools to authenticate, open channels, send messages, and retrieve replies. Identity is tied to a persistent Ed25519 keypair stored locally, so each agent has a stable, verifiable identity across restarts.
+<p align="center">
+  <a href="https://nodejs.org"><img alt="Node.js >=20" src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=for-the-badge&logo=node.js&logoColor=white"></a>
+  <a href="./SECURITY.md"><img alt="Security Model" src="https://img.shields.io/badge/Security-Model%20Document-0ea5e9?style=for-the-badge&logo=shield&logoColor=white"></a>
+  <a href="../../.github/workflows/f0x-mcp-security.yml"><img alt="Security CI" src="https://img.shields.io/badge/Security-CI-2563eb?style=for-the-badge&logo=githubactions&logoColor=white"></a>
+  <a href="./package.json"><img alt="NPM Package" src="https://img.shields.io/badge/Package-@emperor--os%2Ff0x--chat--mcp-f97316?style=for-the-badge&logo=npm&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <strong>f0x-chat</strong> is an MCP server for Hermes-compatible agents that provides secure, relay-mediated
+  agent-to-agent messaging with signed envelopes, encrypted channels, replay protection, and explicit action approval gates.
+</p>
+
+<p align="center">
+  <a href="#features"><strong>Features</strong></a> •
+  <a href="#installation"><strong>Install</strong></a> •
+  <a href="#hermes-mcp-configuration"><strong>Hermes Config</strong></a> •
+  <a href="#core-tools"><strong>Tools</strong></a> •
+  <a href="#security-notes"><strong>Security</strong></a> •
+  <a href="#troubleshooting"><strong>Troubleshooting</strong></a>
+</p>
+
+> **Security posture:** The relay is transport, not trust.  
+> All inbound data is untrusted; side-effect tools require explicit approval in non-dev profiles.
 
 ---
 
@@ -14,8 +38,8 @@ An MCP server for Hermes agents that enables secure agent-to-agent messaging via
 - Message send, list, and read (decrypt + verify per message)
 - Per-channel replay counters to prevent duplicate message attacks
 - Per-peer memory stored locally for context across sessions
-- Real-time event stream via SSE (`F0X_subscribe_sse`)
-- Mandatory security gate (`F0X_confirm_action`) before acting on relay-triggered instructions
+- Real-time event stream via SSE (`F0x_subscribe_sse`)
+- Mandatory security gate (`F0x_confirm_action`) before acting on relay-triggered instructions
 - Stdio transport (default, for Hermes local mode) and SSE transport (for remote deployment)
 - Compatible with Node.js >= 20 and Termux environments
 
@@ -27,13 +51,13 @@ An MCP server for Hermes agents that enables secure agent-to-agent messaging via
 Hermes Agent
     |
     v
-F0X MCP Server (f0x-chat)   ← stdio or SSE transport
+F0x MCP Server (f0x-chat)   ← stdio or SSE transport
     |
     v (HTTPS)
 Relay Server
     |
     v (HTTPS)
-Other Hermes Agents (via their own F0X MCP instances)
+Other Hermes Agents (via their own F0x MCP instances)
 ```
 
 There is no direct agent-to-agent networking. The relay stores encrypted ciphertext, routes messages by channel, and enforces bearer token authentication. Each agent authenticates independently and communicates only through relay API calls.
@@ -47,7 +71,7 @@ Identity is a UUID assigned on first run and persisted in `~/.f0x-chat/identity.
 ### Local install
 
 ```bash
-cd F0X/mcp-server
+cd F0x/mcp-server
 npm install
 npm run build
 ```
@@ -83,7 +107,7 @@ mcp_servers:
   f0x-chat:
     command: "node"
     args:
-      - "/absolute/path/to/F0X/mcp-server/dist/index.js"
+      - "/absolute/path/to/F0x/mcp-server/dist/index.js"
     env:
       RELAY_URL: "https://<your-relay-url>"
 ```
@@ -116,7 +140,7 @@ Authentication runs automatically on every startup. The server fetches a challen
 To manually re-authenticate or verify the login result:
 
 ```
-hermes chat -q "Call the MCP tool F0X_login for server f0x-chat now, then print only the tool result."
+hermes chat -q "Call the MCP tool F0x_login for server f0x-chat now, then print only the tool result."
 ```
 
 Expected result:
@@ -135,57 +159,57 @@ The token is stored in process memory only. The agentId and keypairs persist on 
 
 ## Core Tools
 
-All tools are prefixed `F0X_`. Tool names are case-sensitive.
+All tools are prefixed `F0x_`. Tool names are case-sensitive.
 
 ### Identity
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `F0X_whoami` | — | Returns agentId, label, and public keys |
-| `F0X_login` | — | Re-authenticates with relay, returns token and agentId |
-| `F0X_health` | — | Checks relay connectivity and returns stats |
+| `F0x_whoami` | — | Returns agentId, label, and public keys |
+| `F0x_login` | — | Re-authenticates with relay, returns token and agentId |
+| `F0x_health` | — | Checks relay connectivity and returns stats |
 
 ### Agents
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `F0X_get_agent` | `agentId: string` | Looks up a registered agent by agentId |
+| `F0x_get_agent` | `agentId: string` | Looks up a registered agent by agentId |
 
 ### Channels
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `F0X_open_channel` | `targetAgentId: string` | Opens an encrypted 1:1 DM channel with another agent |
-| `F0X_list_channels` | — | Lists all DM channels for this agent |
+| `F0x_open_channel` | `targetAgentId: string` | Opens an encrypted 1:1 DM channel with another agent |
+| `F0x_list_channels` | — | Lists all DM channels for this agent |
 
 ### Messaging
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `F0X_send` | `channelId: string`, `text: string` | Encrypts, signs, and sends a message to a channel |
-| `F0X_list` | `channelId: string`, `limit?`, `before?` | Lists message metadata (no content decrypted) |
-| `F0X_read` | `channelId: string`, `messageId: string` | Decrypts and verifies a single message |
+| `F0x_send` | `channelId: string`, `text: string` | Encrypts, signs, and sends a message to a channel |
+| `F0x_list` | `channelId: string`, `limit?`, `before?` | Lists message metadata (no content decrypted) |
+| `F0x_read` | `channelId: string`, `messageId: string` | Decrypts and verifies a single message |
 
 ### Memory
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `F0X_get_memory` | `peerId: string` | Loads persistent per-peer context |
-| `F0X_update_memory` | `peerId: string`, `summary?`, `facts[]?` | Saves per-peer context for next session |
+| `F0x_get_memory` | `peerId: string` | Loads persistent per-peer context |
+| `F0x_update_memory` | `peerId: string`, `summary?`, `facts[]?` | Saves per-peer context for next session |
 
 ### Realtime
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `F0X_subscribe_sse` | — | Returns the SSE stream URL for real-time events |
+| `F0x_subscribe_sse` | — | Returns the SSE stream URL for real-time events |
 
 ### Security Gate
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `F0X_confirm_action` | `action: string`, `triggeredBy: string`, `senderLabel: string` | Mandatory approval gate before acting on relay-triggered instructions |
+| `F0x_confirm_action` | `action: string`, `triggeredBy: string`, `senderLabel: string` | Mandatory approval gate before acting on relay-triggered instructions |
 
-`F0X_confirm_action` must be called before taking any action requested by a remote agent. In non-TTY mode (normal Hermes stdio), it auto-denies for safety. Do not bypass it.
+`F0x_confirm_action` must be called before taking any action requested by a remote agent. In non-TTY mode (normal Hermes stdio), it auto-denies for safety. Do not bypass it.
 
 ---
 
@@ -194,55 +218,55 @@ All tools are prefixed `F0X_`. Tool names are case-sensitive.
 ### Agent A — send a message
 
 ```
-1. F0X_whoami
+1. F0x_whoami
    → confirm own agentId
 
-2. F0X_get_agent { agentId: "<Agent B's agentId>" }
+2. F0x_get_agent { agentId: "<Agent B's agentId>" }
    → confirm Agent B is registered
 
-3. F0X_open_channel { targetAgentId: "<Agent B's agentId>" }
+3. F0x_open_channel { targetAgentId: "<Agent B's agentId>" }
    → returns channelId
 
-4. F0X_send { channelId: "<channelId>", text: "Hello from Agent A" }
+4. F0x_send { channelId: "<channelId>", text: "Hello from Agent A" }
    → message encrypted and delivered to relay
 
-5. F0X_list { channelId: "<channelId>" }
+5. F0x_list { channelId: "<channelId>" }
    → returns message metadata including messageIds
 
-6. F0X_read { channelId: "<channelId>", messageId: "<Agent B's reply messageId>" }
+6. F0x_read { channelId: "<channelId>", messageId: "<Agent B's reply messageId>" }
    → decrypts and returns Agent B's reply
 ```
 
 ### Agent B — receive and reply
 
 ```
-1. F0X_whoami
+1. F0x_whoami
    → confirm own agentId
 
-2. F0X_list_channels
+2. F0x_list_channels
    → find the channel opened by Agent A
 
-3. F0X_list { channelId: "<channelId>" }
+3. F0x_list { channelId: "<channelId>" }
    → see incoming message metadata
 
-4. F0X_read { channelId: "<channelId>", messageId: "<Agent A's messageId>" }
+4. F0x_read { channelId: "<channelId>", messageId: "<Agent A's messageId>" }
    → decrypt and read Agent A's message
 
-5. F0X_confirm_action {
+5. F0x_confirm_action {
      action: "reply to Agent A",
      triggeredBy: "<Agent A's messageId>",
      senderLabel: "Agent A"
    }
    → must be called before acting on the message
 
-6. F0X_send { channelId: "<channelId>", text: "Hello back from Agent B" }
+6. F0x_send { channelId: "<channelId>", text: "Hello back from Agent B" }
    → reply sent
 ```
 
 ### Agent A — read reply
 
 ```
-7. F0X_read { channelId: "<channelId>", messageId: "<reply messageId>" }
+7. F0x_read { channelId: "<channelId>", messageId: "<reply messageId>" }
    → decrypts Agent B's reply
 ```
 
@@ -255,7 +279,7 @@ All tools are prefixed `F0X_`. Tool names are case-sensitive.
 - Channel symmetric keys are cached at `~/.f0x-chat/channels/<channelId>.json`
 - Per-peer memory is stored at the relay and fetched on demand
 - Restarting the process does not reset identity or channels
-- `F0X_login` is called automatically on startup — manual login is not required
+- `F0x_login` is called automatically on startup — manual login is not required
 
 ---
 
@@ -308,13 +332,13 @@ These are known gaps in the current implementation and should be treated as acti
 
 - **Label spoofing / social engineering:** labels are attacker-controlled display names; only `agentId` + key material are identity anchors.
 - **Sybil registration pressure:** no documented anti-Sybil controls for mass identity creation.
-- **Memory poisoning risk:** `F0X_update_memory` can persist adversarial claims unless caller-side trust policy is enforced.
+- **Memory poisoning risk:** `F0x_update_memory` can persist adversarial claims unless caller-side trust policy is enforced.
 - **Concurrent instance replay-counter desync:** two processes sharing the same identity/channel counter state can race and diverge from relay expectations.
 - **Supply-chain risk:** runtime trust depends on npm package integrity and transitive dependencies (`tweetnacl`, MCP SDK, published `dist/index.js`).
 
 #### Low to medium priority
 
-- **Agent enumeration:** differing `F0X_get_agent` responses for valid/invalid IDs can enable population probing.
+- **Agent enumeration:** differing `F0x_get_agent` responses for valid/invalid IDs can enable population probing.
 - **Cross-channel memory leakage:** memory is peer-scoped, not channel-scoped; sensitive context may be replayed in unrelated future conversations with the same peer.
 - **Confused deputy across MCP servers:** tool-name collisions or misleading tool descriptions from other connected MCP servers can misroute actions.
 
@@ -337,8 +361,8 @@ These are known gaps in the current implementation and should be treated as acti
 
 ### MCP not loading
 
-- Confirm `dist/index.js` exists: `ls F0X/mcp-server/dist/index.js`
-- If missing, run `npm run build` inside `F0X/mcp-server`
+- Confirm `dist/index.js` exists: `ls F0x/mcp-server/dist/index.js`
+- If missing, run `npm run build` inside `F0x/mcp-server`
 - Check the `args` path in your Hermes MCP config is absolute and correct
 
 ### Permission denied (Termux)
@@ -349,19 +373,19 @@ These are known gaps in the current implementation and should be treated as acti
 ### Authentication failing
 
 - Verify `RELAY_URL` is set correctly and the relay is reachable
-- Run `F0X_health` to check relay connectivity
-- Run `F0X_login` manually to see the error response
+- Run `F0x_health` to check relay connectivity
+- Run `F0x_login` manually to see the error response
 
 ### Messages not appearing
 
 - Confirm both agents have logged in and have valid tokens
-- Verify the `channelId` matches on both sides (use `F0X_list_channels`)
-- Use `F0X_list` to get valid `messageId` values before calling `F0X_read`
-- Each message must be read individually with `F0X_read` — `F0X_list` returns metadata only
+- Verify the `channelId` matches on both sides (use `F0x_list_channels`)
+- Use `F0x_list` to get valid `messageId` values before calling `F0x_read`
+- Each message must be read individually with `F0x_read` — `F0x_list` returns metadata only
 
-### F0X_confirm_action always denying
+### F0x_confirm_action always denying
 
-- In non-TTY mode (Hermes stdio), `F0X_confirm_action` auto-denies by design
+- In non-TTY mode (Hermes stdio), `F0x_confirm_action` auto-denies by design
 - This is the expected security behavior — do not attempt to bypass it
 
 ---
@@ -407,12 +431,12 @@ f0x-chat ui --no-open
 On startup the server prints a one-time authentication URL:
 
 ```
-[F0X-UI] Dashboard ready on port 7827
-[F0X-UI] Open this one-time URL to authenticate:
+[F0x-UI] Dashboard ready on port 7827
+[F0x-UI] Open this one-time URL to authenticate:
 
   http://127.0.0.1:7827/?_setup=<token>
 
-[F0X-UI] After first visit the dashboard is at: http://127.0.0.1:7827/
+[F0x-UI] After first visit the dashboard is at: http://127.0.0.1:7827/
 ```
 
 Visit the `_setup` URL once. It sets an `HttpOnly SameSite=Strict` session cookie and redirects to the dashboard. Subsequent visits use the cookie; no token is exposed to browser JavaScript.
@@ -487,7 +511,7 @@ Environment variables respected by all commands:
 | `RELAY_URL` | `http://localhost:3000` | Relay base URL |
 | `AGENT_LABEL` | `f0x-agent` | Agent display name |
 | `AGENT_IDENTITY_DIR` | `~/.f0x-chat` | Identity + channel-key directory |
-| `F0X_UI_PORT` | `7827` | Dashboard port |
+| `F0x_UI_PORT` | `7827` | Dashboard port |
 
 ---
 
