@@ -136,13 +136,13 @@ jobs:
 
       - name: Run deployment guard (staging profile)
         env:
-          F0X_SECURITY_PROFILE: staging
+          F0x_SECURITY_PROFILE: staging
           RELAY_URL: ${{ secrets.FIXTURE_RELAY_URL || 'https://placeholder.example.com' }}
           AGENT_IDENTITY_DIR: /tmp/f0x-preflight-test
-          F0X_OPERATOR_ID: ci-preflight-operator
+          F0x_OPERATOR_ID: ci-preflight-operator
           AGENT_LABEL: ci-preflight-agent
           # Use a long, high-entropy passphrase for the CI preflight test
-          F0X_IDENTITY_PASSPHRASE: ${{ secrets.CI_PREFLIGHT_PASSPHRASE || 'ci-preflight-long-high-entropy-passphrase-2024' }}
+          F0x_IDENTITY_PASSPHRASE: ${{ secrets.CI_PREFLIGHT_PASSPHRASE || 'ci-preflight-long-high-entropy-passphrase-2024' }}
         run: |
           mkdir -p /tmp/f0x-preflight-test
           chmod 700 /tmp/f0x-preflight-test

@@ -5,7 +5,7 @@
  * This script MUST pass before any production promotion. It verifies:
  *   1. Required environment variables are set and non-empty.
  *   2. RELAY_URL is HTTPS (non-localhost) for prod.
- *   3. F0X_IDENTITY_PASSPHRASE meets minimum entropy policy.
+ *   3. F0x_IDENTITY_PASSPHRASE meets minimum entropy policy.
  *   4. Identity directory exists with correct permissions (0700).
  *   5. Identity file exists with correct permissions (0600).
  *   6. Relay is reachable and health endpoint returns 200.
@@ -32,7 +32,7 @@ import { execSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
 const profileArg = args.find((a) => a.startsWith('--profile='))?.split('=')[1] ?? null;
-const profile = profileArg ?? process.env['F0X_SECURITY_PROFILE'] ?? 'dev';
+const profile = profileArg ?? process.env['F0x_SECURITY_PROFILE'] ?? 'dev';
 
 let failures = 0;
 let warnings = 0;
@@ -53,8 +53,8 @@ if (profile === 'dev') {
 const required = [
   ['RELAY_URL', 'Relay base URL'],
   ['AGENT_IDENTITY_DIR', 'Identity directory path'],
-  ['F0X_OPERATOR_ID', 'Operator tenant identifier'],
-  ['F0X_IDENTITY_PASSPHRASE', 'Identity key encryption passphrase'],
+  ['F0x_OPERATOR_ID', 'Operator tenant identifier'],
+  ['F0x_IDENTITY_PASSPHRASE', 'Identity key encryption passphrase'],
   ['AGENT_LABEL', 'Agent display name']
 ];
 
@@ -85,25 +85,25 @@ if (profile === 'prod') {
 }
 
 // ── 4. Passphrase entropy ────────────────────────────────────────────────────
-const passphrase = process.env['F0X_IDENTITY_PASSPHRASE']?.trim() ?? '';
+const passphrase = process.env['F0x_IDENTITY_PASSPHRASE']?.trim() ?? '';
 if (passphrase) {
   const MIN_LEN = 20;
   const MIN_UNIQUE = 8;
   if (passphrase.length < MIN_LEN) {
-    fail(`F0X_IDENTITY_PASSPHRASE too short: ${passphrase.length} chars (minimum ${MIN_LEN}).`);
+    fail(`F0x_IDENTITY_PASSPHRASE too short: ${passphrase.length} chars (minimum ${MIN_LEN}).`);
   } else {
     pass(`Passphrase length: ${passphrase.length} chars (≥ ${MIN_LEN})`);
   }
   const uniqueChars = new Set(passphrase).size;
   if (uniqueChars < MIN_UNIQUE) {
-    fail(`F0X_IDENTITY_PASSPHRASE entropy too low: ${uniqueChars} unique chars (minimum ${MIN_UNIQUE}).`);
+    fail(`F0x_IDENTITY_PASSPHRASE entropy too low: ${uniqueChars} unique chars (minimum ${MIN_UNIQUE}).`);
   } else {
     pass(`Passphrase unique chars: ${uniqueChars} (≥ ${MIN_UNIQUE})`);
   }
   const trivial = ['password', 'passphrase', 'secret', 'changeme', 'f0x'];
   for (const weak of trivial) {
     if (passphrase.toLowerCase().includes(weak)) {
-      fail(`F0X_IDENTITY_PASSPHRASE contains weak pattern: "${weak}"`);
+      fail(`F0x_IDENTITY_PASSPHRASE contains weak pattern: "${weak}"`);
     }
   }
 }
@@ -136,9 +136,9 @@ if (existsSync(identityFile)) {
     const identityContent = JSON.parse(readFileSync(identityFile, 'utf8'));
     if (identityContent.signingSecretKey && !identityContent.encryptedSecrets) {
       if (profile === 'prod') {
-        fail(`Identity file has unencrypted private keys. Set F0X_IDENTITY_PASSPHRASE and re-save identity for prod.`);
+        fail(`Identity file has unencrypted private keys. Set F0x_IDENTITY_PASSPHRASE and re-save identity for prod.`);
       } else {
-        warn(`Identity file has unencrypted private keys. Set F0X_IDENTITY_PASSPHRASE for staging/prod.`);
+        warn(`Identity file has unencrypted private keys. Set F0x_IDENTITY_PASSPHRASE for staging/prod.`);
       }
     } else if (identityContent.encryptedSecrets) {
       pass('Identity private keys are encrypted (encryptedSecrets present)');
