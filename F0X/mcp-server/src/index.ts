@@ -84,7 +84,8 @@ async function main(): Promise<void> {
     relayUrl: RELAY_URL,
     identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
     agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
-    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined
+    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined,
+    identityPassphraseSet: !!process.env['F0X_IDENTITY_PASSPHRASE']?.trim()
   });
 
   const AGENT_LABEL = await resolveAgentLabel();
@@ -97,6 +98,23 @@ async function main(): Promise<void> {
     process.stderr.write(`[F0X-chat-MCP] Recovery: found ${pendingSends.length} pending send record(s). Review relay state before resubmitting.\n`);
   }
   const relay = new RelayClient({ relayUrl: RELAY_URL });
+  let shutdownStarted = false;
+  async function logoutOnShutdown(reason: string): Promise<void> {
+    if (shutdownStarted) return;
+    shutdownStarted = true;
+    try {
+      await relay.logout();
+      process.stderr.write(`[F0X-chat-MCP] Session revoked on ${reason}.\n`);
+    } catch (e) {
+      process.stderr.write(`[F0X-chat-MCP] Session revoke failed on ${reason}: ${e instanceof Error ? e.message : String(e)}\n`);
+    }
+  }
+  process.once('SIGINT', () => {
+    void logoutOnShutdown('SIGINT').finally(() => process.exit(0));
+  });
+  process.once('SIGTERM', () => {
+    void logoutOnShutdown('SIGTERM').finally(() => process.exit(0));
+  });
 
   // Auto-login
   try {
@@ -124,7 +142,8 @@ async function main(): Promise<void> {
     { capabilities: { tools: {} } }
   );
 
-  const ctx: ToolContext = { relay, identity, identityDir: IDENTITY_DIR };
+  const requireActionApproval = SECURITY_PROFILE !== 'dev';
+  const ctx: ToolContext = { relay, identity, identityDir: IDENTITY_DIR, requireActionApproval };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFINITIONS }));
 

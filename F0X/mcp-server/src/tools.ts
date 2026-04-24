@@ -43,6 +43,7 @@ export interface ToolContext {
   relay: RelayClient;
   identity: AgentIdentityFile;
   identityDir: string;
+  requireActionApproval: boolean;
 }
 
 // ─── Tool schemas ─────────────────────────────────────────────────────────────
@@ -406,6 +407,21 @@ function consumeApprovalTokenOrThrow(triggeredBy?: string, approvalToken?: strin
   pendingActionApprovals.delete(approvalToken);
 }
 
+function enforceApprovalPolicy(
+  ctx: ToolContext,
+  toolName: string,
+  triggeredBy?: string,
+  approvalToken?: string
+): void {
+  if (ctx.requireActionApproval && (!triggeredBy || !approvalToken)) {
+    throw new Error(
+      `${toolName} requires explicit user approval in this security profile. ` +
+      'Call F0X_confirm_action first and pass triggeredBy + approvalToken.'
+    );
+  }
+  consumeApprovalTokenOrThrow(triggeredBy, approvalToken);
+}
+
 async function ensureChannelKey(
   ctx: ToolContext,
   channel: Channel
@@ -500,7 +516,7 @@ export async function handleTool(
         const targetAgentId = validatedArgs['targetAgentId'] as string;
         const triggeredBy = validatedArgs['triggeredBy'] as string | undefined;
         const approvalToken = validatedArgs['approvalToken'] as string | undefined;
-        consumeApprovalTokenOrThrow(triggeredBy, approvalToken);
+        enforceApprovalPolicy(ctx, 'F0X_open_channel', triggeredBy, approvalToken);
         assertRateLimit(`mcp:open_channel:${ctx.identity.agentId}`, { windowMs: 60_000, maxInWindow: 6, burstWindowMs: 10_000, burstMax: 2 });
 
         const target = await ctx.relay.getAgent(targetAgentId);
@@ -552,7 +568,7 @@ export async function handleTool(
         const text = validatedArgs['text'] as string;
         const triggeredBy = validatedArgs['triggeredBy'] as string | undefined;
         const approvalToken = validatedArgs['approvalToken'] as string | undefined;
-        consumeApprovalTokenOrThrow(triggeredBy, approvalToken);
+        enforceApprovalPolicy(ctx, 'F0X_send', triggeredBy, approvalToken);
         assertRateLimit(`mcp:send:${ctx.identity.agentId}`, { windowMs: 60_000, maxInWindow: 60, burstWindowMs: 1_000, burstMax: 10 });
 
         const { channel } = await ctx.relay.listMessages(channelId, { limit: 1 });
@@ -682,7 +698,7 @@ export async function handleTool(
         const facts = validatedArgs['facts'] as string[] | undefined;
         const triggeredBy = validatedArgs['triggeredBy'] as string | undefined;
         const approvalToken = validatedArgs['approvalToken'] as string | undefined;
-        consumeApprovalTokenOrThrow(triggeredBy, approvalToken);
+        enforceApprovalPolicy(ctx, 'F0X_update_memory', triggeredBy, approvalToken);
         const updated = await ctx.relay.setMemory(peerId, { summary, sharedFacts: facts });
         return ok(JSON.stringify(updated, null, 2));
       }
@@ -691,7 +707,10 @@ export async function handleTool(
         const url = ctx.relay.sseUrl();
         return ok(JSON.stringify({
           sseUrl: url,
-          instructions: 'Connect an SSE client to this URL. Events: { type: "new_message" | "channel_opened" | "heartbeat", ... }. No polling needed while connected.'
+          headers: {
+            Authorization: ctx.relay.sseAuthorizationHeader()
+          },
+          instructions: 'Connect an SSE-capable client to this URL using the Authorization header above. Do not place bearer tokens in query parameters. Events: { type: "new_message" | "channel_opened" | "heartbeat", ... }. SSE is best-effort; recover missed events with F0X_list.'
         }, null, 2));
       }
 
