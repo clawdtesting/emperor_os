@@ -79,6 +79,7 @@ async function resolveAgentLabel(): Promise<string> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  const rawPassphrase = process.env['F0X_IDENTITY_PASSPHRASE']?.trim();
   enforceSecurityProfile({
     profile: SECURITY_PROFILE,
     relayUrl: RELAY_URL,
