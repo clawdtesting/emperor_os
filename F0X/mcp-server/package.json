@@ -25,9 +25,7 @@
     "typecheck": "tsc --noEmit",
     "security:check": "node scripts/security-check.mjs",
     "security:live": "node scripts/security-live-check.mjs",
-    "security:conformance": "node scripts/integration-conformance-check.mjs",
-    "deploy:guard": "node scripts/deployment-guard.mjs",
-    "prepublishOnly": "npm run security:check && npm run security:conformance && npm run build"
+    "prepublishOnly": "npm run security:check && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

@@ -86,8 +86,7 @@ async function main(): Promise<void> {
     identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
     agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
     operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined,
-    identityPassphraseSet: !!rawPassphrase,
-    identityPassphrase: rawPassphrase
+    identityPassphraseSet: !!process.env['F0X_IDENTITY_PASSPHRASE']?.trim()
   });
 
   const AGENT_LABEL = await resolveAgentLabel();

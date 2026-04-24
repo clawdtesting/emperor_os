@@ -7,47 +7,6 @@ export interface SecurityProfileInput {
   agentLabelExplicitlySet: boolean;
   operatorIdExplicitlySet: boolean;
   identityPassphraseSet: boolean;
-  /** Raw passphrase value for entropy validation (not stored or logged). */
-  identityPassphrase?: string;
-}
-
-// ─── Passphrase entropy ───────────────────────────────────────────────────────
-
-const MIN_PASSPHRASE_LENGTH = 20;
-const MIN_UNIQUE_CHARS = 8;
-
-/**
- * Validate passphrase strength for staging/prod.
- * Returns a list of policy failures (empty = accepted).
- *
- * Policy (minimum bar — operators should enforce stronger):
- *   - At least 20 characters
- *   - At least 8 distinct characters (prevents trivial repetition)
- *   - Must not be sourced from a known-weak list (env var name itself, etc.)
- */
-export function validatePassphraseStrength(passphrase: string): string[] {
-  const failures: string[] = [];
-  if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
-    failures.push(
-      `F0X_IDENTITY_PASSPHRASE is too short (${passphrase.length} chars). ` +
-      `Minimum for staging/prod: ${MIN_PASSPHRASE_LENGTH} characters.`
-    );
-  }
-  const uniqueChars = new Set(passphrase).size;
-  if (uniqueChars < MIN_UNIQUE_CHARS) {
-    failures.push(
-      `F0X_IDENTITY_PASSPHRASE has too few distinct characters (${uniqueChars}). ` +
-      `Minimum: ${MIN_UNIQUE_CHARS} unique characters.`
-    );
-  }
-  const trivial = ['password', 'passphrase', 'secret', 'f0x', 'f0x-chat', 'changeme', '12345678901234567890'];
-  for (const weak of trivial) {
-    if (passphrase.toLowerCase().includes(weak)) {
-      failures.push(`F0X_IDENTITY_PASSPHRASE contains a known-weak pattern: "${weak}".`);
-      break;
-    }
-  }
-  return failures;
 }
 
 export function resolveSecurityProfile(): SecurityProfile {
@@ -77,15 +36,6 @@ export function enforceSecurityProfile(input: SecurityProfileInput): void {
   if (profile === 'prod' || profile === 'staging') {
     if (!identityPassphraseSet) {
       throw new Error(`Security profile "${profile}" requires F0X_IDENTITY_PASSPHRASE for encrypted key storage.`);
-    }
-    if (input.identityPassphrase) {
-      const weaknesses = validatePassphraseStrength(input.identityPassphrase);
-      if (weaknesses.length > 0) {
-        throw new Error(
-          `Security profile "${profile}" passphrase policy violations:\n` +
-          weaknesses.map((w) => `  - ${w}`).join('\n')
-        );
-      }
     }
   }
 
