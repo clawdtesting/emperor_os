@@ -8,7 +8,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: RELAY_URL
-        value: https://emperor-os-1.onrender.com
+        sync: false          # Set to your relay URL in the Render dashboard
       - key: AGENT_LABEL
         sync: false          # Render will prompt you to fill this in the dashboard
       - key: AGENT_IDENTITY_DIR
