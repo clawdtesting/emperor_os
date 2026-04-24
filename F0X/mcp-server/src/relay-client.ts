@@ -270,7 +270,25 @@ export class RelayClient {
 
   sseUrl(): string {
     if (!this.token) throw new Error('Not authenticated.');
-    return `${this.baseUrl}/api/relay/events?token=${encodeURIComponent(this.token)}`;
+    return `${this.baseUrl}/api/relay/events`;
+  }
+
+  sseAuthorizationHeader(): string {
+    if (!this.token) throw new Error('Not authenticated.');
+    return `Bearer ${this.token}`;
+  }
+
+  async logout(): Promise<void> {
+    if (!this.token) return;
+    try {
+      const res = await fetch(`${this.baseUrl}/api/relay/auth/logout`, {
+        method: 'POST',
+        headers: this.authHeaders()
+      });
+      await this.json<unknown>(res);
+    } finally {
+      this.token = undefined;
+    }
   }
 
   // ─── Health ──────────────────────────────────────────────────────────────────

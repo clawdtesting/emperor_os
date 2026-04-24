@@ -1,19 +1,32 @@
-<div align="center">
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&height=180&text=Emperor_OS&fontSize=52&fontAlignY=36&color=0:0f172a,100:1d4ed8&fontColor=ffffff&desc=Autonomous%20On-Chain%20Economic%20Agent&descAlignY=60&descSize=16" alt="Emperor_OS Banner" />
+</p>
 
-# ⚙️ Emperor_OS
+<p align="center">
+  <a href="https://nodejs.org"><img alt="Node.js" src="https://img.shields.io/badge/Node.js-20.x-339933?style=for-the-badge&logo=node.js&logoColor=white"></a>
+  <a href="https://ethereum.org"><img alt="Ethereum Mainnet" src="https://img.shields.io/badge/Ethereum-Mainnet-627EEA?style=for-the-badge&logo=ethereum&logoColor=white"></a>
+  <a href="https://ipfs.tech"><img alt="IPFS" src="https://img.shields.io/badge/IPFS-Enabled-65C2CB?style=for-the-badge&logo=ipfs&logoColor=white"></a>
+  <a href="./.github/workflows/f0x-mcp-security.yml"><img alt="F0X MCP Security CI" src="https://img.shields.io/badge/F0X%20MCP%20Security-CI-0ea5e9?style=for-the-badge&logo=githubactions&logoColor=white"></a>
+  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Proprietary-ef4444?style=for-the-badge"></a>
+</p>
 
-### Autonomous On-Chain Economic Agent — AGI Alpha Job Marketplace
+<p align="center">
+  <strong>Emperor_OS</strong> is a production-grade off-chain execution runtime for the AGI Alpha marketplace:
+  discover jobs, score deterministically, execute deliverables, validate outputs, publish artifacts, and hand off
+  <em>unsigned</em> transaction packages for human signature.
+</p>
 
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-26.7%25-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Ethereum](https://img.shields.io/badge/Ethereum-Mainnet-627EEA?style=flat-square&logo=ethereum&logoColor=white)](https://ethereum.org)
-[![IPFS](https://img.shields.io/badge/IPFS-Pinata-65C2CB?style=flat-square&logo=ipfs&logoColor=white)](https://pinata.cloud)
-[![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?style=flat-square&logo=github-actions&logoColor=white)](https://github.com/features/actions)
-[![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)](./LICENSE)
+<p align="center">
+  <a href="#overview"><strong>Overview</strong></a> •
+  <a href="#system-architecture"><strong>Architecture</strong></a> •
+  <a href="#security-model"><strong>Security</strong></a> •
+  <a href="#job-lifecycle"><strong>Lifecycle</strong></a> •
+  <a href="#infrastructure--deployment"><strong>Deployment</strong></a> •
+  <a href="#session-startup-protocol"><strong>Session Protocol</strong></a>
+</p>
 
-**Emperor_OS** is a production-grade autonomous off-chain execution system designed to discover, evaluate, execute, and submit jobs on the [AGI Alpha](https://agialpha.com) blockchain job marketplace on Ethereum Mainnet. It competes for work, produces deliverables, and packages everything into unsigned transaction envelopes for human review — never signing, never broadcasting without explicit operator authorization.
-
-</div>
+> **Hard invariant:** the runtime never signs and never broadcasts.  
+> Every irreversible action is packaged as an unsigned envelope and handed to the operator.
 
 ---
 
