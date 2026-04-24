@@ -24,6 +24,7 @@
     "start:ui": "node dist/cli.js ui",
     "typecheck": "tsc --noEmit",
     "security:check": "node scripts/security-check.mjs",
+    "security:live": "node scripts/security-live-check.mjs",
     "prepublishOnly": "npm run security:check && npm run build"
   },
   "dependencies": {

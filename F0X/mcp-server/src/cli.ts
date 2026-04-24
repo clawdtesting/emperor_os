@@ -6,6 +6,7 @@
  *   f0x-chat ui       Start the local dashboard UI server
  *   f0x-chat status   Show identity + relay auth state
  *   f0x-chat login    Authenticate with the relay
+ *   f0x-chat logout   Revoke current relay session token
  *   f0x-chat doctor   Validate config, build artifacts, and relay connectivity
  *   f0x-chat checklist Run local security checklist checks
  *
@@ -49,7 +50,8 @@ function makeSession(): F0XSession {
     relayUrl: RELAY_URL,
     identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
     agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
-    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined
+    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined,
+    identityPassphraseSet: !!process.env['F0X_IDENTITY_PASSPHRASE']?.trim()
   });
   const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
   enforceTenantBinding(IDENTITY_DIR, OPERATOR_ID, identity.agentId);
@@ -66,9 +68,13 @@ function makeSession(): F0XSession {
 
 async function tryOpenBrowser(url: string): Promise<void> {
   try {
-    const { exec } = await import('node:child_process');
-    const cmd = process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}" 2>/dev/null`;
-    exec(cmd);
+    const { execFile } = await import('node:child_process');
+    if (!/^https?:\/\/[^\s]+$/i.test(url)) return;
+    if (process.platform === 'darwin') {
+      execFile('open', [url]);
+      return;
+    }
+    execFile('xdg-open', [url]);
   } catch {
     // ignore — URL is already printed to stderr
   }
@@ -157,6 +163,26 @@ async function cmdLogin(): Promise<void> {
       label: session.identity.label
     }, null, 2));
     process.stderr.write('[F0X] Login successful. Token valid for 30 minutes.\n');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(JSON.stringify({ ok: false, error: msg }, null, 2));
+    process.exit(1);
+  }
+}
+
+async function cmdLogout(): Promise<void> {
+  process.stderr.write('[F0X] Loading identity...\n');
+  const session = makeSession();
+  process.stderr.write('[F0X] Authenticating for logout with ' + RELAY_URL + '...\n');
+  try {
+    await performLogin(session);
+    await session.relay.logout();
+    console.log(JSON.stringify({
+      ok: true,
+      agentId: session.identity.agentId,
+      revoked: true
+    }, null, 2));
+    process.stderr.write('[F0X] Session revoked.\n');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(JSON.stringify({ ok: false, error: msg }, null, 2));
@@ -295,6 +321,13 @@ switch (command) {
     });
     break;
 
+  case 'logout':
+    cmdLogout().catch((e) => {
+      process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.exit(1);
+    });
+    break;
+
   case 'checklist':
     cmdChecklist().catch((e) => {
       process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
@@ -303,7 +336,7 @@ switch (command) {
     break;
 
   default: {
-    const validCommands = ['ui', 'status', 'login', 'doctor', 'checklist'];
+    const validCommands = ['ui', 'status', 'login', 'logout', 'doctor', 'checklist'];
     if (command) {
       process.stderr.write('[F0X] Unknown command: ' + command + '\n\n');
     }
@@ -317,6 +350,7 @@ switch (command) {
       '           Options: --port=<n>  --no-open',
       '  status   Show identity and relay connectivity status',
       '  login    Authenticate with the relay',
+      '  logout   Revoke relay session token (requires relay logout endpoint)',
       '  doctor   Validate build artifacts, config, and relay reachability',
       '  checklist  Run operator security checklist checks',
       '',

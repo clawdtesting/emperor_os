@@ -68,6 +68,18 @@ function run() {
     'signed envelope timestamp skew validation in MCP read path'
   );
 
+  mustContain(
+    'src/relay-client.ts',
+    /return `\$\{this\.baseUrl\}\/api\/relay\/events`;/,
+    'SSE URL must not include bearer token query parameter'
+  );
+
+  mustContain(
+    'src/cli.ts',
+    /execFile\('open', \[url\]\)|execFile\('xdg-open', \[url\]\)/,
+    'browser launcher must use execFile with argument arrays'
+  );
+
   console.log('Security checks passed.');
 }
 
