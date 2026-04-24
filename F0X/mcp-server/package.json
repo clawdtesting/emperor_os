@@ -23,7 +23,8 @@
     "start:sse": "node dist/index.js --sse",
     "start:ui": "node dist/cli.js ui",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "security:check": "node scripts/security-check.mjs",
+    "prepublishOnly": "npm run security:check && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
