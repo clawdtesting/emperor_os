@@ -14,7 +14,7 @@
  *   RELAY_URL          Relay base URL (default: http://localhost:3000)
  *   AGENT_LABEL        Agent display name (default: f0x-agent)
  *   AGENT_IDENTITY_DIR Identity/channel-key directory (default: ~/.f0x-chat)
- *   F0X_UI_PORT        UI server port (default: 7827)
+ *   F0x_UI_PORT        UI server port (default: 7827)
  */
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -25,7 +25,7 @@ import { dirname } from 'node:path';
 import { loadOrCreateIdentity, defaultIdentityDir, resolveIdentityPath, runLocalIntegrityChecks } from './identity.js';
 import { listPendingSends } from './send-recovery.js';
 import { RelayClient } from './relay-client.js';
-import { type F0XSession, performLogin } from './core/ops.js';
+import { type F0xSession, performLogin } from './core/ops.js';
 import { startUiServer } from './ui-server/index.js';
 import { enforceSecurityProfile, resolveSecurityProfile } from './security-profile.js';
 import { enforceTenantBinding } from './tenant-binding.js';
@@ -35,30 +35,30 @@ import { enforceTenantBinding } from './tenant-binding.js';
 const RELAY_URL    = process.env['RELAY_URL']          ?? 'http://localhost:3000';
 const IDENTITY_DIR = process.env['AGENT_IDENTITY_DIR'] ?? defaultIdentityDir();
 const AGENT_LABEL  = process.env['AGENT_LABEL']        ?? 'f0x-agent';
-const UI_PORT      = process.env['F0X_UI_PORT']        ? parseInt(process.env['F0X_UI_PORT'], 10) : 7827;
+const UI_PORT      = process.env['F0x_UI_PORT']        ? parseInt(process.env['F0x_UI_PORT'], 10) : 7827;
 const SECURITY_PROFILE = resolveSecurityProfile();
-const OPERATOR_ID = process.env['F0X_OPERATOR_ID'] ?? 'local-dev-operator';
+const OPERATOR_ID = process.env['F0x_OPERATOR_ID'] ?? 'local-dev-operator';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 
 // ─── Session factory ──────────────────────────────────────────────────────────
 
-function makeSession(): F0XSession {
+function makeSession(): F0xSession {
   enforceSecurityProfile({
     profile: SECURITY_PROFILE,
     relayUrl: RELAY_URL,
     identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
     agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
-    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined,
-    identityPassphraseSet: !!process.env['F0X_IDENTITY_PASSPHRASE']?.trim()
+    operatorIdExplicitlySet: process.env['F0x_OPERATOR_ID'] !== undefined,
+    identityPassphraseSet: !!process.env['F0x_IDENTITY_PASSPHRASE']?.trim()
   });
   const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
   enforceTenantBinding(IDENTITY_DIR, OPERATOR_ID, identity.agentId);
   runLocalIntegrityChecks(IDENTITY_DIR);
   const pendingSends = listPendingSends(IDENTITY_DIR);
   if (pendingSends.length > 0) {
-    process.stderr.write(`[F0X] Recovery: found ${pendingSends.length} pending send record(s) in local state.\n`);
+    process.stderr.write(`[F0x] Recovery: found ${pendingSends.length} pending send record(s) in local state.\n`);
   }
   const relay    = new RelayClient({ relayUrl: RELAY_URL });
   return { relay, identity, identityDir: IDENTITY_DIR, relayUrl: RELAY_URL };
@@ -87,19 +87,19 @@ async function cmdUi(): Promise<void> {
   const port    = portArg ? parseInt(portArg.split('=')[1]!, 10) : UI_PORT;
   const noOpen  = process.argv.includes('--no-open');
 
-  process.stderr.write('[F0X] Loading identity from ' + IDENTITY_DIR + '\n');
+  process.stderr.write('[F0x] Loading identity from ' + IDENTITY_DIR + '\n');
   const session = makeSession();
-  process.stderr.write('[F0X] Agent: ' + session.identity.label + ' (' + session.identity.agentId + ')\n');
-  process.stderr.write('[F0X] Relay: ' + RELAY_URL + '\n');
+  process.stderr.write('[F0x] Agent: ' + session.identity.label + ' (' + session.identity.agentId + ')\n');
+  process.stderr.write('[F0x] Relay: ' + RELAY_URL + '\n');
 
-  process.stderr.write('[F0X] Authenticating...\n');
+  process.stderr.write('[F0x] Authenticating...\n');
   try {
     await performLogin(session);
-    process.stderr.write('[F0X] Authenticated.\n');
+    process.stderr.write('[F0x] Authenticated.\n');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    process.stderr.write('[F0X] Login failed: ' + msg + '\n');
-    process.stderr.write('[F0X] Continuing — dashboard will start but relay calls may fail.\n');
+    process.stderr.write('[F0x] Login failed: ' + msg + '\n');
+    process.stderr.write('[F0x] Continuing — dashboard will start but relay calls may fail.\n');
   }
 
   startUiServer(session, RELAY_URL, { port });
@@ -119,7 +119,7 @@ async function cmdStatus(): Promise<void> {
   const identityPath = resolveIdentityPath(IDENTITY_DIR);
   const hasIdentity  = existsSync(identityPath);
 
-  console.log('F0X Status');
+  console.log('F0x Status');
   console.log('----------');
   console.log('identity dir : ' + IDENTITY_DIR);
   console.log('identity file: ' + (hasIdentity ? 'found' : 'NOT FOUND — run any command to create'));
@@ -146,14 +146,14 @@ async function cmdStatus(): Promise<void> {
   }
 
   console.log('');
-  process.stderr.write('[F0X] Run "f0x-chat login" to authenticate.\n');
+  process.stderr.write('[F0x] Run "f0x-chat login" to authenticate.\n');
 }
 
 async function cmdLogin(): Promise<void> {
-  process.stderr.write('[F0X] Loading identity...\n');
+  process.stderr.write('[F0x] Loading identity...\n');
   const session = makeSession();
-  process.stderr.write('[F0X] Agent: ' + session.identity.label + ' (' + session.identity.agentId + ')\n');
-  process.stderr.write('[F0X] Authenticating with ' + RELAY_URL + '...\n');
+  process.stderr.write('[F0x] Agent: ' + session.identity.label + ' (' + session.identity.agentId + ')\n');
+  process.stderr.write('[F0x] Authenticating with ' + RELAY_URL + '...\n');
 
   try {
     await performLogin(session);
@@ -162,7 +162,27 @@ async function cmdLogin(): Promise<void> {
       agentId: session.identity.agentId,
       label: session.identity.label
     }, null, 2));
-    process.stderr.write('[F0X] Login successful. Token valid for 30 minutes.\n');
+    process.stderr.write('[F0x] Login successful. Token valid for 30 minutes.\n');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(JSON.stringify({ ok: false, error: msg }, null, 2));
+    process.exit(1);
+  }
+}
+
+async function cmdLogout(): Promise<void> {
+  process.stderr.write('[F0x] Loading identity...\n');
+  const session = makeSession();
+  process.stderr.write('[F0x] Authenticating for logout with ' + RELAY_URL + '...\n');
+  try {
+    await performLogin(session);
+    await session.relay.logout();
+    console.log(JSON.stringify({
+      ok: true,
+      agentId: session.identity.agentId,
+      revoked: true
+    }, null, 2));
+    process.stderr.write('[F0x] Session revoked.\n');
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(JSON.stringify({ ok: false, error: msg }, null, 2));
@@ -295,28 +315,35 @@ const command = process.argv[2];
 switch (command) {
   case 'ui':
     cmdUi().catch((e) => {
-      process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.stderr.write('[F0x] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
       process.exit(1);
     });
     break;
 
   case 'status':
     cmdStatus().catch((e) => {
-      process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.stderr.write('[F0x] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
       process.exit(1);
     });
     break;
 
   case 'login':
     cmdLogin().catch((e) => {
-      process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.stderr.write('[F0x] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
       process.exit(1);
     });
     break;
 
   case 'doctor':
     cmdDoctor().catch((e) => {
-      process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.stderr.write('[F0x] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.exit(1);
+    });
+    break;
+
+  case 'logout':
+    cmdLogout().catch((e) => {
+      process.stderr.write('[F0x] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
       process.exit(1);
     });
     break;
@@ -330,7 +357,7 @@ switch (command) {
 
   case 'checklist':
     cmdChecklist().catch((e) => {
-      process.stderr.write('[F0X] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
+      process.stderr.write('[F0x] Fatal: ' + (e instanceof Error ? e.message : e) + '\n');
       process.exit(1);
     });
     break;
@@ -338,10 +365,10 @@ switch (command) {
   default: {
     const validCommands = ['ui', 'status', 'login', 'logout', 'doctor', 'checklist'];
     if (command) {
-      process.stderr.write('[F0X] Unknown command: ' + command + '\n\n');
+      process.stderr.write('[F0x] Unknown command: ' + command + '\n\n');
     }
     console.log([
-      'f0x-chat — F0X agent dashboard CLI',
+      'f0x-chat — F0x agent dashboard CLI',
       '',
       'Usage: f0x-chat <command> [options]',
       '',
@@ -358,7 +385,7 @@ switch (command) {
       '  RELAY_URL          Relay base URL (default: http://localhost:3000)',
       '  AGENT_LABEL        Agent display name (default: f0x-agent)',
       '  AGENT_IDENTITY_DIR Identity directory (default: ~/.f0x-chat)',
-      '  F0X_UI_PORT        Dashboard port (default: 7827)',
+      '  F0x_UI_PORT        Dashboard port (default: 7827)',
     ].join('\n'));
     if (command && !validCommands.includes(command)) process.exit(1);
     break;

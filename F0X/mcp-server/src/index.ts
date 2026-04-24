@@ -35,7 +35,7 @@ import { TOOL_DEFINITIONS, handleTool, type ToolContext } from './tools.js';
 const RELAY_URL = process.env['RELAY_URL'] ?? 'http://localhost:3000';
 const IDENTITY_DIR = process.env['AGENT_IDENTITY_DIR'] ?? defaultIdentityDir();
 const SECURITY_PROFILE = resolveSecurityProfile();
-const OPERATOR_ID = process.env['F0X_OPERATOR_ID'] ?? 'local-dev-operator';
+const OPERATOR_ID = process.env['F0x_OPERATOR_ID'] ?? 'local-dev-operator';
 
 const cliArgs = process.argv.slice(2);
 
@@ -52,15 +52,15 @@ async function resolveAgentLabel(): Promise<string> {
 
   // In SSE/Render mode there's no interactive terminal — require the env var
   if (useSSE) {
-    process.stderr.write('[F0X-chat-MCP] AGENT_LABEL env var is required in SSE/Render mode.\n');
+    process.stderr.write('[F0x-chat-MCP] AGENT_LABEL env var is required in SSE/Render mode.\n');
     process.exit(1);
   }
 
   // When spawned via stdio (e.g. by Hermes), stdin is the MCP protocol pipe — not a TTY.
   // Reading from it would consume MCP messages. Fall back to a safe default instead.
   if (!process.stdin.isTTY) {
-    process.stderr.write('[F0X-chat-MCP] No AGENT_LABEL set and stdin is not a TTY — using default label "f0x-agent".\n');
-    process.stderr.write('[F0X-chat-MCP] Set AGENT_LABEL env var in your MCP config to customise it.\n');
+    process.stderr.write('[F0x-chat-MCP] No AGENT_LABEL set and stdin is not a TTY — using default label "f0x-agent".\n');
+    process.stderr.write('[F0x-chat-MCP] Set AGENT_LABEL env var in your MCP config to customise it.\n');
     return 'f0x-agent';
   }
 
@@ -85,8 +85,8 @@ async function main(): Promise<void> {
     relayUrl: RELAY_URL,
     identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
     agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
-    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined,
-    identityPassphraseSet: !!process.env['F0X_IDENTITY_PASSPHRASE']?.trim()
+    operatorIdExplicitlySet: process.env['F0x_OPERATOR_ID'] !== undefined,
+    identityPassphraseSet: !!process.env['F0x_IDENTITY_PASSPHRASE']?.trim()
   });
 
   const AGENT_LABEL = await resolveAgentLabel();
@@ -96,7 +96,7 @@ async function main(): Promise<void> {
   runLocalIntegrityChecks(IDENTITY_DIR);
   const pendingSends = listPendingSends(IDENTITY_DIR);
   if (pendingSends.length > 0) {
-    process.stderr.write(`[F0X-chat-MCP] Recovery: found ${pendingSends.length} pending send record(s). Review relay state before resubmitting.\n`);
+    process.stderr.write(`[F0x-chat-MCP] Recovery: found ${pendingSends.length} pending send record(s). Review relay state before resubmitting.\n`);
   }
   const relay = new RelayClient({ relayUrl: RELAY_URL });
   let shutdownStarted = false;
@@ -105,9 +105,9 @@ async function main(): Promise<void> {
     shutdownStarted = true;
     try {
       await relay.logout();
-      process.stderr.write(`[F0X-chat-MCP] Session revoked on ${reason}.\n`);
+      process.stderr.write(`[F0x-chat-MCP] Session revoked on ${reason}.\n`);
     } catch (e) {
-      process.stderr.write(`[F0X-chat-MCP] Session revoke failed on ${reason}: ${e instanceof Error ? e.message : String(e)}\n`);
+      process.stderr.write(`[F0x-chat-MCP] Session revoke failed on ${reason}: ${e instanceof Error ? e.message : String(e)}\n`);
     }
   }
   process.once('SIGINT', () => {
@@ -132,14 +132,14 @@ async function main(): Promise<void> {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    process.stderr.write(`[F0X-chat-MCP] Login failed: ${msg}\n`);
-    process.stderr.write(`[F0X-chat-MCP] Set RELAY_URL and call F0X_login to retry.\n`);
+    process.stderr.write(`[F0x-chat-MCP] Login failed: ${msg}\n`);
+    process.stderr.write(`[F0x-chat-MCP] Set RELAY_URL and call F0x_login to retry.\n`);
   }
 
   // ─── MCP server ─────────────────────────────────────────────────────────────
 
   const server = new Server(
-    { name: 'F0X-chat-MCP', version: '1.0.0' },
+    { name: 'F0x-chat-MCP', version: '1.0.0' },
     { capabilities: { tools: {} } }
   );
 
@@ -195,18 +195,18 @@ async function main(): Promise<void> {
     });
 
     httpServer.listen(SSE_PORT, () => {
-      process.stderr.write(`[F0X-chat-MCP] SSE ready on port ${SSE_PORT}\n`);
-      process.stderr.write(`[F0X-chat-MCP] agentId: ${identity.agentId}  label: ${identity.label}\n`);
-      process.stderr.write(`[F0X-chat-MCP] relay:   ${RELAY_URL}\n`);
+      process.stderr.write(`[F0x-chat-MCP] SSE ready on port ${SSE_PORT}\n`);
+      process.stderr.write(`[F0x-chat-MCP] agentId: ${identity.agentId}  label: ${identity.label}\n`);
+      process.stderr.write(`[F0x-chat-MCP] relay:   ${RELAY_URL}\n`);
     });
   } else {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    process.stderr.write(`[F0X-chat-MCP] stdio ready — agentId: ${identity.agentId}  label: ${identity.label}\n`);
+    process.stderr.write(`[F0x-chat-MCP] stdio ready — agentId: ${identity.agentId}  label: ${identity.label}\n`);
   }
 }
 
 main().catch((e) => {
-  process.stderr.write(`[F0X-chat-MCP] Fatal: ${e instanceof Error ? e.message : e}\n`);
+  process.stderr.write(`[F0x-chat-MCP] Fatal: ${e instanceof Error ? e.message : e}\n`);
   process.exit(1);
 });

@@ -98,7 +98,7 @@ const PERMISSION_MASK = 0o777;
 const KEY_DERIVATION_BYTES = 32;
 
 function identityPassphrase(): string | undefined {
-  const passphrase = process.env['F0X_IDENTITY_PASSPHRASE'];
+  const passphrase = process.env['F0x_IDENTITY_PASSPHRASE'];
   if (!passphrase) return undefined;
   const trimmed = passphrase.trim();
   return trimmed.length > 0 ? trimmed : undefined;
@@ -184,7 +184,7 @@ function decodeIdentityFromDisk(file: AgentIdentityDiskFile): AgentIdentityFile 
     const passphrase = identityPassphrase();
     if (!passphrase) {
       throw new Error(
-        'Identity file contains encrypted private keys. Set F0X_IDENTITY_PASSPHRASE to decrypt and continue.'
+        'Identity file contains encrypted private keys. Set F0x_IDENTITY_PASSPHRASE to decrypt and continue.'
       );
     }
     const decrypted = decryptSecrets(passphrase, file.encryptedSecrets);

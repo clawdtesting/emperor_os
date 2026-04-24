@@ -1,5 +1,5 @@
 /**
- * Local UI server for the F0X dashboard.
+ * Local UI server for the F0x dashboard.
  *
  * Security model:
  *   - Binds to 127.0.0.1 only — never reachable from the network.
@@ -12,7 +12,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import {
-  type F0XSession,
+  type F0xSession,
   performLogin,
   listChannels,
   openChannel,
@@ -80,7 +80,7 @@ function setCookieAndRedirect(res: ServerResponse, sessionId: string, port: numb
 // ─── Server ───────────────────────────────────────────────────────────────────
 
 export function startUiServer(
-  session: F0XSession,
+  session: F0xSession,
   relayUrl: string,
   opts: UiServerOptions = {}
 ): () => void {
@@ -121,9 +121,9 @@ export function startUiServer(
       if (!authed) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(
-          '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>F0X</title></head>' +
+          '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>F0x</title></head>' +
           '<body style="font-family:monospace;padding:2em;background:#0d1117;color:#c9d1d9">' +
-          '<h2 style="color:#58a6ff">F0X Dashboard</h2>' +
+          '<h2 style="color:#58a6ff">F0x Dashboard</h2>' +
           '<p>Open the one-time URL printed in your terminal to authenticate.</p>' +
           '</body></html>'
         );
@@ -228,10 +228,10 @@ export function startUiServer(
 
   server.listen(port, '127.0.0.1', () => {
     const setupUrl = 'http://127.0.0.1:' + port + '/?_setup=' + setupToken;
-    process.stderr.write('\n[F0X-UI] Dashboard ready on port ' + port + '\n');
-    process.stderr.write('[F0X-UI] Open this one-time URL to authenticate:\n\n');
+    process.stderr.write('\n[F0x-UI] Dashboard ready on port ' + port + '\n');
+    process.stderr.write('[F0x-UI] Open this one-time URL to authenticate:\n\n');
     process.stderr.write('  ' + setupUrl + '\n\n');
-    process.stderr.write('[F0X-UI] After first visit the dashboard is at: http://127.0.0.1:' + port + '/\n\n');
+    process.stderr.write('[F0x-UI] After first visit the dashboard is at: http://127.0.0.1:' + port + '/\n\n');
   });
 
   return () => { server.close(); };

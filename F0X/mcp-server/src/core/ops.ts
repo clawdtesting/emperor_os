@@ -1,5 +1,5 @@
 /**
- * Shared business logic for F0X agent sessions.
+ * Shared business logic for F0x agent sessions.
  * Used by both the MCP server adapter (tools.ts) and the UI server.
  * Returns plain typed values — no MCP formatting here.
  */
@@ -36,7 +36,7 @@ import { validateSignedTimestamp } from '../timestamp-guard.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
-export interface F0XSession {
+export interface F0xSession {
   relay: RelayClient;
   identity: AgentIdentityFile;
   identityDir: string;
@@ -47,7 +47,7 @@ const MAX_ENVELOPE_SKEW_SECONDS = 300;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function performLogin(session: F0XSession): Promise<{ token: string }> {
+export async function performLogin(session: F0xSession): Promise<{ token: string }> {
   const { relay, identity } = session;
   const challenge = await relay.getChallenge(identity.agentId);
   const signature = signChallenge(challenge.message, identity.signingSecretKey);
@@ -61,7 +61,7 @@ export async function performLogin(session: F0XSession): Promise<{ token: string
   });
 }
 
-async function withReauth<T>(session: F0XSession, op: () => Promise<T>): Promise<T> {
+async function withReauth<T>(session: F0xSession, op: () => Promise<T>): Promise<T> {
   try {
     return await op();
   } catch (e) {
@@ -74,7 +74,7 @@ async function withReauth<T>(session: F0XSession, op: () => Promise<T>): Promise
 
 // ─── Channel key resolution ───────────────────────────────────────────────────
 
-export async function ensureChannelKey(session: F0XSession, channel: Channel): Promise<Uint8Array> {
+export async function ensureChannelKey(session: F0xSession, channel: Channel): Promise<Uint8Array> {
   const { relay, identity, identityDir } = session;
 
   const existing = loadChannelKey(identityDir, channel.channelId);
@@ -122,7 +122,7 @@ export interface ChannelSummary {
   peerLabel: string;
 }
 
-export async function listChannels(session: F0XSession): Promise<ChannelSummary[]> {
+export async function listChannels(session: F0xSession): Promise<ChannelSummary[]> {
   const { relay, identity } = session;
   const channels = await withReauth(session, () => relay.listChannels());
   return Promise.all(channels.map(async (c) => {
@@ -139,7 +139,7 @@ export interface OpenChannelResult {
   existed: boolean;
 }
 
-export async function openChannel(session: F0XSession, targetAgentId: string): Promise<OpenChannelResult> {
+export async function openChannel(session: F0xSession, targetAgentId: string): Promise<OpenChannelResult> {
   const { relay, identity, identityDir } = session;
   assertRateLimit(`ui:open_channel:${identity.agentId}`, { windowMs: 60_000, maxInWindow: 6, burstWindowMs: 10_000, burstMax: 2 });
 
@@ -196,7 +196,7 @@ export interface DecryptedMessage {
  * to keep message content out of LLM context until explicitly requested.
  */
 export async function fetchMessages(
-  session: F0XSession,
+  session: F0xSession,
   channelId: string,
   opts: { limit?: number; before?: string } = {}
 ): Promise<DecryptedMessage[]> {
@@ -295,7 +295,7 @@ export interface SentMessageResult {
 }
 
 export async function sendMessage(
-  session: F0XSession,
+  session: F0xSession,
   channelId: string,
   text: string
 ): Promise<SentMessageResult> {

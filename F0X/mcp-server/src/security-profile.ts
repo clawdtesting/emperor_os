@@ -10,9 +10,9 @@ export interface SecurityProfileInput {
 }
 
 export function resolveSecurityProfile(): SecurityProfile {
-  const raw = (process.env['F0X_SECURITY_PROFILE'] ?? 'dev').toLowerCase();
+  const raw = (process.env['F0x_SECURITY_PROFILE'] ?? 'dev').toLowerCase();
   if (raw === 'dev' || raw === 'staging' || raw === 'prod') return raw;
-  throw new Error(`Invalid F0X_SECURITY_PROFILE "${raw}". Expected dev|staging|prod.`);
+  throw new Error(`Invalid F0x_SECURITY_PROFILE "${raw}". Expected dev|staging|prod.`);
 }
 
 export function enforceSecurityProfile(input: SecurityProfileInput): void {
@@ -30,7 +30,13 @@ export function enforceSecurityProfile(input: SecurityProfileInput): void {
     throw new Error(`Security profile "${profile}" requires AGENT_IDENTITY_DIR to be explicitly set.`);
   }
   if (!operatorIdExplicitlySet) {
-    throw new Error(`Security profile "${profile}" requires F0X_OPERATOR_ID to be explicitly set.`);
+    throw new Error(`Security profile "${profile}" requires F0x_OPERATOR_ID to be explicitly set.`);
+  }
+
+  if (profile === 'prod' || profile === 'staging') {
+    if (!identityPassphraseSet) {
+      throw new Error(`Security profile "${profile}" requires F0x_IDENTITY_PASSPHRASE for encrypted key storage.`);
+    }
   }
 
   if (profile === 'prod' || profile === 'staging') {
