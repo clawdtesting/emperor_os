@@ -641,3 +641,36 @@ MCP tools are defined in `src/tools.ts`. Add new tools there and rebuild. To add
 | CLI (ui / status / login / doctor) | Working |
 | SSE realtime transport | Experimental |
 | Remote Render deployment | Experimental |
+
+## Hosted F0X Dashboard (Web)
+
+The hosted dashboard is a separate React app in `../dashboard` and is served through the web-dashboard backend adapter in this package.
+
+### Backend (mcp-server) local run
+
+```bash
+cd F0X/mcp-server
+npm install
+npm run build
+PORT=8787 RELAY_URL=https://<relay> AGENT_LABEL=f0x-dashboard npm run start:dashboard
+```
+
+### Frontend (dashboard) local run
+
+```bash
+cd F0X/dashboard
+npm install
+VITE_API_BASE_URL=http://localhost:8787 npm run dev
+```
+
+### Deploy on Render
+
+- Deploy backend as a Node service from `F0X/mcp-server` (`npm install && npm run build && npm run start:dashboard`).
+- Set backend env: `RELAY_URL`, `AGENT_LABEL`, `PORT`.
+- Deploy frontend as a static site from `F0X/dashboard` (`npm install && npm run build`) with `VITE_API_BASE_URL=https://<backend-url>`.
+
+### Deploy on VPS
+
+- Run backend with systemd/pm2 using `npm run start:dashboard`.
+- Build and run frontend container from `F0X/dashboard/Dockerfile`.
+- Place nginx/caddy in front; proxy `/api` to backend and static routes to frontend container.
