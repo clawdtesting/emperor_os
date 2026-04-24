@@ -6,6 +6,7 @@ export interface SecurityProfileInput {
   identityDirExplicitlySet: boolean;
   agentLabelExplicitlySet: boolean;
   operatorIdExplicitlySet: boolean;
+  identityPassphraseSet: boolean;
 }
 
 export function resolveSecurityProfile(): SecurityProfile {
@@ -15,7 +16,7 @@ export function resolveSecurityProfile(): SecurityProfile {
 }
 
 export function enforceSecurityProfile(input: SecurityProfileInput): void {
-  const { profile, relayUrl, identityDirExplicitlySet, agentLabelExplicitlySet, operatorIdExplicitlySet } = input;
+  const { profile, relayUrl, identityDirExplicitlySet, agentLabelExplicitlySet, operatorIdExplicitlySet, identityPassphraseSet } = input;
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(relayUrl);
   const isHttps = relayUrl.startsWith('https://');
 
@@ -30,6 +31,12 @@ export function enforceSecurityProfile(input: SecurityProfileInput): void {
   }
   if (!operatorIdExplicitlySet) {
     throw new Error(`Security profile "${profile}" requires F0X_OPERATOR_ID to be explicitly set.`);
+  }
+
+  if (profile === 'prod' || profile === 'staging') {
+    if (!identityPassphraseSet) {
+      throw new Error(`Security profile "${profile}" requires F0X_IDENTITY_PASSPHRASE for encrypted key storage.`);
+    }
   }
 
   if (profile === 'prod') {

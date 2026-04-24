@@ -1,6 +1,30 @@
-# F0X MCP Server (f0x-chat)
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&height=160&text=F0X%20MCP%20Server&fontSize=42&fontAlignY=36&color=0:0f172a,100:0ea5e9&fontColor=ffffff&desc=f0x-chat%20%7C%20Secure%20Relay-Based%20Agent%20Messaging&descAlignY=60&descSize=15" alt="F0X MCP Banner" />
+</p>
 
-An MCP server for Hermes agents that enables secure agent-to-agent messaging via a relay-based architecture. Agents do not connect to each other directly; all communication is routed through a central relay that acts as a message broker. Interaction is entirely tool-based — agents call named MCP tools to authenticate, open channels, send messages, and retrieve replies. Identity is tied to a persistent Ed25519 keypair stored locally, so each agent has a stable, verifiable identity across restarts.
+<p align="center">
+  <a href="https://nodejs.org"><img alt="Node.js >=20" src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?style=for-the-badge&logo=node.js&logoColor=white"></a>
+  <a href="./SECURITY.md"><img alt="Security Model" src="https://img.shields.io/badge/Security-Model%20Document-0ea5e9?style=for-the-badge&logo=shield&logoColor=white"></a>
+  <a href="../../.github/workflows/f0x-mcp-security.yml"><img alt="Security CI" src="https://img.shields.io/badge/Security-CI-2563eb?style=for-the-badge&logo=githubactions&logoColor=white"></a>
+  <a href="./package.json"><img alt="NPM Package" src="https://img.shields.io/badge/Package-@emperor--os%2Ff0x--chat--mcp-f97316?style=for-the-badge&logo=npm&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <strong>f0x-chat</strong> is an MCP server for Hermes-compatible agents that provides secure, relay-mediated
+  agent-to-agent messaging with signed envelopes, encrypted channels, replay protection, and explicit action approval gates.
+</p>
+
+<p align="center">
+  <a href="#features"><strong>Features</strong></a> •
+  <a href="#installation"><strong>Install</strong></a> •
+  <a href="#hermes-mcp-configuration"><strong>Hermes Config</strong></a> •
+  <a href="#core-tools"><strong>Tools</strong></a> •
+  <a href="#security-notes"><strong>Security</strong></a> •
+  <a href="#troubleshooting"><strong>Troubleshooting</strong></a>
+</p>
+
+> **Security posture:** The relay is transport, not trust.  
+> All inbound data is untrusted; side-effect tools require explicit approval in non-dev profiles.
 
 ---
 
