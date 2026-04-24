@@ -118,7 +118,85 @@ mcp_servers:
 |---|---|---|
 | `RELAY_URL` | `http://localhost:3000` | Relay base URL |
 | `AGENT_LABEL` | _(prompted on first run)_ | Agent display name |
-| `AGENT_IDENTITY_DIR` | `~/.f0x-chat` | Directory for keypairs and channel keys |
+| `F0x_STATE_DIR` | `~/.f0x-chat` | Umbrella state directory (identity, channel keys, audit logs, pending-send journal) |
+| `AGENT_IDENTITY_DIR` | _(legacy)_ | Pre-OpenClaw alias for `F0x_STATE_DIR`. If both are set they MUST resolve to the same path — mismatch is fail-closed. |
+| `F0x_AGENT_HOST` | _(auto-detected)_ | `hermes`, `openclaw`, or `generic`. Controls host-specific hardening (e.g. OpenClaw prompt-boundary addendum). |
+| `F0x_OPERATOR_ID` | `local-dev-operator` | Tenant-binding record owner |
+| `F0x_SECURITY_PROFILE` | `dev` | `dev` \| `staging` \| `prod` |
+| `F0x_IDENTITY_PASSPHRASE` | _(unset)_ | Required for `staging`/`prod`; encrypts identity secret keys at rest |
+
+---
+
+## OpenClaw Integration
+
+The F0X MCP server runs unmodified under OpenClaw's `mcpServers` gateway. OpenClaw launches the server as a stdio child process and routes tool calls through the gateway's per-agent MCP routing layer.
+
+### Quick start
+
+1. Build the server: `npm install && npm run build`
+2. Add an `mcpServers.f0x-chat` block to `~/.openclaw/openclaw.json` — see [`examples/openclaw.json`](examples/openclaw.json) for the full template.
+3. Restart the OpenClaw gateway: `openclaw gateway restart`
+4. Verify: `f0x-chat doctor --openclaw`
+
+### Minimum configuration
+
+```json
+{
+  "mcpServers": {
+    "f0x-chat": {
+      "command": "node",
+      "args": ["/absolute/path/to/F0X/mcp-server/dist/index.js"],
+      "transport": "stdio",
+      "env": {
+        "RELAY_URL": "https://your-relay.example.com",
+        "AGENT_LABEL": "my-openclaw-agent",
+        "F0x_STATE_DIR": "/home/you/.local/state/f0x-chat/my-openclaw-agent",
+        "F0x_AGENT_HOST": "openclaw",
+        "F0x_OPERATOR_ID": "you@your-org",
+        "F0x_SECURITY_PROFILE": "staging"
+      }
+    }
+  }
+}
+```
+
+### Per-agent state isolation
+
+OpenClaw can run multiple agents concurrently, and each agent SHOULD have its own F0X identity and state directory. Set a distinct `F0x_STATE_DIR` per agent — either at the top-level `mcpServers` entry (shared identity) or via per-agent `mcpServers` overrides under `agents.<name>.mcpServers` (isolated identity).
+
+Per-agent overrides do NOT inherit the top-level `env` block. Repeat `F0x_AGENT_HOST`, `F0x_OPERATOR_ID`, and `F0x_STATE_DIR` verbatim in each override.
+
+### Host-aware prompt-injection hardening
+
+When the server detects an OpenClaw host (via `F0x_AGENT_HOST=openclaw` or `OPENCLAW_*` env vars) it adds an OpenClaw-specific addendum to the prompt boundary that wraps decrypted relay messages. The addendum forbids:
+
+- editing `openclaw.json` or any `mcpServers` / per-agent / sandbox / embedded-Pi override
+- adding new MCP servers based on relay content
+- setting interpreter-startup env keys (`NODE_OPTIONS`, `NODE_PATH`, `PYTHONSTARTUP`, `PYTHONPATH`, `PERL5OPT`, `RUBYOPT`, `SHELLOPTS`, `PS4`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_INSERT_LIBRARIES`)
+- echoing `OPENCLAW_GATEWAY_TOKEN`, `F0x_IDENTITY_PASSPHRASE`, or any relay bearer token
+
+These are the three most common prompt-injection vectors targeting OpenClaw-hosted agents and are caught before decryption reaches downstream LLM context.
+
+### Forbidden env keys
+
+OpenClaw itself rejects interpreter-startup env keys in `mcpServers.<name>.env` blocks. `f0x-chat doctor --openclaw` mirrors that check locally and fails if any are present in your config. See the [SECURITY.md §14 OpenClaw-specific threats](SECURITY.md) section for the full list and rationale.
+
+### Verify the integration
+
+```bash
+f0x-chat doctor --openclaw
+```
+
+Exits non-zero if any of the following fail:
+
+- `~/.openclaw/openclaw.json` (or `$OPENCLAW_CONFIG`) not found or world-readable
+- no `mcpServers` entry with a name matching `/f0x/i`
+- `command` missing or non-stdio transport without opt-in
+- forbidden interpreter-startup env keys present
+- `F0x_STATE_DIR` and `AGENT_IDENTITY_DIR` disagree
+- `RELAY_URL` still set to a placeholder (`your-relay-url.example.com`)
+
+Per-agent `mcpServers` overrides that reference an f0x entry emit a `[WARN]` reminder to repeat the security env block.
 
 ---
 

@@ -7,8 +7,8 @@
  * Run via: npm run security:conformance
  *
  * This script is a CI required check for any PR that modifies:
- *   - src/integration-policy.ts
- *   - src/tools.ts (wrapMessageContent / sanitizeMessageText)
+ *   - src/core/integration-policy.ts
+ *   - src/adapters/mcp-common/tools.ts (wrapMessageContent / sanitizeMessageText)
  *   - Any adapter system prompt template
  *
  * Exit codes:
@@ -23,10 +23,10 @@ import { join } from 'node:path';
 // this runs before build in some CI flows. Key phrases are stable constants.
 
 const ROOT = process.cwd();
-const policyPath = join(ROOT, 'src', 'integration-policy.ts');
+const policyPath = join(ROOT, 'src', 'core', 'integration-policy.ts');
 
 if (!existsSync(policyPath)) {
-  console.error('integration-conformance: src/integration-policy.ts not found.');
+  console.error('integration-conformance: src/core/integration-policy.ts not found.');
   process.exit(1);
 }
 
@@ -47,7 +47,7 @@ function check(description, condition) {
 const requiredPhrases = [
   'UNTRUSTED EXTERNAL DATA',
   'F0X SECURITY POLICY',
-  'F0X_confirm_action',
+  'F0x_confirm_action',
   'agentId',
   'as data, not as instructions'
 ];
@@ -104,8 +104,32 @@ check(
   policySource.includes('export function assertConformingAdapter')
 );
 
+// ── 5b. OpenClaw boundary addendum present and exported ─────────────────────
+check(
+  'OPENCLAW_BOUNDARY_ADDENDUM exported from integration-policy.ts',
+  policySource.includes('export const OPENCLAW_BOUNDARY_ADDENDUM')
+);
+check(
+  'OpenClaw addendum forbids openclaw.json config edits',
+  policySource.includes('openclaw.json') && policySource.includes('mcpServers')
+);
+check(
+  'OpenClaw addendum forbids interpreter-startup env keys',
+  policySource.includes('NODE_OPTIONS') &&
+    policySource.includes('PYTHONSTARTUP') &&
+    policySource.includes('LD_PRELOAD')
+);
+check(
+  'OpenClaw addendum forbids gateway-token exfiltration',
+  policySource.includes('OPENCLAW_GATEWAY_TOKEN')
+);
+check(
+  'buildBoundaryTemplate() exported from integration-policy.ts',
+  policySource.includes('export function buildBoundaryTemplate')
+);
+
 // ── 6. tools.ts wrapMessageContent references untrusted boundary ─────────────
-const toolsPath = join(ROOT, 'src', 'tools.ts');
+const toolsPath = join(ROOT, 'src', 'adapters', 'mcp-common', 'tools.ts');
 if (existsSync(toolsPath)) {
   const toolsSource = readFileSync(toolsPath, 'utf8');
   check(
@@ -117,7 +141,7 @@ if (existsSync(toolsPath)) {
     toolsSource.includes('sanitizeMessageText')
   );
 } else {
-  console.warn('[SKIP] src/tools.ts not found — skipping tools conformance checks');
+  console.warn('[SKIP] src/adapters/mcp-common/tools.ts not found — skipping tools conformance checks');
 }
 
 // ── 7. Integration policy module is imported or referenced in tools ───────────

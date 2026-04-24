@@ -18,7 +18,7 @@ import {
   openChannel,
   fetchMessages,
   sendMessage
-} from '../core/ops.js';
+} from '../../../core/ops.js';
 import { DASHBOARD_HTML } from './dashboard.js';
 
 // ─── Options ──────────────────────────────────────────────────────────────────
