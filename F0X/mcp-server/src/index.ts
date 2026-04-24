@@ -79,13 +79,15 @@ async function resolveAgentLabel(): Promise<string> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  const rawPassphrase = process.env['F0X_IDENTITY_PASSPHRASE']?.trim();
   enforceSecurityProfile({
     profile: SECURITY_PROFILE,
     relayUrl: RELAY_URL,
     identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
     agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
     operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined,
-    identityPassphraseSet: !!process.env['F0X_IDENTITY_PASSPHRASE']?.trim()
+    identityPassphraseSet: !!rawPassphrase,
+    identityPassphrase: rawPassphrase
   });
 
   const AGENT_LABEL = await resolveAgentLabel();
