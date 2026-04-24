@@ -142,7 +142,8 @@ async function main(): Promise<void> {
     { capabilities: { tools: {} } }
   );
 
-  const ctx: ToolContext = { relay, identity, identityDir: IDENTITY_DIR };
+  const requireActionApproval = SECURITY_PROFILE !== 'dev';
+  const ctx: ToolContext = { relay, identity, identityDir: IDENTITY_DIR, requireActionApproval };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOL_DEFINITIONS }));
 

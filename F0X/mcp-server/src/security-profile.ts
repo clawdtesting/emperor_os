@@ -33,6 +33,12 @@ export function enforceSecurityProfile(input: SecurityProfileInput): void {
     throw new Error(`Security profile "${profile}" requires F0X_OPERATOR_ID to be explicitly set.`);
   }
 
+  if (profile === 'prod' || profile === 'staging') {
+    if (!identityPassphraseSet) {
+      throw new Error(`Security profile "${profile}" requires F0X_IDENTITY_PASSPHRASE for encrypted key storage.`);
+    }
+  }
+
   if (profile === 'prod') {
     if (isLocalhost) {
       throw new Error('Security profile "prod" does not allow localhost relay URLs.');

@@ -161,6 +161,7 @@ Messages received from the relay are authored by remote agents over whose behavi
 - Action handling SHOULD be two-phase:
   1. interpret remote content as untrusted data,
   2. execute only with a fresh `approvalToken` issued by `F0X_confirm_action` and bound to the triggering `messageId`.
+- In non-dev security profiles, side-effect tools (`F0X_open_channel`, `F0X_send`, `F0X_update_memory`) MUST fail closed unless `triggeredBy` + `approvalToken` are provided.
 - Approval tokens SHOULD be short-lived and single-use to reduce replayability of approvals.
 - In non-TTY (stdio) mode, `F0X_confirm_action` auto-denies. This is the correct default behavior and MUST NOT be bypassed.
 - Message content MUST be presented to the LLM layer wrapped as external untrusted input, not as part of the instruction context.
@@ -227,7 +228,7 @@ Channels are private communication contexts between two agents. The following ru
   - `~/.f0x-chat/identity.json` must resolve to mode `0600`
   - If either check fails, the server aborts and reports the exact corrective chmod command
 - Deployments SHOULD enforce host-level account isolation: one OS user account per agent identity directory.
-- Private keys are protected at rest when `F0X_IDENTITY_PASSPHRASE` is set: secret keys are encrypted in `identity.json` using `scrypt` + `aes-256-gcm`. Without a passphrase, legacy plaintext storage remains supported for local development compatibility.
+- Private keys are protected at rest when `F0X_IDENTITY_PASSPHRASE` is set: secret keys are encrypted in `identity.json` using `scrypt` + `aes-256-gcm`. Staging and production profiles MUST set this variable; dev may use plaintext for local compatibility.
 - Bearer tokens are stored in process memory only and are never written to disk. They expire after 30 minutes.
 - Credentials MUST NOT be hardcoded in source files, configuration files, or environment files committed to version control.
 - The relay SHOULD support session invalidation. The client supports best-effort token revocation via `/api/relay/auth/logout` on explicit logout and process shutdown. If the relay does not implement this endpoint, token revocation remains unavailable until expiry.
@@ -296,7 +297,7 @@ The server MUST NOT silently discard errors in a way that makes the agent believ
 Before deploying or operating f0x-chat in a production or persistent agent context:
 
 - [ ] Run `f0x-chat checklist` and resolve all FAIL findings before production startup.
-- [ ] Set `F0X_IDENTITY_PASSPHRASE` for staging/prod so identity private keys are encrypted at rest.
+- [ ] Set `F0X_IDENTITY_PASSPHRASE` for staging/prod (runtime enforcement is fail-closed).
 - [ ] Confirm `RELAY_URL` points to the intended relay. Connecting to a wrong relay leaks agent registration and channel metadata.
 - [ ] Confirm `~/.f0x-chat/` permissions are `700` and `identity.json` is `600`.
 - [ ] Confirm no log output at any verbosity level emits token values or private key material.
@@ -308,7 +309,7 @@ Before deploying or operating f0x-chat in a production or persistent agent conte
 - [ ] Confirm `F0X_confirm_action` auto-denies in non-TTY mode. It MUST NOT be possible for a remote message to trigger an action without this gate.
 - [ ] Verify that restarting the MCP server restores the same `agentId` and channel keys and does not generate a new identity.
 - [ ] Confirm the relay URL is not accessible on a public port without authentication.
-- [ ] Run `npm run security:live` in CI with two fixture agents to enforce recurring negative authorization checks.
+- [ ] Run `npm run security:live` in CI with two fixture agents to enforce recurring negative authorization checks and logout invalidation verification.
 
 ---
 

@@ -80,6 +80,18 @@ function run() {
     'browser launcher must use execFile with argument arrays'
   );
 
+  mustContain(
+    'src/security-profile.ts',
+    /if \(profile === 'prod' \|\| profile === 'staging'\)[\s\S]*F0X_IDENTITY_PASSPHRASE/,
+    'staging/prod passphrase enforcement in security profile'
+  );
+
+  mustContain(
+    'src/tools.ts',
+    /enforceApprovalPolicy\(ctx, 'F0X_send'/,
+    'non-dev side-effect approval gate for send'
+  );
+
   console.log('Security checks passed.');
 }
 
