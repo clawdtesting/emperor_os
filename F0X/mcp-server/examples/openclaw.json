@@ -1,0 +1,50 @@
+{
+  "$schema_note": "This is an illustrative excerpt of ~/.openclaw/openclaw.json showing how to register the F0X MCP server under OpenClaw. Merge the `mcpServers` block into your existing config; do not replace unrelated top-level fields. Run `f0x-chat doctor --openclaw` to verify the result.",
+
+  "mcpServers": {
+    "f0x-chat": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/F0X/mcp-server/dist/index.js"
+      ],
+      "transport": "stdio",
+      "env": {
+        "RELAY_URL": "https://your-relay.example.com",
+        "AGENT_LABEL": "my-openclaw-agent",
+
+        "F0X_STATE_DIR": "/home/you/.local/state/f0x-chat/my-openclaw-agent",
+        "F0X_AGENT_HOST": "openclaw",
+        "F0X_OPERATOR_ID": "you@your-org",
+        "F0X_SECURITY_PROFILE": "staging",
+
+        "F0X_IDENTITY_PASSPHRASE_NOTE": "Set F0X_IDENTITY_PASSPHRASE via OpenClaw's secret store, not inline here. Required when F0X_SECURITY_PROFILE is staging or prod."
+      }
+    }
+  },
+
+  "agents_note": "If you use per-agent mcpServers overrides under `agents.<name>.mcpServers`, repeat the `env` block verbatim — OpenClaw does NOT inherit the top-level server env for overrides. Omitting F0X_AGENT_HOST or F0X_OPERATOR_ID in a per-agent override will silently fall back to generic-host defaults.",
+
+  "agents": {
+    "researcher": {
+      "mcpServers": {
+        "f0x-chat": {
+          "command": "node",
+          "args": [
+            "/absolute/path/to/F0X/mcp-server/dist/index.js"
+          ],
+          "transport": "stdio",
+          "env": {
+            "RELAY_URL": "https://your-relay.example.com",
+            "AGENT_LABEL": "researcher-agent",
+            "F0X_STATE_DIR": "/home/you/.local/state/f0x-chat/researcher",
+            "F0X_AGENT_HOST": "openclaw",
+            "F0X_OPERATOR_ID": "you@your-org",
+            "F0X_SECURITY_PROFILE": "staging"
+          }
+        }
+      }
+    }
+  },
+
+  "__forbidden_env_keys_note": "OpenClaw rejects interpreter-startup env keys in `env` blocks because they alter how a stdio MCP server starts up and can be used to inject code into the spawned process. Do NOT set any of: NODE_OPTIONS, NODE_PATH, PYTHONSTARTUP, PYTHONPATH, PERL5OPT, RUBYOPT, SHELLOPTS, PS4, LD_PRELOAD, LD_LIBRARY_PATH, DYLD_INSERT_LIBRARIES. f0x-chat doctor --openclaw will fail if any of these are present."
+}

@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 /**
- * Orchestrator Chat MCP Server
+ * F0X Chat MCP Server
  *
  * Usage:
- *   # stdio (default — for Hermes local mode)
+ *   # stdio (default — for Hermes local mode and OpenClaw gateway)
  *   node dist/index.js
  *
- *   # SSE — for remote Hermes / deployed relay
+ *   # SSE — for remote agent hosts / deployed relay
  *   node dist/index.js --sse [--sse-port=3001]
  *
  * Environment variables:
- *   RELAY_URL          Relay base URL (default: http://localhost:3000)
- *   AGENT_LABEL        Agent display name — if unset, will be prompted interactively
- *   AGENT_IDENTITY_DIR Path for identity + channel key files (default: ~/.orchestrator-chat)
- *   PORT               When set (e.g. on Render), enables SSE mode automatically on that port
+ *   RELAY_URL           Relay base URL (default: http://localhost:3000)
+ *   AGENT_LABEL         Agent display name — if unset, will be prompted interactively
+ *   F0X_STATE_DIR       Umbrella state directory (preferred; default: ~/.f0x-chat)
+ *   AGENT_IDENTITY_DIR  Legacy alias for F0X_STATE_DIR (retained for pre-OpenClaw operators)
+ *   F0X_AGENT_HOST      hermes|openclaw|generic — overrides host auto-detection
+ *   PORT                When set (e.g. on Render), enables SSE mode automatically on that port
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -23,19 +25,15 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createInterface } from 'node:readline';
 
-import { RelayClient } from './relay-client.js';
-import { loadOrCreateIdentity, defaultIdentityDir, runLocalIntegrityChecks } from './identity.js';
-import { listPendingSends } from './send-recovery.js';
-import { enforceSecurityProfile, resolveSecurityProfile } from './security-profile.js';
-import { enforceTenantBinding } from './tenant-binding.js';
+import { createSession, resolveAgentEnv } from './core/runtime.js';
 import { TOOL_DEFINITIONS, handleTool, type ToolContext } from './tools.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const RELAY_URL = process.env['RELAY_URL'] ?? 'http://localhost:3000';
-const IDENTITY_DIR = process.env['AGENT_IDENTITY_DIR'] ?? defaultIdentityDir();
-const SECURITY_PROFILE = resolveSecurityProfile();
-const OPERATOR_ID = process.env['F0X_OPERATOR_ID'] ?? 'local-dev-operator';
+const env = resolveAgentEnv();
+const RELAY_URL = env.relayUrl;
+const IDENTITY_DIR = env.stateDir;
+const SECURITY_PROFILE = env.securityProfile;
 
 const cliArgs = process.argv.slice(2);
 
@@ -48,7 +46,7 @@ const SSE_PORT = renderPort ?? (ssePortArg ? parseInt(ssePortArg.split('=')[1]!,
 // ─── Interactive label prompt ─────────────────────────────────────────────────
 
 async function resolveAgentLabel(): Promise<string> {
-  if (process.env['AGENT_LABEL']) return process.env['AGENT_LABEL'];
+  if (env.agentLabel) return env.agentLabel;
 
   // In SSE/Render mode there's no interactive terminal — require the env var
   if (useSSE) {
@@ -79,27 +77,12 @@ async function resolveAgentLabel(): Promise<string> {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const rawPassphrase = process.env['F0X_IDENTITY_PASSPHRASE']?.trim();
-  enforceSecurityProfile({
-    profile: SECURITY_PROFILE,
-    relayUrl: RELAY_URL,
-    identityDirExplicitlySet: process.env['AGENT_IDENTITY_DIR'] !== undefined,
-    agentLabelExplicitlySet: process.env['AGENT_LABEL'] !== undefined,
-    operatorIdExplicitlySet: process.env['F0X_OPERATOR_ID'] !== undefined,
-    identityPassphraseSet: !!rawPassphrase,
-    identityPassphrase: rawPassphrase
-  });
-
   const AGENT_LABEL = await resolveAgentLabel();
-
-  const identity = loadOrCreateIdentity(IDENTITY_DIR, AGENT_LABEL);
-  enforceTenantBinding(IDENTITY_DIR, OPERATOR_ID, identity.agentId);
-  runLocalIntegrityChecks(IDENTITY_DIR);
-  const pendingSends = listPendingSends(IDENTITY_DIR);
-  if (pendingSends.length > 0) {
-    process.stderr.write(`[F0X-chat-MCP] Recovery: found ${pendingSends.length} pending send record(s). Review relay state before resubmitting.\n`);
+  const session = createSession(env, { label: AGENT_LABEL });
+  const { relay, identity } = session;
+  if (env.host !== 'generic') {
+    process.stderr.write(`[F0X-chat-MCP] Detected agent host: ${env.host}\n`);
   }
-  const relay = new RelayClient({ relayUrl: RELAY_URL });
   let shutdownStarted = false;
   async function logoutOnShutdown(reason: string): Promise<void> {
     if (shutdownStarted) return;

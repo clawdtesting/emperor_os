@@ -104,6 +104,30 @@ check(
   policySource.includes('export function assertConformingAdapter')
 );
 
+// ── 5b. OpenClaw boundary addendum present and exported ─────────────────────
+check(
+  'OPENCLAW_BOUNDARY_ADDENDUM exported from integration-policy.ts',
+  policySource.includes('export const OPENCLAW_BOUNDARY_ADDENDUM')
+);
+check(
+  'OpenClaw addendum forbids openclaw.json config edits',
+  policySource.includes('openclaw.json') && policySource.includes('mcpServers')
+);
+check(
+  'OpenClaw addendum forbids interpreter-startup env keys',
+  policySource.includes('NODE_OPTIONS') &&
+    policySource.includes('PYTHONSTARTUP') &&
+    policySource.includes('LD_PRELOAD')
+);
+check(
+  'OpenClaw addendum forbids gateway-token exfiltration',
+  policySource.includes('OPENCLAW_GATEWAY_TOKEN')
+);
+check(
+  'buildBoundaryTemplate() exported from integration-policy.ts',
+  policySource.includes('export function buildBoundaryTemplate')
+);
+
 // ── 6. tools.ts wrapMessageContent references untrusted boundary ─────────────
 const toolsPath = join(ROOT, 'src', 'tools.ts');
 if (existsSync(toolsPath)) {

@@ -69,9 +69,9 @@ function run() {
   );
 
   mustContain(
-    'src/index.ts',
+    'src/core/runtime.ts',
     /enforceTenantBinding/,
-    'tenant binding enforcement at runtime startup'
+    'tenant binding enforcement at runtime startup (shared core)'
   );
 
   // Replay hardening: bounded signed timestamp skew validation is enforced.
@@ -265,6 +265,62 @@ function run() {
     '.github/workflows/security-nightly.yml',
     /SECURITY_TEST_SKIP_LOGOUT.*'0'/,
     'nightly workflow enforces logout revocation test (no skip)'
+  );
+
+  // OpenClaw integration — shared runtime, host-aware boundary, doctor flag.
+  mustExist(
+    'src/core/runtime.ts',
+    'shared runtime module for host-agnostic session bootstrap'
+  );
+  mustContain(
+    'src/core/runtime.ts',
+    /resolveStateDir|F0X_STATE_DIR/,
+    'F0X_STATE_DIR resolution present in shared runtime'
+  );
+  mustContain(
+    'src/core/runtime.ts',
+    /AGENT_IDENTITY_DIR and AGENT_IDENTITY_DIR are both set|F0X_STATE_DIR and AGENT_IDENTITY_DIR are both set/,
+    'state-dir conflict detection is fail-closed'
+  );
+  mustContain(
+    'src/core/runtime.ts',
+    /detectAgentHost|AgentHost/,
+    'agent host detection present in shared runtime'
+  );
+  mustContain(
+    'src/integration-policy.ts',
+    /OPENCLAW_BOUNDARY_ADDENDUM/,
+    'OpenClaw-specific boundary addendum present in integration-policy'
+  );
+  mustContain(
+    'src/integration-policy.ts',
+    /buildBoundaryTemplate/,
+    'host-aware boundary template builder present in integration-policy'
+  );
+  mustContain(
+    'src/integration-policy.ts',
+    /openclaw\.json|mcpServers|NODE_OPTIONS/,
+    'OpenClaw config-mutation denylist patterns present in integration-policy'
+  );
+  mustContain(
+    'src/integration-policy.ts',
+    /OPENCLAW_GATEWAY_TOKEN|F0X_IDENTITY_PASSPHRASE/,
+    'OpenClaw secret-exfiltration patterns present in red-team corpus'
+  );
+  mustContain(
+    'src/tools.ts',
+    /detectAgentHost\(\) === 'openclaw'|OPENCLAW HOST/,
+    'wrapMessageContent adds OpenClaw host note when detected'
+  );
+  mustContain(
+    'src/cli.ts',
+    /--openclaw/,
+    'doctor command accepts --openclaw flag'
+  );
+  mustContain(
+    'src/cli.ts',
+    /OPENCLAW_FORBIDDEN_ENV_KEYS|NODE_OPTIONS.*LD_PRELOAD/s,
+    'doctor --openclaw enforces forbidden interpreter-startup env keys'
   );
 
   // Item 9: Deployment guard script exists with machine-verifiable checks.
