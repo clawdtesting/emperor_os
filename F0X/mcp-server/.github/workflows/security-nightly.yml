@@ -1,0 +1,163 @@
+name: Security Nightly
+
+# Runs nightly with a fixture relay environment where all required secrets are
+# always present. Also triggered on PRs that touch relay or auth-critical paths.
+#
+# Required repository secrets:
+#   FIXTURE_RELAY_URL                  — URL of the dedicated test relay
+#   FIXTURE_AGENT_A_TOKEN              — pre-authenticated bearer token for fixture agent A
+#   FIXTURE_AGENT_B_TOKEN              — pre-authenticated bearer token for fixture agent B
+#   FIXTURE_AGENT_A_CHANNEL_ID         — channel ID for agent A
+#   FIXTURE_AGENT_B_CHANNEL_ID         — channel ID for agent B (not A's)
+#
+# Results are archived as build artifacts for 90-day audit retention.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 03:00 UTC every night
+  push:
+    branches:
+      - main
+    paths:
+      - 'F0X/mcp-server/src/relay-client.ts'
+      - 'F0X/mcp-server/src/tools.ts'
+      - 'F0X/mcp-server/src/index.ts'
+      - 'F0X/mcp-server/src/identity.ts'
+      - 'F0X/mcp-server/src/security-profile.ts'
+      - 'F0X/mcp-server/src/abuse-detection.ts'
+      - 'F0X/mcp-server/src/integration-policy.ts'
+      - 'F0X/mcp-server/src/payload-policy.ts'
+      - 'F0X/mcp-server/scripts/**'
+  pull_request:
+    paths:
+      - 'F0X/mcp-server/src/relay-client.ts'
+      - 'F0X/mcp-server/src/tools.ts'
+      - 'F0X/mcp-server/src/index.ts'
+      - 'F0X/mcp-server/src/identity.ts'
+      - 'F0X/mcp-server/src/security-profile.ts'
+      - 'F0X/mcp-server/src/abuse-detection.ts'
+      - 'F0X/mcp-server/src/integration-policy.ts'
+      - 'F0X/mcp-server/src/payload-policy.ts'
+      - 'F0X/mcp-server/scripts/**'
+
+defaults:
+  run:
+    working-directory: F0X/mcp-server
+
+jobs:
+  static-security:
+    name: Static Security Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: F0X/mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Static security check
+        run: npm run security:check
+
+      - name: Integration conformance check
+        run: npm run security:conformance
+
+      - name: Build
+        run: npm run build
+
+  live-security:
+    name: Live Security Tests (fixture relay)
+    runs-on: ubuntu-latest
+    needs: static-security
+    # Only run live tests when fixture secrets are available.
+    # On nightly runs from main, secrets are always injected.
+    # On PRs from forks, secrets are not available — this job is skipped gracefully.
+    if: |
+      vars.FIXTURE_RELAY_AVAILABLE == 'true' ||
+      (github.event_name == 'schedule') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: F0X/mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run live security checks
+        env:
+          RELAY_URL: ${{ secrets.FIXTURE_RELAY_URL }}
+          SECURITY_TEST_AGENT_A_TOKEN: ${{ secrets.FIXTURE_AGENT_A_TOKEN }}
+          SECURITY_TEST_AGENT_B_TOKEN: ${{ secrets.FIXTURE_AGENT_B_TOKEN }}
+          SECURITY_TEST_AGENT_A_CHANNEL_ID: ${{ secrets.FIXTURE_AGENT_A_CHANNEL_ID }}
+          SECURITY_TEST_AGENT_B_CHANNEL_ID: ${{ secrets.FIXTURE_AGENT_B_CHANNEL_ID }}
+          # Logout revocation is REQUIRED in nightly; never skip here.
+          SECURITY_TEST_SKIP_LOGOUT: '0'
+        run: npm run security:live -- 2>&1 | tee live-security-results.json
+
+      - name: Archive live security results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-security-results-${{ github.run_id }}
+          path: F0X/mcp-server/live-security-results.json
+          retention-days: 90
+
+  deployment-preflight:
+    name: Deployment Preflight (staging dry-run)
+    runs-on: ubuntu-latest
+    needs: static-security
+    if: github.event_name == 'schedule' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: F0X/mcp-server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run deployment guard (staging profile)
+        env:
+          F0X_SECURITY_PROFILE: staging
+          RELAY_URL: ${{ secrets.FIXTURE_RELAY_URL || 'https://placeholder.example.com' }}
+          AGENT_IDENTITY_DIR: /tmp/f0x-preflight-test
+          F0X_OPERATOR_ID: ci-preflight-operator
+          AGENT_LABEL: ci-preflight-agent
+          # Use a long, high-entropy passphrase for the CI preflight test
+          F0X_IDENTITY_PASSPHRASE: ${{ secrets.CI_PREFLIGHT_PASSPHRASE || 'ci-preflight-long-high-entropy-passphrase-2024' }}
+        run: |
+          mkdir -p /tmp/f0x-preflight-test
+          chmod 700 /tmp/f0x-preflight-test
+          node scripts/deployment-guard.mjs --profile=staging || true
+
+  required-checks-summary:
+    name: Required Security Checks Summary
+    runs-on: ubuntu-latest
+    needs: [static-security]
+    if: always()
+    steps:
+      - name: Check static security result
+        run: |
+          if [ "${{ needs.static-security.result }}" != "success" ]; then
+            echo "FAIL: Static security checks did not pass."
+            exit 1
+          fi
+          echo "PASS: All required security checks passed."
