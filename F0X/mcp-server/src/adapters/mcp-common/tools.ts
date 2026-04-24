@@ -6,8 +6,8 @@
  * managed internally by the server process.
  */
 
-import { RelayAuthError, RelayRateLimitError, type RelayClient, type AgentProfile, type Channel, type MessageEnvelope } from './relay-client.js';
-import type { AgentIdentityFile, ChannelKeyFile } from './identity.js';
+import { RelayAuthError, RelayRateLimitError, type RelayClient, type AgentProfile, type Channel, type MessageEnvelope } from '../../core/relay-client.js';
+import type { AgentIdentityFile, ChannelKeyFile } from '../../core/identity.js';
 import {
   signChallenge,
   wrapChannelKey,
@@ -19,12 +19,12 @@ import {
   generateChannelKey,
   bytesToBase64,
   randomUUID
-} from './crypto.js';
+} from '../../core/crypto.js';
 import {
   loadChannelKey,
   saveChannelKey,
   incrementReplayCounter
-} from './identity.js';
+} from '../../core/identity.js';
 import {
   recordAuthFailure,
   recordRateLimitIncident,
@@ -32,12 +32,12 @@ import {
   recordReplayRejection,
   recordSignatureFailure,
   recordTimestampSkew
-} from './security-observability.js';
-import { assertRateLimit } from './rate-limiter.js';
-import { markSendDelivered, markSendPending } from './send-recovery.js';
-import { validateSignedTimestamp } from './timestamp-guard.js';
-import { scanForPolicyViolations } from './integration-policy.js';
-import { detectAgentHost } from './core/runtime.js';
+} from '../../core/security-observability.js';
+import { assertRateLimit } from '../../core/rate-limiter.js';
+import { markSendDelivered, markSendPending } from '../../core/send-recovery.js';
+import { validateSignedTimestamp } from '../../core/timestamp-guard.js';
+import { scanForPolicyViolations } from '../../core/integration-policy.js';
+import { detectAgentHost } from '../../core/runtime.js';
 
 // ─── Shared state (injected at server startup) ────────────────────────────────
 

@@ -4,8 +4,8 @@
  * Returns plain typed values — no MCP formatting here.
  */
 
-import { RelayAuthError, RelayRateLimitError, type RelayClient, type Channel, type MessageEnvelope } from '../relay-client.js';
-import type { AgentIdentityFile } from '../identity.js';
+import { RelayAuthError, RelayRateLimitError, type RelayClient, type Channel, type MessageEnvelope } from './relay-client.js';
+import type { AgentIdentityFile } from './identity.js';
 import {
   signChallenge,
   wrapChannelKey,
@@ -16,12 +16,12 @@ import {
   verifyEnvelopeSignature,
   generateChannelKey,
   randomUUID
-} from '../crypto.js';
+} from './crypto.js';
 import {
   loadChannelKey,
   saveChannelKey,
   incrementReplayCounter
-} from '../identity.js';
+} from './identity.js';
 import {
   recordAuthFailure,
   recordRateLimitIncident,
@@ -29,10 +29,10 @@ import {
   recordReplayRejection,
   recordSignatureFailure,
   recordTimestampSkew
-} from '../security-observability.js';
-import { assertRateLimit } from '../rate-limiter.js';
-import { markSendDelivered, markSendPending } from '../send-recovery.js';
-import { validateSignedTimestamp } from '../timestamp-guard.js';
+} from './security-observability.js';
+import { assertRateLimit } from './rate-limiter.js';
+import { markSendDelivered, markSendPending } from './send-recovery.js';
+import { validateSignedTimestamp } from './timestamp-guard.js';
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 

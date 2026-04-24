@@ -6,7 +6,9 @@
   "main": "dist/index.js",
   "bin": {
     "f0x-chat-mcp": "dist/index.js",
-    "f0x-chat": "dist/cli.js"
+    "f0x-chat-mcp-hermes": "dist/adapters/hermes-mcp/index.js",
+    "f0x-chat-mcp-openclaw": "dist/adapters/openclaw-mcp/index.js",
+    "f0x-chat": "dist/adapters/cli-ui/cli.js"
   },
   "files": [
     "dist/**/*",
@@ -21,7 +23,7 @@
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "start:sse": "node dist/index.js --sse",
-    "start:ui": "node dist/cli.js ui",
+    "start:ui": "node dist/adapters/cli-ui/cli.js ui",
     "typecheck": "tsc --noEmit",
     "security:check": "node scripts/security-check.mjs",
     "security:live": "node scripts/security-live-check.mjs",

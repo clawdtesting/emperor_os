@@ -30,11 +30,11 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { defaultIdentityDir, loadOrCreateIdentity, runLocalIntegrityChecks } from '../identity.js';
-import { RelayClient } from '../relay-client.js';
-import { enforceSecurityProfile, resolveSecurityProfile, type SecurityProfile } from '../security-profile.js';
-import { enforceTenantBinding } from '../tenant-binding.js';
-import { listPendingSends } from '../send-recovery.js';
+import { defaultIdentityDir, loadOrCreateIdentity, runLocalIntegrityChecks } from './identity.js';
+import { RelayClient } from './relay-client.js';
+import { enforceSecurityProfile, resolveSecurityProfile, type SecurityProfile } from './security-profile.js';
+import { enforceTenantBinding } from './tenant-binding.js';
+import { listPendingSends } from './send-recovery.js';
 import type { F0XSession } from './ops.js';
 
 // ─── Host detection ───────────────────────────────────────────────────────────

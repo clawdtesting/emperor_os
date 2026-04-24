@@ -7,8 +7,8 @@
  * Run via: npm run security:conformance
  *
  * This script is a CI required check for any PR that modifies:
- *   - src/integration-policy.ts
- *   - src/tools.ts (wrapMessageContent / sanitizeMessageText)
+ *   - src/core/integration-policy.ts
+ *   - src/adapters/mcp-common/tools.ts (wrapMessageContent / sanitizeMessageText)
  *   - Any adapter system prompt template
  *
  * Exit codes:
@@ -23,10 +23,10 @@ import { join } from 'node:path';
 // this runs before build in some CI flows. Key phrases are stable constants.
 
 const ROOT = process.cwd();
-const policyPath = join(ROOT, 'src', 'integration-policy.ts');
+const policyPath = join(ROOT, 'src', 'core', 'integration-policy.ts');
 
 if (!existsSync(policyPath)) {
-  console.error('integration-conformance: src/integration-policy.ts not found.');
+  console.error('integration-conformance: src/core/integration-policy.ts not found.');
   process.exit(1);
 }
 
@@ -129,7 +129,7 @@ check(
 );
 
 // ── 6. tools.ts wrapMessageContent references untrusted boundary ─────────────
-const toolsPath = join(ROOT, 'src', 'tools.ts');
+const toolsPath = join(ROOT, 'src', 'adapters', 'mcp-common', 'tools.ts');
 if (existsSync(toolsPath)) {
   const toolsSource = readFileSync(toolsPath, 'utf8');
   check(
@@ -141,7 +141,7 @@ if (existsSync(toolsPath)) {
     toolsSource.includes('sanitizeMessageText')
   );
 } else {
-  console.warn('[SKIP] src/tools.ts not found — skipping tools conformance checks');
+  console.warn('[SKIP] src/adapters/mcp-common/tools.ts not found — skipping tools conformance checks');
 }
 
 // ── 7. Integration policy module is imported or referenced in tools ───────────

@@ -28,42 +28,42 @@ function run() {
 
   // Prompt-injection containment: non-TTY confirm must auto-deny.
   mustContain(
-    'src/tools.ts',
+    'src/adapters/mcp-common/tools.ts',
     /F0X_confirm_action called in non-TTY mode — auto-denied/,
     'non-TTY auto-deny guard for F0X_confirm_action'
   );
 
   // Crypto trust boundary: verify signature before decrypt in F0X_read.
   mustContain(
-    'src/tools.ts',
+    'src/adapters/mcp-common/tools.ts',
     /if \(!signatureValid\)\s*{\s*recordSignatureFailure[\s\S]*Refusing to decrypt untrusted envelope/,
     'signature verification gate before decryption in F0X_read'
   );
 
   // Auth/authz behavior: 401/403 must trigger explicit auth error type.
   mustContain(
-    'src/relay-client.ts',
+    'src/core/relay-client.ts',
     /if \(res\.status === 401 \|\| res\.status === 403\)[\s\S]*RelayAuthError/,
     'relay 401/403 typed auth failure handling'
   );
 
   // Flood handling: 429 must be explicit and non-silent.
   mustContain(
-    'src/relay-client.ts',
+    'src/core/relay-client.ts',
     /if \(res\.status === 429\)[\s\S]*RelayRateLimitError/,
     'relay 429 typed rate-limit handling'
   );
 
   // Continuity boundary: no silent identity regeneration when continuity exists.
   mustContain(
-    'src/identity.ts',
+    'src/core/identity.ts',
     /Refusing to silently regenerate identity/,
     'identity continuity fail-closed behavior'
   );
 
   // Recovery boundary: pending send journal must exist.
   mustContain(
-    'src/send-recovery.ts',
+    'src/core/send-recovery.ts',
     /markSendPending[\s\S]*status: 'pending'/,
     'pending send journaling before relay side effect'
   );
@@ -76,31 +76,31 @@ function run() {
 
   // Replay hardening: bounded signed timestamp skew validation is enforced.
   mustContain(
-    'src/tools.ts',
+    'src/adapters/mcp-common/tools.ts',
     /validateSignedTimestamp\(env\.timestamp/,
     'signed envelope timestamp skew validation in MCP read path'
   );
 
   mustContain(
-    'src/relay-client.ts',
+    'src/core/relay-client.ts',
     /return `\$\{this\.baseUrl\}\/api\/relay\/events`;/,
     'SSE URL must not include bearer token query parameter'
   );
 
   mustContain(
-    'src/cli.ts',
+    'src/adapters/cli-ui/cli.ts',
     /execFile\('open', \[url\]\)|execFile\('xdg-open', \[url\]\)/,
     'browser launcher must use execFile with argument arrays'
   );
 
   mustContain(
-    'src/security-profile.ts',
+    'src/core/security-profile.ts',
     /if \(profile === 'prod' \|\| profile === 'staging'\)[\s\S]*F0X_IDENTITY_PASSPHRASE/,
     'staging/prod passphrase enforcement in security profile'
   );
 
   mustContain(
-    'src/tools.ts',
+    'src/adapters/mcp-common/tools.ts',
     /enforceApprovalPolicy\(ctx, 'F0X_send'/,
     'non-dev side-effect approval gate for send'
   );
@@ -109,21 +109,21 @@ function run() {
 
   // Item 1: Relay metadata minimization module exists with padding support.
   mustExist(
-    'src/metadata-minimization.ts',
+    'src/core/metadata-minimization.ts',
     'relay metadata minimization module'
   );
   mustContain(
-    'src/metadata-minimization.ts',
+    'src/core/metadata-minimization.ts',
     /padPlaintext/,
     'payload padding function present in metadata-minimization'
   );
   mustContain(
-    'src/metadata-minimization.ts',
+    'src/core/metadata-minimization.ts',
     /startCoverTraffic/,
     'cover traffic function present in metadata-minimization'
   );
   mustContain(
-    'src/metadata-minimization.ts',
+    'src/core/metadata-minimization.ts',
     /getChannelPolicy/,
     'channel sensitivity policy function present in metadata-minimization'
   );
@@ -147,106 +147,106 @@ function run() {
 
   // Item 3: SSE sequencer module exists with reconciliation support.
   mustExist(
-    'src/sse-sequencer.ts',
+    'src/core/sse-sequencer.ts',
     'SSE sequencer module'
   );
   mustContain(
-    'src/sse-sequencer.ts',
+    'src/core/sse-sequencer.ts',
     /SseSequencer/,
     'SseSequencer class present'
   );
   mustContain(
-    'src/sse-sequencer.ts',
+    'src/core/sse-sequencer.ts',
     /reconcileAfterReconnect/,
     'SSE reconciliation helper present'
   );
   mustContain(
-    'src/sse-sequencer.ts',
+    'src/core/sse-sequencer.ts',
     /gapAlertThreshold|alertGap/,
     'SSE gap alerting present'
   );
 
   // Item 4: Integration policy module exists with denylist + conformance check.
   mustExist(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     'integration policy module'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /FIXED_PROMPT_BOUNDARY_TEMPLATE/,
     'prompt boundary template present in integration-policy'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /ROLE_OVERRIDE_DENYLIST/,
     'role override denylist present in integration-policy'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /RED_TEAM_CORPUS/,
     'red-team corpus present in integration-policy'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /verifyRedTeamCorpus/,
     'verifyRedTeamCorpus function present in integration-policy'
   );
 
   // Item 5: Passphrase entropy validation in security profile.
   mustContain(
-    'src/security-profile.ts',
+    'src/core/security-profile.ts',
     /validatePassphraseStrength/,
     'passphrase entropy validation function present in security-profile'
   );
   mustContain(
-    'src/security-profile.ts',
+    'src/core/security-profile.ts',
     /MIN_PASSPHRASE_LENGTH/,
     'minimum passphrase length constant present in security-profile'
   );
 
   // Item 6: Abuse detection module exists with quarantine support.
   mustExist(
-    'src/abuse-detection.ts',
+    'src/core/abuse-detection.ts',
     'abuse detection module'
   );
   mustContain(
-    'src/abuse-detection.ts',
+    'src/core/abuse-detection.ts',
     /AbuseDetector/,
     'AbuseDetector class present'
   );
   mustContain(
-    'src/abuse-detection.ts',
+    'src/core/abuse-detection.ts',
     /QUARANTINE_THRESHOLD/,
     'quarantine threshold constant present in abuse-detection'
   );
   mustContain(
-    'src/abuse-detection.ts',
+    'src/core/abuse-detection.ts',
     /abuseAuditPath|abuse-audit\.log/,
     'separate abuse audit log path present in abuse-detection'
   );
 
   // Item 7: Payload policy module with limit enforcement and relay verification.
   mustExist(
-    'src/payload-policy.ts',
+    'src/core/payload-policy.ts',
     'payload policy module'
   );
   mustContain(
-    'src/payload-policy.ts',
+    'src/core/payload-policy.ts',
     /DEFAULT_PAYLOAD_LIMITS/,
     'default payload limits constant present in payload-policy'
   );
   mustContain(
-    'src/payload-policy.ts',
+    'src/core/payload-policy.ts',
     /enforcePayloadPolicy/,
     'enforcePayloadPolicy function present in payload-policy'
   );
   mustContain(
-    'src/payload-policy.ts',
+    'src/core/payload-policy.ts',
     /verifyRelayLimits/,
     'verifyRelayLimits function present for relay config verification'
   );
   mustContain(
-    'src/payload-policy.ts',
+    'src/core/payload-policy.ts',
     /getEffectiveLimits/,
     'getEffectiveLimits exported for health/config endpoint'
   );
@@ -288,39 +288,55 @@ function run() {
     'agent host detection present in shared runtime'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /OPENCLAW_BOUNDARY_ADDENDUM/,
     'OpenClaw-specific boundary addendum present in integration-policy'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /buildBoundaryTemplate/,
     'host-aware boundary template builder present in integration-policy'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /openclaw\.json|mcpServers|NODE_OPTIONS/,
     'OpenClaw config-mutation denylist patterns present in integration-policy'
   );
   mustContain(
-    'src/integration-policy.ts',
+    'src/core/integration-policy.ts',
     /OPENCLAW_GATEWAY_TOKEN|F0X_IDENTITY_PASSPHRASE/,
     'OpenClaw secret-exfiltration patterns present in red-team corpus'
   );
   mustContain(
-    'src/tools.ts',
+    'src/adapters/mcp-common/tools.ts',
     /detectAgentHost\(\) === 'openclaw'|OPENCLAW HOST/,
     'wrapMessageContent adds OpenClaw host note when detected'
   );
   mustContain(
-    'src/cli.ts',
+    'src/adapters/cli-ui/cli.ts',
     /--openclaw/,
     'doctor command accepts --openclaw flag'
   );
+  mustExist(
+    'src/adapters/openclaw-mcp/doctor.ts',
+    'OpenClaw doctor module extracted into openclaw-mcp adapter'
+  );
   mustContain(
-    'src/cli.ts',
+    'src/adapters/openclaw-mcp/doctor.ts',
     /OPENCLAW_FORBIDDEN_ENV_KEYS|NODE_OPTIONS.*LD_PRELOAD/s,
     'doctor --openclaw enforces forbidden interpreter-startup env keys'
+  );
+  mustExist(
+    'src/adapters/hermes-mcp/index.ts',
+    'Hermes MCP adapter entry shim'
+  );
+  mustExist(
+    'src/adapters/openclaw-mcp/index.ts',
+    'OpenClaw MCP adapter entry shim'
+  );
+  mustExist(
+    'src/adapters/mcp-common/server.ts',
+    'shared MCP adapter server (transport wiring)'
   );
 
   // Item 9: Deployment guard script exists with machine-verifiable checks.
