@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/components/Layout.tsx","./src/hooks/usePolling.ts","./src/pages/App.tsx","./src/services/api.ts","./src/types/index.ts"],"version":"5.9.3"}

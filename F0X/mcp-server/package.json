@@ -8,7 +8,8 @@
     "f0x-chat-mcp": "dist/index.js",
     "f0x-chat-mcp-hermes": "dist/adapters/hermes-mcp/index.js",
     "f0x-chat-mcp-openclaw": "dist/adapters/openclaw-mcp/index.js",
-    "f0x-chat": "dist/adapters/cli-ui/cli.js"
+    "f0x-chat": "dist/adapters/cli-ui/cli.js",
+    "f0x-chat-dashboard-server": "dist/adapters/web-dashboard/index.js"
   },
   "files": [
     "dist/**/*",
@@ -29,7 +30,8 @@
     "security:live": "node scripts/security-live-check.mjs",
     "security:conformance": "node scripts/integration-conformance-check.mjs",
     "deploy:guard": "node scripts/deployment-guard.mjs",
-    "prepublishOnly": "npm run security:check && npm run security:conformance && npm run build"
+    "prepublishOnly": "npm run security:check && npm run security:conformance && npm run build",
+    "start:dashboard": "node dist/adapters/web-dashboard/index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
