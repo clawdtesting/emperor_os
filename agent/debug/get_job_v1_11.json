@@ -1,0 +1,27 @@
+{
+  "jobId": 11,
+  "status": "Assigned",
+  "employer": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+  "assignedAgent": "0x42629BC07618E07424d7Db62fD4089AF685E20d6",
+  "payout": "10000 AGIALPHA",
+  "payoutRaw": "10000000000000000000000",
+  "duration": "14 days",
+  "assignedAt": "2026-03-18T04:19:23.000Z",
+  "agentPayoutPercentage": 60,
+  "completed": false,
+  "disputed": false,
+  "expired": false,
+  "validation": {
+    "completionRequested": false,
+    "approvals": 0,
+    "disapprovals": 0,
+    "completionRequestedAt": null,
+    "disputedAt": null
+  },
+  "specURI": "ipfs://QmQ5DHNAh6XF5kVUh5dmgp47KuAASDX5MsgixyyDcbsgvs",
+  "completionURI": null,
+  "links": {
+    "jobPage": "https://agialpha.com/jobs",
+    "contract": "https://etherscan.io/address/0xB3AAeb69b630f0299791679c063d68d6687481d1"
+  }
+}

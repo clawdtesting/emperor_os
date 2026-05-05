@@ -76,6 +76,7 @@ function classifyJob(job, ourAddress) {
   const ours = String(ourAddress ?? "").toLowerCase();
 
 // Check for forced-open testing mode via environment variable
+// Check for forced-open testing mode via environment variable
   const forceOpenForTesting = process.env.DISCOVERY_FORCE_OPEN_FOR_TESTING === '1';
   if (forceOpenForTesting && job.jobId != null && Number(job.jobId) === 0) {
     console.log(`[discover] WARNING: forced-open testing mode enabled; do not use in production`);
@@ -139,16 +140,9 @@ export async function discover() {
 
   const sliced = allRawJobs.slice(0, CONFIG.DISCOVER_LIMIT);
 
-  const forceOpenForTesting = process.env.DISCOVERY_FORCE_OPEN_FOR_TESTING === '1';
-  const jobsListed = allRawJobs.length;
-  let jobsFetched = 0;
-  let openCandidates = 0;
-  let skippedCompleted = 0;
-  let skippedDisputed = 0;
-  let skippedAssignedToOthers = 0;
-  let reviewPacketsWritten = 0;
-  let trackedAssigned = 0;
+  let discovered = 0;
   let skipped = 0;
+  let trackedAssigned = 0;
 
   for (const entry of sliced) {
     const rough = normalizeJob(entry);
@@ -164,8 +158,8 @@ export async function discover() {
 
     try {
       normalizeJobId(rough.jobId);
-    } catch (err) {
-      console.log(`[discover] skip invalid jobId from list_jobs: ${JSON.stringify(rough.jobId)}`, err.message);
+    } catch {
+      console.log(`[discover] skip invalid jobId from list_jobs: ${JSON.stringify(rough.jobId)}`);
       skipped += 1;
       continue;
     }
@@ -197,11 +191,10 @@ export async function discover() {
 
     const classification = classifyJob(fullJob, CONFIG.AGENT_ADDRESS);
     // Debug: log the job details for classification
-    if (process.env.MCP_DEBUG === '1') {
-      console.log(`[discover] jobId=${fullJob.jobId} raw status: "${fullJob.status}" normalized: "${String(fullJob.status ?? "").trim().toLowerCase()}" classification: ${JSON.stringify(classification)}`);
-    }
+    console.log(`[discover] jobId=${fullJob.jobId} raw status: "${fullJob.status}" normalized: "${String(fullJob.status ?? "").trim().toLowerCase()}" classification: ${JSON.stringify(classification)}`);
+    
     // For debugging: let's see what jobs we actually have
-    if (process.env.MCP_DEBUG === '1') {
+    if (fullJob.jobId <= 11) {
       console.log(`[discover] DEBUG: Full job ${fullJob.jobId} data:`, {
         jobId: fullJob.jobId,
         status: fullJob.status,
@@ -212,22 +205,9 @@ export async function discover() {
         specURI: fullJob.jobSpecURI
       });
     }
+
     if (classification.action === "skip") {
       console.log(`[discover] skip ${fullJob.jobId}: ${classification.reason}`);
-      switch (classification.reason) {
-        case "completed":
-          skippedCompleted += 1;
-          break;
-        case "disputed":
-          skippedDisputed += 1;
-          break;
-        case "assigned to another agent":
-          skippedAssignedToOthers += 1;
-          break;
-        default:
-          // other skip reasons
-          break;
-      }
       skipped += 1;
       continue;
     }
@@ -326,12 +306,7 @@ export async function discover() {
       specNormalized: { path: "spec.normalized.json", mimeType: "application/json" },
       decision: decisionObj
     };
-    const reviewPacket = buildDiscoveryReviewPacket(normalized.jobId, artifacts, {
-      protocol: version,
-      source: "agialpha-mcp",
-      rawJobId: fullJob.jobId,
-      canonicalJobId: normalized.jobId
-    });
+    const reviewPacket = buildDiscoveryReviewPacket(normalized.jobId, artifacts);
     await writeJson(path.join(artifactPaths.dir, "discovery_review_packet.json"), reviewPacket);
 
     // Update state to review_pending with decision and score
@@ -347,11 +322,10 @@ export async function discover() {
       `[discover] processed ${versionedJobId}: decision=${decision} (score: ${scoreResult.score})`
     );
 
-    openCandidates += 1;
-    reviewPacketsWritten += 1;
+    discovered += 1;
   }
 
   console.log(
-    `[discover] jobs listed=${jobsListed} jobs fetched=${jobsFetched} open candidates=${openCandidates} skipped completed=${skippedCompleted} skipped disputed=${skippedDisputed} skipped assigned to others=${skippedAssignedToOthers} review packets written=${reviewPacketsWritten} forced-open mode=${forceOpenForTesting ? 'enabled' : 'disabled'}`
+    `[discover] discovered=${discovered} trackedAssigned=${trackedAssigned} skipped=${skipped}`
   );
 }

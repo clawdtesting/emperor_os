@@ -1,0 +1,106 @@
+{
+  "jobId": "v1_001",
+  "status": "storage_verified",
+  "operatorTx": {},
+  "stageIdempotency": {
+    "execute": {
+      "key": "execute:v1_001:completed",
+      "claimedAt": "2026-05-04T23:32:35.375Z"
+    },
+    "storage_stage": {
+      "key": "storage_stage:v1_001:completed",
+      "claimedAt": "2026-05-05T19:22:14.886Z"
+    }
+  },
+  "attempts": {
+    "apply": 0,
+    "execute": 3,
+    "submit": 0,
+    "storage": 3,
+    "completionPackage": 2,
+    "validatorActionPackage": 1
+  },
+  "createdAt": "2026-05-04T23:27:00.589Z",
+  "updatedAt": "2026-05-05T22:04:23.919Z",
+  "contractVersion": "v1",
+  "source": "fixture",
+  "discoveredAt": "2026-05-04T23:27:00.589Z",
+  "title": "Fixture Job for Apply Testing",
+  "category": "testing",
+  "payout": "1000",
+  "durationSeconds": 86400,
+  "specUri": null,
+  "details": "This is a fixture job for testing the apply flow. Not a real job.",
+  "rawJob": {},
+  "rawSpec": {},
+  "decision": "accept_candidate",
+  "score": 0.8,
+  "scoreReason": "fixture test job",
+  "reviewedAt": "2026-05-04T23:27:00.589Z",
+  "statusHistory": [
+    {
+      "status": "review_pending",
+      "at": "2026-05-04T23:27:00.589Z"
+    },
+    {
+      "status": "apply_ready",
+      "at": "2026-05-04T23:32:35.309Z"
+    },
+    {
+      "status": "deliverable_ready",
+      "at": "2026-05-04T23:32:35.381Z"
+    },
+    {
+      "status": "storage_pending",
+      "at": "2026-05-05T19:42:55.628Z"
+    },
+    {
+      "status": "storage_verified",
+      "at": "2026-05-05T20:16:10.720Z"
+    },
+    {
+      "status": "completion_package_ready",
+      "at": "2026-05-05T20:22:15.376Z"
+    },
+    {
+      "status": "deliverable_ready",
+      "at": "2026-05-05T20:42:04.567Z"
+    },
+    {
+      "status": "storage_verified",
+      "at": "2026-05-05T20:49:35.523Z"
+    },
+    {
+      "status": "storage_verified",
+      "at": "2026-05-05T21:57:04.697Z"
+    }
+  ],
+  "artifactDir": "/home/emperor/workspace/emperor_os/artifacts/job_v1_001",
+  "statusMetadata": {
+    "semanticMeaning": "artifacts_verified_locally_and_published_with_fetchback",
+    "artifactManifestVerified": true,
+    "externalStoragePublished": true,
+    "fetchbackVerified": true,
+    "jobCompletionUri": "ipfs://QmRE4YHbszJqHi4qb4gmY1uirw4f6KcRijWhJ2W3acynW2",
+    "txPackageBuilt": false,
+    "signed": false,
+    "broadcast": false,
+    "requiresHumanApproval": true,
+    "nextStage": "completion_package_build",
+    "validatorActionPackageBuilt": true,
+    "requiresHumanValidatorSigning": true
+  },
+  "executedAt": "2026-05-05T20:42:04.547Z",
+  "executionMode": "deterministic/local",
+  "artifactManifest": {
+    "path": "artifact_manifest.json",
+    "schema": "emperor-os/artifact-manifest/v1"
+  },
+  "stagedAt": "2026-05-05T19:42:55.628Z",
+  "storagePublishedAt": "2026-05-05T20:49:35.522Z",
+  "completionPackageBuiltAt": "2026-05-05T20:31:38.480Z",
+  "completionPackage": {
+    "completionReviewPacketPath": "/home/emperor/workspace/emperor_os/artifacts/job_v1_001/completion_review_packet.json",
+    "unsignedCompletionTxPath": "/home/emperor/workspace/emperor_os/artifacts/job_v1_001/unsigned_completion_tx.json"
+  }
+}

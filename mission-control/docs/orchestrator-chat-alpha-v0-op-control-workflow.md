@@ -1,11 +1,11 @@
-# Orchestrator Chat Alpha v0 onboarding workflow for Op-control
+# F0x relay onboarding workflow for Op-control
 
 Purpose: move `/home/emperor/workspace/Orchestrator-node/orchestratorchatalphav0` from "planned scaffold" to a usable project entry in Op-control without weakening human-sign or deterministic review boundaries.
 
 ## Current state
 
 What exists now:
-- Op-control already lists `Orchestrator Chat Alpha v0` as a project adapter.
+- Op-control already lists `F0x relay` as a project adapter.
 - The source app exists at `/home/emperor/workspace/Orchestrator-node/orchestratorchatalphav0`.
 - The app is a standalone Next.js 13 project with:
   - `npm run build`
@@ -30,7 +30,7 @@ What does not exist yet:
 ## Target operator experience
 
 From Op-control Projects page:
-1. Operator sees `Orchestrator Chat Alpha v0`.
+1. Operator sees `F0x relay`.
 2. If deployment is not configured, card shows honest status:
    - "Render deployment not configured"
    - "Requires MetaMask-compatible browser wallet"
@@ -131,7 +131,7 @@ This can stay metadata-driven initially.
 
 Only if needed for this product later.
 
-If Orchestrator Chat Alpha v0 needs to hand artifacts or state back into Op-control, implement a separate explicit bridge:
+If F0x relay needs to hand artifacts or state back into Op-control, implement a separate explicit bridge:
 - import/review package upload or URL handoff
 - deterministic validation rules for accepted artifacts
 - unsigned-only packaging for anything on-chain

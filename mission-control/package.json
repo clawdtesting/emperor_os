@@ -9,7 +9,8 @@
     "build": "npm run check:conflicts && npm run check:exports && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check:exports": "node scripts/check-duplicate-exports.mjs"
+    "check:exports": "node scripts/check-duplicate-exports.mjs",
+    "start": "vite preview"
   },
   "dependencies": {
     "cors": "^2.8.6",

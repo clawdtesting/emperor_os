@@ -1,0 +1,74 @@
+services:
+  - type: web
+    name: emperor-os-opcontrol
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AGI_ALPHA_MCP
+        value: https://agialpha.com/api/mcp
+      - key: AGENT_ADDRESS
+        fromService:
+          name: emperor-os-agent
+          property: AGENT_ADDRESS
+      - key: PINATA_JWT
+        fromService:
+          name: emperor-os-storage
+          property: PINATA_JWT
+      - key: OPENROUTER_API_KEY
+        fromService:
+          name: emperor-os-ai
+          property: OPENROUTER_API_KEY
+      - key: ETH_RPC_URL
+        fromService:
+          name: emperor-os-blockchain
+          property: ETH_RPC_URL
+      - key: ETH_RPC_WS
+        fromService:
+          name: emperor-os-blockchain
+          property: ETH_RPC_WS
+      - key: AGENT_SUBDOMAIN
+        fromService:
+          name: emperor-os-agent
+          property: AGENT_SUBDOMAIN
+      - key: MIN_PAYOUT_AGIALPHA
+        value: "500"
+      - key: MAX_ACTIVE_JOBS
+        value: "3"
+      - key: DISCOVER_LIMIT
+        value: "50"
+      - key: LOOP_BASE_DELAY_MS
+        value: "15000"
+      - key: LOOP_MAX_DELAY_MS
+        value: "300000"
+      - key: LOOP_BACKOFF_MULTIPLIER
+        value: "2"
+      - key: LOOP_BACKOFF_JITTER_MS
+        value: "1000"
+      - key: STATE_TTL_DAYS
+        value: "30"
+      - key: MAX_STATE_FILES
+        value: "5000"
+      - key: MIN_CONFIDENCE_TO_APPLY
+        value: "0.4"
+      - key: MAX_ACCEPTABLE_DIFFICULTY
+        value: "0.75"
+      - key: MIN_EXECUTION_CONFIDENCE
+        value: "0.55"
+      - key: ENABLE_RED_FLAG_HARD_SKIP
+        value: "true"
+      - key: CREATED_VIA
+        value: "emperor-os-agent"
+      - key: LOCALE
+        value: "en-US"
+      - key: CONTRACT
+        value: "0xB3AAeb69b630f0299791679c063d68d6687481d1"
+      - key: CHAIN_ID
+        value: "1"
+      - key: MIN_ARTIFACT_CHARS
+        value: "500"
+    healthCheckPath: /health
+    autoDeploy: true

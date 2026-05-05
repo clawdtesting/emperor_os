@@ -1,0 +1,1 @@
+"MCP error -32602: Input validation error: Invalid arguments for tool fetch_job_metadata: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"number\",\n    \"received\": \"string\",\n    \"path\": [\n      \"jobId\"\n    ],\n    \"message\": \"Expected number, received string\"\n  }\n]"

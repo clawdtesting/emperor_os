@@ -96,9 +96,6 @@ export const JOB_STATUS = {
   ASSIGNED: "assigned",
   WORKING: "working",
   DELIVERABLE_READY: "deliverable_ready",
-  STORAGE_PENDING: "storage_pending",
-  STORAGE_VERIFIED: "storage_verified",
-  COMPLETION_PACKAGE_READY: "completion_package_ready",
   PUBLICATION_PENDING: "publication_pending",
   COMPLETION_PENDING_REVIEW: "completion_pending_review",
   SUBMITTED: "submitted",
@@ -149,27 +146,9 @@ const VALID_TRANSITIONS = {
   [JOB_STATUS.ASSIGNED]: [JOB_STATUS.WORKING, JOB_STATUS.DELIVERABLE_READY, JOB_STATUS.FAILED],
   [JOB_STATUS.WORKING]: [JOB_STATUS.ASSIGNED, JOB_STATUS.DELIVERABLE_READY, JOB_STATUS.FAILED],
   [JOB_STATUS.DELIVERABLE_READY]: [
-    JOB_STATUS.STORAGE_PENDING,
-    JOB_STATUS.STORAGE_VERIFIED,
     JOB_STATUS.PUBLICATION_PENDING,
     JOB_STATUS.COMPLETION_PENDING_REVIEW,
     JOB_STATUS.FAILED,
-  ],
-  [JOB_STATUS.STORAGE_PENDING]: [
-    JOB_STATUS.STORAGE_VERIFIED,
-    JOB_STATUS.FAILED,
-    JOB_STATUS.DELIVERABLE_READY
-  ],
-  [JOB_STATUS.STORAGE_VERIFIED]: [
-    JOB_STATUS.COMPLETION_PACKAGE_READY,
-    JOB_STATUS.FAILED,
-    JOB_STATUS.STORAGE_PENDING
-  ],
-  [JOB_STATUS.COMPLETION_PACKAGE_READY]: [
-    JOB_STATUS.DELIVERABLE_READY,
-    JOB_STATUS.STORAGE_PENDING,
-    JOB_STATUS.STORAGE_VERIFIED,
-    JOB_STATUS.FAILED
   ],
   [JOB_STATUS.PUBLICATION_PENDING]: [
     JOB_STATUS.DELIVERABLE_READY,
@@ -186,8 +165,7 @@ const VALID_TRANSITIONS = {
   [JOB_STATUS.APPLY_READY]: [
     JOB_STATUS.APPLIED,
     JOB_STATUS.REJECTED,
-    JOB_STATUS.SKIPPED,
-    JOB_STATUS.DELIVERABLE_READY
+    JOB_STATUS.SKIPPED
   ]
 };
 
@@ -444,4 +422,46 @@ export async function pruneStateFiles() {
     maxStateFiles: CONFIG.MAX_STATE_FILES,
     archiveIndexDir: ARCHIVE_INDEX_DIR,
   };
+}
+function parseInputJobId(rawJobId) {
+  const input = String(rawJobId ?? "").trim();
+  if (!input) throw new Error("Missing jobId");
+
+  const versioned = input.match(/^(v1|v2|prime)_(\\d+)$/i);
+  if (versioned) {
+    return { explicitVersion: versioned[1].toLowerCase(), numericId: versioned[2] };
+  }
+
+  if (!/^\\d+$/.test(input)) {
+    throw new Error(`Invalid jobId format: ${rawJobId}. Expected <numeric> or <v1|v2|prime>_<numeric>.`);
+  }
+
+  return { explicitVersion: null, numericId: input };
+}
+
+export async function resolveVersionedJobId(rawJobId) {
+  const { explicitVersion, numericId } = parseInputJobId(rawJobId);
+
+  if (explicitVersion) {
+    return `${explicitVersion}_${numericId}`;
+  }
+
+  const candidates = [`v1_${numericId}`, `v2_${numericId}`, `prime_${numericId}`];
+  const existing = [];
+  for (const candidate of candidates) {
+    const state = await getJobState(candidate);
+    if (state) existing.push(candidate);
+  }
+
+  if (existing.length === 1) return existing[0];
+  if (existing.length > 1) {
+    throw new Error(
+      `Ambiguous jobId ${numericId}. Matching states: ${existing.join(", ")}. Use explicit versioned ID.`
+    );
+  }
+
+  // fail closed: no silent assumptions
+  throw new Error(
+    `No state found for jobId ${numericId}. Tried: ${candidates.join(", ")}. Use explicit versioned ID if needed.`
+  );
 }

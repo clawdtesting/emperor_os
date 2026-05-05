@@ -8,7 +8,9 @@ export const ARTIFACTS_ROOT = path.join(CONFIG.WORKSPACE_ROOT, "artifacts");
 export const DEBUG_ROOT = path.join(CONFIG.WORKSPACE_ROOT, "debug");
 
 export function getJobArtifactDir(jobId) {
-  return path.join(ARTIFACTS_ROOT, String(jobId).includes("_") ? jobId : `job_${normalizeJobId(jobId)}`);
+  const isUnderscoreStyle = String(jobId).includes("_");
+  const base = isUnderscoreStyle ? jobId : normalizeJobId(jobId);
+  return path.join(ARTIFACTS_ROOT, `job_${base}`);
 }
 
 export async function ensureWorkspaceArtifactDirs() {
@@ -53,6 +55,16 @@ export async function writeText(filePath, text) {
   const tmp = `${filePath}.tmp.${Date.now()}.${Buffer.from(filePath).toString('hex').slice(0, 6)}`;
   await fs.writeFile(tmp, text, "utf8");
   await fs.rename(tmp, filePath);
+}
+
+export async function readJson(filePath) {
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code === "ENOENT") return null;
+    throw err;
+  }
 }
 
 export async function readText(filePath) {

@@ -1,0 +1,67 @@
+{
+  "archivedAt": "2026-05-04T00:48:06.679Z",
+  "originalJobId": "v1_0",
+  "reason": "Forced-open test artifact from completed Job 0 during testing",
+  "originalState": {
+    "jobId": "v1_0",
+    "status": "review_pending",
+    "operatorTx": {},
+    "stageIdempotency": {},
+    "attempts": {
+      "apply": 0,
+      "execute": 0,
+      "submit": 0
+    },
+    "createdAt": "2026-05-03T23:53:53.682Z",
+    "updatedAt": "2026-05-03T23:53:53.686Z",
+    "contractVersion": "v1",
+    "source": "agialpha-mcp",
+    "discoveredAt": "2026-05-03T23:53:53.680Z",
+    "title": "Job 0",
+    "category": "other",
+    "payout": "88888",
+    "durationSeconds": 259200,
+    "specUri": "ipfs://bafkreie75ykl5o5mg3yuihxjn26rwwce5nyz5mo4k66l4lc2wmgkkdi4qe",
+    "details": "",
+    "rawJob": {
+      "jobId": 0,
+      "status": "Completed",
+      "employer": "0xa9eD0539c2fbc5C6BC15a2E168bd9BCd07c01201",
+      "assignedAgent": "0x3B7205E05D015D06323B432E9813bCb3fe86adf7",
+      "payout": "88888 AGIALPHA",
+      "payoutRaw": "88888000000000000000000",
+      "duration": "3 days",
+      "assignedAt": "2026-03-06T22:57:47.000Z",
+      "agentPayoutPercentage": 80,
+      "completed": true,
+      "disputed": false,
+      "expired": false,
+      "validation": {
+        "completionRequested": true,
+        "approvals": 7,
+        "disapprovals": 0,
+        "completionRequestedAt": "2026-03-07T00:11:35.000Z",
+        "disputedAt": null
+      },
+      "specURI": "ipfs://bafkreie75ykl5o5mg3yuihxjn26rwwce5nyz5mo4k66l4lc2wmgkkdi4qe",
+      "completionURI": "ipfs://bafkreigz2nznh42izu47ftvu5u67ofw2mm5qpua772m7dopaumqoukn3lu",
+      "links": {
+        "jobPage": "https://agialpha.com/jobs",
+        "contract": "https://etherscan.io/address/0xB3AAeb69b630f0299791679c063d68d6687481d1"
+      }
+    },
+    "rawSpec": "MCP error -32602: Input validation error: Invalid arguments for tool fetch_job_metadata: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"number\",\n    \"received\": \"string\",\n    \"path\": [\n      \"jobId\"\n    ],\n    \"message\": \"Expected number, received string\"\n  }\n]",
+    "artifactDir": "/home/emperor/workspace/emperor_os/artifacts/job_v1_0",
+    "decision": "reject",
+    "score": 0,
+    "scoreReason": "not open",
+    "reviewedAt": "2026-05-03T23:53:53.686Z",
+    "statusHistory": [
+      {
+        "status": "review_pending",
+        "at": "2026-05-03T23:53:53.686Z"
+      }
+    ]
+  },
+  "note": "This job was created via DISCOVERY_FORCE_OPEN_FOR_TESTING=1 and should not appear in active review queue"
+}

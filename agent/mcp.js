@@ -220,15 +220,83 @@ export async function listJobs() {
   if (!Array.isArray(result)) {
     throw new Error("[MCP:list_jobs] expected array");
   }
+  console.log(`[MCP:list_jobs] returned ${result.length} jobs`);
+  if (result.length > 0) {
+    const first = result[0];
+    console.log(`[MCP:list_jobs] first element keys: ${Object.keys(first).join(", ")}`);
+    // Log a few sample values if they are not secrets
+    if (first.jobId !== undefined) {
+      console.log(`[MCP:list_jobs] first jobId: ${first.jobId}`);
+    }
+    if (first.id !== undefined) {
+      console.log(`[MCP:list_jobs] first id: ${first.id}`);
+    }
+  }
   return result;
 }
 
 export async function getJob(jobId) {
-  const result = await callMcp("get_job", { jobId }, { retries: 2 });
-  if (!result || typeof result !== "object") {
-    throw new Error(`[MCP:get_job] expected object for jobId=${jobId}`);
+  // Try different argument shapes that MCP get_job might expect
+  // Try numeric first as MCP confirmed it requires numeric jobId
+  const argShapes = [
+    { jobId: Number(jobId) },  // number (preferred based on MCP confirmation)
+    { jobId: String(jobId) },  // string (fallback)
+    { id: Number(jobId) },     // alternative param name as number
+    { id: String(jobId) },     // alternative param name
+    { job_id: Number(jobId) }, // underscore version as number
+    { job_id: String(jobId) }, // underscore version
+  ];
+
+  let lastError = null;
+
+  const debugEnabled = process.env.MCP_DEBUG === '1';
+
+  for (const args of argShapes) {
+    try {
+      // Debug: log what we're trying (only if debug enabled)
+      if (debugEnabled) {
+        console.log(`[MCP:get_job] trying args: ${JSON.stringify(args)} for jobId=${jobId}`);
+      }
+      const result = await callMcp("get_job", args, { retries: 1 }); // fewer retries per attempt
+
+      // Debug: log the result type (only if debug enabled)
+      if (debugEnabled) {
+        console.log(`[MCP:get_job] jobId=${jobId} result type: ${typeof result} with args ${JSON.stringify(args)}`);
+        if (typeof result === 'string') {
+          const preview = result.substring(0, 100);
+          console.log(`[MCP:get_job] jobId=${jobId} string preview: ${preview}`);
+          try {
+            const parsed = JSON.parse(result);
+            if (parsed !== null && typeof parsed === 'object') {
+              console.log(`[MCP:get_job] jobId=${jobId} parsed string as object with args ${JSON.stringify(args)}`);
+              return parsed;
+            }
+          } catch (e) {
+            // Not JSON, continue to next shape
+          }
+        }
+      }
+
+      if (result !== null && typeof result === 'object') {
+        if (debugEnabled) {
+          console.log(`[MCP:get_job] jobId=${jobId} result keys: ${Object.keys(result).join(', ')} with args ${JSON.stringify(args)}`);
+        }
+        return result;
+      }
+
+      // If we got here, result was not valid, try next shape
+      lastError = new Error(`[MCP:get_job] expected object but got ${typeof result} for jobId=${jobId}`);
+    } catch (err) {
+      lastError = err;
+      if (debugEnabled) {
+        console.log(`[MCP:get_job] jobId=${jobId} failed with args ${JSON.stringify(args)}: ${err.message}`);
+      }
+      continue; // try next shape
+    }
   }
-  return result;
+
+  // If all shapes failed, throw the last error
+  throw new Error(`[MCP:get_job] expected object for jobId=${jobId} after trying all argument shapes. Last error: ${lastError.message}`);
 }
 
 export async function fetchJobSpec(jobId) {

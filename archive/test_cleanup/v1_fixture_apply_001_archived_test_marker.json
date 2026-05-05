@@ -1,0 +1,41 @@
+{
+  "archivedAt": "2026-05-04T01:27:24.444Z",
+  "originalJobId": "v1_fixture_apply_001",
+  "reason": "Forced-open test artifact from completed Job 0 during testing",
+  "originalState": {
+    "jobId": "v1_fixture_apply_001",
+    "status": "review_pending",
+    "operatorTx": {},
+    "stageIdempotency": {},
+    "attempts": {
+      "apply": 0,
+      "execute": 0,
+      "submit": 0
+    },
+    "createdAt": "2026-05-04T01:06:44.734Z",
+    "updatedAt": "2026-05-04T01:06:44.734Z",
+    "contractVersion": "v1",
+    "source": "fixture",
+    "discoveredAt": "2026-05-04T01:06:44.734Z",
+    "title": "Fixture Job for Apply Testing",
+    "category": "testing",
+    "payout": "1000",
+    "durationSeconds": 86400,
+    "specUri": null,
+    "details": "This is a fixture job for testing the apply flow. Not a real job.",
+    "rawJob": {},
+    "rawSpec": {},
+    "decision": "accept_candidate",
+    "score": 0.8,
+    "scoreReason": "fixture test job",
+    "reviewedAt": "2026-05-04T01:06:44.734Z",
+    "statusHistory": [
+      {
+        "status": "review_pending",
+        "at": "2026-05-04T01:06:44.734Z"
+      }
+    ],
+    "artifactDir": "/home/emperor/workspace/emperor_os/artifacts/job_v1_fixture_apply_001"
+  },
+  "note": "This job was created via DISCOVERY_FORCE_OPEN_FOR_TESTING=1 and should not appear in active review queue"
+}

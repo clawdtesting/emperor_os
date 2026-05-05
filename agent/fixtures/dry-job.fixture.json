@@ -1,0 +1,12 @@
+{
+  "jobId": "dry_run_001",
+  "id": "dry_run_001",
+  "status": "Open",
+  "payout": "1000",
+  "jobSpecURI": "ipfs://QmTestSpecURI/dry_run_001.json",
+  "assignedAgent": null,
+  "employer": "0xEmployerAddress",
+  "details": "This is a dry-run job for testing the Emperor OS lifecycle. It requires a simple markdown deliverable with sections: Overview, Methodology, Results, Conclusion.",
+  "duration": 259200,
+  "_contractVersion": "job-v1"
+}
