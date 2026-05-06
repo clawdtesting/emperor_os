@@ -21,14 +21,14 @@ async function main() {
   console.log(`   Manager Contract: ${primeCfg.managerContract}`);
   console.log(`   Chain ID: ${primeCfg.chainId}`);
   console.log(`   Contract Name: ${primeCfg.contractName}`);
-  console.log(`   ABI Status:`);
+  console.log("   ABI Status:");
   console.log(`     Discovery: ${primeCfg.abi.discovery.status} (${primeCfg.abi.discovery.sourcePath ? "available" : "missing"})`);
   console.log(`     Manager: ${primeCfg.abi.manager.status} (${primeCfg.abi.manager.sourcePath ? "available" : "missing"})`);
   console.log();
 
   // 2. Check for ABI files
   const discoveryAbiPath = path.join(AGENT_DIR, "abi", "AGIJobDiscoveryPrime.json");
-  const managerAbiPath = path.join(AGENT_DIR, "abi", "AGIJobPrimeManager.json"); // Assuming we might have this or not
+  const managerAbiPath = path.join(AGENT_DIR, "abi", "AGIJobPrimeManager.json");
   let discoveryAbiExists = false;
   let managerAbiExists = false;
   try {
@@ -118,34 +118,64 @@ async function main() {
   }
   console.log();
 
-  // 6. Readiness Score (simple)
-  let score = 0;
-  const total = 5;
-  if (primeCfg.discoveryContract && primeCfg.managerContract) score++;
-  if (discoveryAbiExists) score++;
-  if (foundCount >= primeFiles.length * 0.8) score++; // 80% of prime files present
-  // Check for state/model files
-  let stateCount = 0;
-  for (const file of stateFiles) {
-    try {
-      await fs.access(path.join(AGENT_DIR, file));
-      stateCount++;
-    } catch (_) {}
-  }
-  if (stateCount > 0) score++;
-  // Check if we have at least some Prime flow logic (we do, many files)
-  if (foundCount > 10) score++;
-  console.log(`6. Prime Readiness Score: ${score}/${total}`);
-  console.log(`   Breakdown:`);
-  console.log(`     - Contracts configured: ${primeCfg.discoveryContract && primeCfg.managerContract ? "YES" : "NO"}`);
+  // 6. Readiness Assessment (multi-dimensional)
+  console.log("6. Prime Readiness Assessment:");
+
+  // Architecture Readiness: contracts configured
+  const architectureReady = !!primeCfg.discoveryContract && !!primeCfg.managerContract;
+  console.log(`   Architecture Readiness: ${architectureReady ? "READY" : "NOT READY"}`);
+  console.log(`     - Discovery contract configured: ${!!primeCfg.discoveryContract ? "YES" : "NO"}`);
+  console.log(`     - Manager contract configured: ${!!primeCfg.managerContract ? "YES" : "NO"}`);
+
+  // Read-Only Readiness: discovery ABI available and we can read view functions
+  const readOnlyReady = discoveryAbiExists;
+  console.log(`   Read-Only Readiness: ${readOnlyReady ? "READY" : "NOT READY"}`);
   console.log(`     - Discovery ABI available: ${discoveryAbiExists ? "YES" : "NO"}`);
-  console.log(`     - Prime agent files present: ${foundCount}/${primeFiles.length} (${Math.round(foundCount/primeFiles.length*100)}%)`);
-  console.log(`     - State/model files present: ${stateCount > 0 ? "YES" : "NO"}`);
-  console.log(`     - Substantial Prime logic present: ${foundCount > 10 ? "YES" : "NO"}`);
+
+  // Unsigned Write Package Readiness: manager ABI available and we have write package builders
+  // Since manager ABI is unavailable, this is not ready.
+  const unsignedWriteReady = managerAbiExists; // We don't have manager ABI, so false.
+  console.log(`   Unsigned Write Package Readiness: ${unsignedWriteReady ? "READY" : "NOT READY"}`);
+  console.log(`     - Manager ABI available: ${managerAbiExists ? "YES" : "NO"}`);
+  console.log(`     - Prime transaction package builders implemented: NO (to be implemented)`);
+
+  // Live Execution Readiness: state machine integration, monitoring, etc.
+  // We don't have Prime state machine integration yet.
+  const liveExecutionReady = false; // To be implemented
+  console.log(`   Live Execution Readiness: ${liveExecutionReady ? "READY" : "NOT READY"}`);
+  console.log(`     - Prime state machine integration: NO`);
+  console.log(`     - Prime job discovery monitoring: NO`);
+  console.log(`     - End-to-end Prime flow testing: NO`);
+
   console.log();
 
-  // 7. Missing Capabilities
-  console.log("7. Missing Prime Capabilities (to be implemented):");
+  // 7. Warnings and Fail Closed Conditions
+  console.log("7. Warnings and Requirements:");
+  const warnings = [];
+
+  if (!managerAbiExists) {
+    warnings.push("Prime manager ABI is unavailable - cannot verify write function signatures");
+  }
+  if (!discoveryAbiExists) {
+    warnings.push("Prime discovery ABI is unavailable - cannot read contract");
+  }
+  // Check for missing write package builders (we know they are missing)
+  warnings.push("Prime transaction package builders are not implemented (commit/reveal/finalist/trial/validator/settlement)");
+  warnings.push("Prime state machine integration is missing");
+  warnings.push("Prime job discovery monitoring is not implemented");
+  warnings.push("End-to-end tests for Prime flows are missing");
+
+  if (warnings.length > 0) {
+    for (const w of warnings) {
+      console.log(`   - ${w}`);
+    }
+  } else {
+    console.log("   No warnings.");
+  }
+  console.log();
+
+  // 8. Missing Capabilities
+  console.log("8. Missing Prime Capabilities (to be implemented):");
   console.log("   - Prime-specific job discovery flow (commit/reveal applications)");
   console.log("   - Prime finalist acceptance and trial submission");
   console.log("   - Prime validator scoring and reward distribution");
@@ -153,10 +183,11 @@ async function main() {
   console.log("   - Integration of Prime flows into Emperor OS state machine");
   console.log("   - Unsigned transaction packaging for Prime write actions");
   console.log("   - Validator action packages for Prime scoring/settlement");
+  console.log("   - End-to-end tests for Prime flows");
   console.log();
 
-  // 8. Safety Notes
-  console.log("8. Safety Gates Required for Prime:");
+  // 9. Safety Notes
+  console.log("9. Safety Notes:");
   console.log("   - All Prime write actions (commit, reveal, accept finalist, submit trial, score, settle) must require external human signing.");
   console.log("   - No private keys may exist in runtime; unsigned tx packages only.");
   console.log("   - Human review required before signing any Prime transaction.");

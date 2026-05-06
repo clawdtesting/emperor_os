@@ -77,12 +77,39 @@ async function main() {
   console.log("  - Human review required before signing any transaction.");
   console.log();
 
-  // Readiness Score (simple)
-  let score = 0;
-  const total = 4;
-  if (primeCfg.discoveryContract && primeCfg.managerContract) score++;
-  if (discoveryAbiExists) score++;
-  // Check for some Prime-related files (we already have many)
+  // Multi-dimensional Readiness Assessment
+  console.log("Readiness Assessment:");
+
+  // Architecture Readiness: contracts configured
+  const architectureReady = !!primeCfg.discoveryContract && !!primeCfg.managerContract;
+  console.log(`  Architecture: ${architectureReady ? "architecture_ready" : "architecture_not_ready"}`);
+
+  // Read-Only Readiness: discovery ABI available and we can read view functions
+  const readOnlyReady = discoveryAbiExists;
+  console.log(`  Read-Only: ${readOnlyReady ? "read_only_partial" : "read_only_not_ready"}`);
+
+  // Unsigned Write Package Readiness: manager ABI available and we have write package builders
+  const managerAbiPath = path.join(AGENT_DIR, "abi", "AGIJobPrimeManager.json");
+  let managerAbiExists = false;
+  try {
+    await fs.access(managerAbiPath);
+    managerAbiExists = true;
+  } catch (_) {}
+  const unsignedWriteReady = managerAbiExists; // We don't have manager ABI, so false.
+  console.log(`  Unsigned Write Package: ${unsignedWriteReady ? "unsigned_write_ready" : "unsigned_write_not_ready"}`);
+
+  // Live Execution Readiness: state machine integration, monitoring, etc.
+  // We don't have Prime state machine integration yet.
+  const liveExecutionReady = false; // To be implemented
+  console.log(`  Live Prime Execution: ${liveExecutionReady ? "live_prime_ready" : "live_prime_not_ready"}`);
+
+  console.log();
+
+  // Legacy Score (for reference only)
+  let legacyScore = 0;
+  const legacyTotal = 4;
+  if (primeCfg.discoveryContract && primeCfg.managerContract) legacyScore++;
+  if (discoveryAbiExists) legacyScore++;
   const primeFiles = [
     "prime-artifact-builder.js", "prime-client.js", "prime-content.js",
     "prime-execution-bridge.js", "prime-inspector.js", "prime-monitor.js",
@@ -100,9 +127,8 @@ async function main() {
       foundCount++;
     } catch (_) {}
   }
-  const fileScore = foundCount >= primeFiles.length * 0.5 ? 1 : 0; // At least half present
-  score += fileScore;
-  // Check for state/model files
+  const fileScore = foundCount >= primeFiles.length * 0.5 ? 1 : 0;
+  legacyScore += fileScore;
   const stateFiles = ["prime-state.js", "prime-phase-model.js"];
   let stateCount = 0;
   for (const file of stateFiles) {
@@ -112,13 +138,8 @@ async function main() {
     } catch (_) {}
   }
   const stateScore = stateCount > 0 ? 1 : 0;
-  score += stateScore;
-
-  console.log(`Readiness Score: ${score}/${total}`);
-  console.log(`  Contracts configured: ${primeCfg.discoveryContract && primeCfg.managerContract ? "YES" : "NO"}`);
-  console.log(`  Discovery ABI available: ${discoveryAbiExists ? "YES" : "NO"}`);
-  console.log(`  Prime agent files present (>=50%): ${fileScore === 1 ? "YES" : "NO"} (${foundCount}/${primeFiles.length})`);
-  console.log(`  State/model files present: ${stateScore === 1 ? "YES" : "NO"} (${stateCount}/${stateFiles.length})`);
+  legacyScore += stateScore;
+  console.log(`Legacy Readiness Score: ${legacyScore}/${legacyTotal} (for reference only)`);
   console.log();
 
   console.log("=== Inspection Complete ===");
