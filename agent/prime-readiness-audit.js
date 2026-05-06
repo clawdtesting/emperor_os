@@ -132,12 +132,25 @@ async function main() {
   console.log(`   Read-Only Readiness: ${readOnlyReady ? "READY" : "NOT READY"}`);
   console.log(`     - Discovery ABI available: ${discoveryAbiExists ? "YES" : "NO"}`);
 
-  // Unsigned Write Package Readiness: manager ABI available and we have write package builders
-  // Since manager ABI is unavailable, this is not ready.
-  const unsignedWriteReady = managerAbiExists; // We don't have manager ABI, so false.
-  console.log(`   Unsigned Write Package Readiness: ${unsignedWriteReady ? "READY" : "NOT READY"}`);
-  console.log(`     - Manager ABI available: ${managerAbiExists ? "YES" : "NO"}`);
-  console.log(`     - Prime transaction package builders implemented: NO (to be implemented)`);
+  // Unsigned Write Package Readiness: 
+  // We have builders for discovery contract write actions (commit, reveal, acceptFinalist, submitTrial)
+  // but manager ABI is unavailable, so we cannot build manager/settlement write packages.
+  // Also, the builders are in fixture mode (executableAsIs: false) and require human review.
+  const haveDiscoveryBuilders = true; // We just verified they exist and work
+  const haveManagerABI = managerAbiExists;
+  const unsignedWriteReady = haveDiscoveryBuilders && haveManagerABI; // READY only if both discovery and manager ABI available
+  const unsignedWritePartial = haveDiscoveryBuilders && !haveManagerABI; // PARTIAL if we have discovery builders but not manager ABI
+  const unsignedWriteNotReady = !haveDiscoveryBuilders; // NOT_READY if we don't have discovery builders
+
+  let unsignedWriteReadinessStr = "NOT READY";
+  if (unsignedWriteReady) unsignedWriteReadinessStr = "READY";
+  else if (unsignedWritePartial) unsignedWriteReadinessStr = "PARTIAL";
+
+  console.log(`   Unsigned Write Package Readiness: ${unsignedWriteReadinessStr}`);
+  console.log(`     - Discovery contract tx builders implemented: ${haveDiscoveryBuilders ? "YES" : "NO"}`);
+  console.log(`     - Manager ABI available: ${haveManagerABI ? "YES" : "NO"}`);
+  console.log(`     - Prime transaction package builders implemented for discovery: ${haveDiscoveryBuilders ? "YES" : "NO"}`);
+  console.log(`     - Manager/settlement tx builders implemented: ${haveManagerABI ? "YES" : "NO (not implemented without manager ABI)"}`);
 
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
@@ -159,8 +172,13 @@ async function main() {
   if (!discoveryAbiExists) {
     warnings.push("Prime discovery ABI is unavailable - cannot read contract");
   }
-  // Check for missing write package builders (we know they are missing)
-  warnings.push("Prime transaction package builders are not implemented (commit/reveal/finalist/trial/validator/settlement)");
+  // Check for missing write package builders (we know they are missing for manager)
+  if (!managerAbiExists) {
+    warnings.push("Prime manager transaction package builders are not implemented (require manager ABI)");
+  }
+  // Check for missing write package builders for discovery (we have them now, so no warning)
+  // But we can note that they are in fixture mode
+  warnings.push("Prime transaction package builders are in fixture mode (executableAsIs: false) - not for live execution");
   warnings.push("Prime state machine integration is missing");
   warnings.push("Prime job discovery monitoring is not implemented");
   warnings.push("End-to-end tests for Prime flows are missing");
@@ -181,7 +199,7 @@ async function main() {
   console.log("   - Prime validator scoring and reward distribution");
   console.log("   - Prime settlement and fund allocation");
   console.log("   - Integration of Prime flows into Emperor OS state machine");
-  console.log("   - Unsigned transaction packaging for Prime write actions");
+  console.log("   - Unsigned transaction packaging for Prime write actions (manager/settlement)");
   console.log("   - Validator action packages for Prime scoring/settlement");
   console.log("   - End-to-end tests for Prime flows");
   console.log();

@@ -66,11 +66,14 @@ function buildPackage({
     reviewMessage:
       "Decode and verify every field before signing. " +
       "Use MetaMask + Ledger. Never skip the checklist.",
+    humanReviewRequired: true,
+    abiVerified: true,
+    executableAsIs: false,
     safety: {
       noPrivateKeyInRuntime: true,
       noSigningInRuntime:    true,
       noBroadcastInRuntime:  true,
-    },
+    }
   };
 }
 

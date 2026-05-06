@@ -32,7 +32,7 @@ export const AGIALPHA_TOKEN   = process.env.AGIALPHA_TOKEN_ADDRESS ?? "0xa61a3b3
 // ── ABI (loaded from registry file) ──────────────────────────────────────────
 
 let _abi = null;
-function loadAbi() {
+export function loadAbi() {
   if (_abi) return _abi;
   _abi = require("./abi/AGIJobDiscoveryPrime.json");
   return _abi;
