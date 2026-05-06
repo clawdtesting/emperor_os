@@ -76,7 +76,6 @@ To maintain clear boundaries and safety, Emperor OS separates concerns as follow
 - Prime validator scoring and reward distribution (if separate from v1/v2).
 - Prime settlement and fund allocation.
 - Integration of Prime flows into Emperor OS state machine (new job states).
-- Unsigned transaction packaging for Prime write actions.
 - Validator action packages for Prime scoring/settlement.
 - End-to-end tests for Prime flows.
 
@@ -94,10 +93,11 @@ To maintain clear boundaries and safety, Emperor OS separates concerns as follow
 - Can call view functions: procurements, applicationView
 - Discovery ABI status: partial (functions listed but not fully verified for all signatures)
 
-### Unsigned Write Package Readiness: ❌ NOT READY
-- Manager ABI unavailable - cannot verify write function signatures
-- No Prime transaction package builders implemented
-- Commit/reveal/finalist/trial/validator/settlement flows not implemented
+### Unsigned Write Package Readiness: ⚠️ PARTIAL
+- Discovery contract unsigned package builders exist (commitApplication, revealApplication, acceptFinalist, submitTrial)
+- Managed via fixture/offline mode (executableAsIs: false)
+- Manager ABI unavailable - cannot verify manager/settlement write function signatures
+- Manager/settlement transaction package builders not implemented
 
 ### Live Execution Readiness: ❌ NOT READY
 - No Prime state machine integration
@@ -154,7 +154,7 @@ Emperor OS has laid the foundation for Prime support by separating protocol conc
 
 - Architecture: READY
 - Read-only: PARTIAL
-- Unsigned write packages: NOT READY
+- Unsigned write packages: PARTIAL (discovery contract builders in fixture mode)
 - Live execution: NOT READY
 
 The next steps involve implementing the actual flows, ensuring safety, and integrating with the state manager.

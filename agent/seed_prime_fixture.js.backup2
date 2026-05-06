@@ -1,0 +1,84 @@
+// agent/seed_prime_fixture.js
+// Seeds a fake Prime procurement for testing the Prime state machine.
+// This creates a fixture procurement with ID: 1001
+// It does not touch MCP, chain, or sign/broadcast anything.
+
+import { promises as fs } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { CONFIG } from "./config.js";
+import { emptyProcState, writeJson, ensureDir } from "./prime-state.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const FIXTURE_PROCUREMENT_ID = "1001";
+
+async function seedFixture() {
+  console.log("[seed_prime_fixture] Seeding fixture Prime procurement...");
+  
+  const procRoot = path.join(CONFIG.WORKSPACE_ROOT, "artifacts", `proc_${FIXTURE_PROCUREMENT_ID}`);
+  await ensureDir(procRoot);
+  
+  // 1. Create Prime state for procurement 1001
+  const now = new Date().toISOString();
+  const fixtureState = emptyProcState(FIXTURE_PROCUREMENT_ID, null);
+  fixtureState.status = "DISCOVERED"; // Start with discovered state
+  fixtureState.createdAt = now;
+  fixtureState.updatedAt = now;
+  
+  const statePath = path.join(procRoot, "state.json");
+  await writeJson(statePath, fixtureState);
+  console.log(`[seed_prime_fixture] Wrote state for procurement ${FIXTURE_PROCUREMENT_ID} to ${statePath}`);
+  
+  // 2. Create prime_procurement_snapshot.json
+  const snapshot = {
+    procurementId: FIXTURE_PROCUREMENT_ID,
+    title: "Fixture Prime Procurement for Testing",
+    description: "This is a fixture Prime procurement for testing the state machine. Not a real procurement.",
+    discoveredAt: now,
+    chainId: 1,
+    contractAddress: "0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29",
+    commitDeadline: String(Math.floor(Date.now() / 1000) + 86400 * 7), // 7 days from now
+    revealDeadline: String(Math.floor(Date.now() / 1000) + 86400 * 14), // 14 days from now
+    finalistAcceptDeadline: String(Math.floor(Date.now() / 1000) + 86400 * 21), // 21 days from now
+    trialDeadline: String(Math.floor(Date.now() / 1000) + 86400 * 28), // 28 days from now
+    scoreCommitDeadline: String(Math.floor(Date.now() / 1000) + 86400 * 35), // 35 days from now
+    scoreRevealDeadline: String(Math.floor(Date.now() / 1000) + 86400 * 42), // 42 days from now
+    generatedAt: now,
+    note: "This is a fixture procurement snapshot for testing. Not real chain data."
+  };
+  
+  const snapshotPath = path.join(procRoot, "prime_procurement_snapshot.json");
+  await writeJson(snapshotPath, snapshot);
+  console.log("[seed_prime_fixture] Created prime_procurement_snapshot.json");
+  
+  // 3. Create prime_discovery_review_packet.json
+  const discoveryPacket = {
+    procurementId: FIXTURE_PROCUREMENT_ID,
+    source: "fixture",
+    rawProcurementId: FIXTURE_PROCUREMENT_ID,
+    canonicalProcurementId: FIXTURE_PROCUREMENT_ID,
+    artifacts: {
+      snapshot: { path: "prime_procurement_snapshot.json", mimeType: "application/json" }
+    },
+    generatedAt: now,
+    note: "This is a fixture discovery review packet for testing. Not a real procurement."
+  };
+  
+  const discoveryPacketPath = path.join(procRoot, "prime_discovery_review_packet.json");
+  await writeJson(discoveryPacketPath, discoveryPacket);
+  console.log("[seed_prime_fixture] Created prime_discovery_review_packet.json");
+  
+  console.log("[seed_prime_fixture] Fixture seeding complete.");
+  console.log(`[seed_prime_fixture] You can now run:`);
+  console.log(`  node agent/prime_approve_action.js ${FIXTURE_PROCUREMENT_ID} commit`);
+}
+
+// Run if invoked directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  seedFixture().catch(err => {
+    console.error("[seed_prime_fixture] Error:", err);
+    process.exit(1);
+  });
+}

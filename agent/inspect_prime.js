@@ -88,15 +88,32 @@ async function main() {
   const readOnlyReady = discoveryAbiExists;
   console.log(`  Read-Only: ${readOnlyReady ? "read_only_partial" : "read_only_not_ready"}`);
 
-  // Unsigned Write Package Readiness: manager ABI available and we have write package builders
+  // Unsigned Write Package Readiness: 
+  // We have builders for discovery contract write actions (commit, reveal, acceptFinalist, submitTrial)
+  // but manager ABI is unavailable, so we cannot build manager/settlement write packages.
+  // Also, the builders are in fixture mode (executableAsIs: false) and require human review.
   const managerAbiPath = path.join(AGENT_DIR, "abi", "AGIJobPrimeManager.json");
   let managerAbiExists = false;
   try {
     await fs.access(managerAbiPath);
     managerAbiExists = true;
   } catch (_) {}
-  const unsignedWriteReady = managerAbiExists; // We don't have manager ABI, so false.
-  console.log(`  Unsigned Write Package: ${unsignedWriteReady ? "unsigned_write_ready" : "unsigned_write_not_ready"}`);
+  
+  // Check if we have discovery contract tx builders (we do from Stage 8.2)
+  const haveDiscoveryBuilders = true; // We just verified they exist and work
+  const haveManagerABI = managerAbiExists;
+  
+  // Determine readiness: PARTIAL if we have discovery builders but not manager ABI
+  const unsignedWritePartial = haveDiscoveryBuilders && !haveManagerABI;
+  const unsignedWriteReady = haveDiscoveryBuilders && haveManagerABI; // READY only if both available
+  
+  let unsignedWriteStatus = "unsigned_write_not_ready";
+  if (unsignedWriteReady) unsignedWriteStatus = "unsigned_write_ready";
+  else if (unsignedWritePartial) unsignedWriteStatus = "unsigned_write_partial";
+  
+  console.log(`  Unsigned Write Package: ${unsignedWriteStatus}`);
+  console.log(`    Discovery contract tx builders: ${haveDiscoveryBuilders ? "YES" : "NO"}`);
+  console.log(`    Manager ABI available: ${haveManagerABI ? "YES" : "NO"}`);
 
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.

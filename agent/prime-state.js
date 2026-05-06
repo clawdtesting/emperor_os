@@ -32,7 +32,7 @@ export function procSubdir(procurementId, sub) {
   return path.join(procRootDir(procurementId), sub);
 }
 
-async function ensureDir(dir) {
+export async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true });
 }
 
