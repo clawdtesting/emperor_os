@@ -313,23 +313,67 @@ export function generateSalt() {
  * @returns {{ to: string, data: string, value: string }}
  */
 export function encodePrimeCall(functionName, args) {
-  let iface = new ethers.Interface(loadAbi());
-  let data;
+  const iface = new ethers.Interface(loadAbi());
   try {
-    data = iface.encodeFunctionData(functionName, args);
+    const data = iface.encodeFunctionData(functionName, args);
+    return {
+      to: PRIME_CONTRACT,
+      data,
+      value: "0",
+    };
   } catch (err) {
+    const scoreFallbackFunctions = new Set(["scoreCommit", "scoreReveal"]);
+    if (!scoreFallbackFunctions.has(functionName)) {
+      const signatureMap = {
+        commitApplication: "commitApplication(uint256 procurementId, bytes32 commitment, string subdomain, bytes32[] merkleProof)",
+        revealApplication: "revealApplication(uint256 procurementId, string subdomain, bytes32[] merkleProof, bytes32 salt, string applicationURI)",
+        acceptFinalist: "acceptFinalist(uint256 procurementId)",
+        submitTrial: "submitTrial(uint256 procurementId, string trialURI)",
+      };
+      const sanitizedArgTypes = Array.isArray(args)
+        ? args.map((a) => {
+            if (a === null || a === undefined) return String(a);
+            if (typeof a === "bigint") return "bigint";
+            if (Array.isArray(a)) return `array(len=${a.length})`;
+            return typeof a;
+          })
+        : ["non-array-args"];
+      const missingArgumentNames = [];
+      if (functionName === "commitApplication") {
+        if (!args?.[0]) missingArgumentNames.push("procurementId");
+        if (!args?.[1]) missingArgumentNames.push("commitment");
+        if (!args?.[2]) missingArgumentNames.push("subdomain");
+        if (!Array.isArray(args?.[3]) || args?.[3].length === 0) missingArgumentNames.push("merkleProof");
+      } else if (functionName === "revealApplication") {
+        if (!args?.[0]) missingArgumentNames.push("procurementId");
+        if (!args?.[1]) missingArgumentNames.push("subdomain");
+        if (!Array.isArray(args?.[2]) || args?.[2].length === 0) missingArgumentNames.push("merkleProof");
+        if (!args?.[3]) missingArgumentNames.push("salt");
+        if (!args?.[4]) missingArgumentNames.push("applicationURI");
+      } else if (functionName === "acceptFinalist") {
+        if (!args?.[0]) missingArgumentNames.push("procurementId");
+      } else if (functionName === "submitTrial") {
+        if (!args?.[0]) missingArgumentNames.push("procurementId");
+        if (!args?.[1]) missingArgumentNames.push("trialURI");
+      }
+
+      const expectedSignature = signatureMap[functionName] ?? "unknown";
+      throw new Error(
+        `encodePrimeCall failed for ${functionName}. expected=${expectedSignature}. argTypes=${JSON.stringify(sanitizedArgTypes)}. missing=${missingArgumentNames.join(",") || "none"}. cause=${err?.message || err}`
+      );
+    }
+
     const fallback = new ethers.Interface([
       "function scoreCommit(uint256 procurementId, bytes32 scoreCommitment)",
       "function scoreReveal(uint256 procurementId, uint256 score, bytes32 salt)",
     ]);
-    data = fallback.encodeFunctionData(functionName, args);
-    iface = fallback;
+    const data = fallback.encodeFunctionData(functionName, args);
+    return {
+      to: PRIME_CONTRACT,
+      data,
+      value: "0",
+    };
   }
-  return {
-    to:    PRIME_CONTRACT,
-    data,
-    value: "0",
-  };
 }
 
 /**

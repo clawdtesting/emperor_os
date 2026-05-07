@@ -1,17 +1,18 @@
 // agent/prime_approve_action.js
 // Approves and builds unsigned Prime transaction packages after operator approval.
 // Safety: does not sign, does not broadcast, does not manage nonce, does not use private keys.
-// Supports actions: commit, reveal, accept-finalist, submit-trial
 
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { getProcState, setProcState } from "./prime-state.js";
-import { ensureProcSubdir } from "./prime-state.js";
-import { buildCommitApplicationTx } from "./prime-tx-builder.js";
-import { buildRevealApplicationTx } from "./prime-tx-builder.js";
-import { buildAcceptFinalistTx } from "./prime-tx-builder.js";
-import { buildSubmitTrialTx } from "./prime-tx-builder.js";
+import { ethers } from "ethers";
+import { getProcState, setProcState, ensureProcSubdir } from "./prime-state.js";
+import {
+  buildCommitApplicationTx,
+  buildRevealApplicationTx,
+  buildAcceptFinalistTx,
+  buildSubmitTrialTx,
+} from "./prime-tx-builder.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,14 +23,46 @@ const forbiddenChecks = [
   { label: "signTransaction", regex: /\bsignTransaction\s*\(/ },
   { label: "broadcast", regex: /\bbroadcast\s*\(/ },
   { label: "PRIVATE_KEY", regex: /\bPRIVATE_KEY\b/ },
-  { label: "process.env.PRIVATE_KEY", regex: /process\s*\.\s*env\s*\.\s*PRIVATE_KEY/ }
+  { label: "process.env.PRIVATE_KEY", regex: /process\s*\.\s*env\s*\.\s*PRIVATE_KEY/ },
 ];
 
-async function safetySelfCheck() {
-  const filesToCheck = [
-    path.join(__dirname, "prime-tx-builder.js")
-  ];
+const actionMap = {
+  commit: {
+    status: "COMMIT_READY",
+    from: ["APPLICATION_DRAFTED"],
+    builder: buildCommitApplicationTx,
+    subdir: "application",
+    txName: "unsigned_commit_tx.json",
+    packetName: "prime_action_review_packet.json",
+  },
+  reveal: {
+    status: "REVEAL_READY",
+    from: ["COMMIT_SUBMITTED"],
+    builder: buildRevealApplicationTx,
+    subdir: "reveal",
+    txName: "unsigned_reveal_tx.json",
+    packetName: "prime_action_review_packet.json",
+  },
+  "accept-finalist": {
+    status: "FINALIST_ACCEPT_READY",
+    from: ["REVEAL_SUBMITTED", "SHORTLISTED"],
+    builder: buildAcceptFinalistTx,
+    subdir: "finalist",
+    txName: "unsigned_accept_finalist_tx.json",
+    packetName: "prime_action_review_packet.json",
+  },
+  "submit-trial": {
+    status: "TRIAL_READY",
+    from: ["FINALIST_ACCEPT_SUBMITTED", "TRIAL_IN_PROGRESS"],
+    builder: buildSubmitTrialTx,
+    subdir: "trial",
+    txName: "unsigned_submit_trial_tx.json",
+    packetName: "prime_action_review_packet.json",
+  },
+};
 
+async function safetySelfCheck() {
+  const filesToCheck = [path.join(__dirname, "prime-tx-builder.js")];
   for (const filePath of filesToCheck) {
     const content = await fs.readFile(filePath, "utf8");
     for (const check of forbiddenChecks) {
@@ -49,7 +82,134 @@ async function fileExists(filePath) {
   }
 }
 
-async function approvePrimeAction(rawProcurementId, action, force = false) {
+function readJson(filePath, label) {
+  return fs.readFile(filePath, "utf8").then((raw) => {
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      throw new Error(`Invalid JSON in ${label}: ${err.message}`);
+    }
+  });
+}
+
+function normalizeBytes32Hex(value, fieldName) {
+  if (typeof value !== "string" || value.length === 0) return value;
+  if (/^0x[0-9a-fA-F]{64}$/.test(value)) return value;
+  const normalized = ethers.keccak256(ethers.toUtf8Bytes(value));
+  console.log(`[prime_approve_action] Normalized non-bytes32 ${fieldName} to deterministic keccak256.`);
+  return normalized;
+}
+
+function normalizeCommitmentMaterial(material) {
+  const commitmentHash = normalizeBytes32Hex(material.commitmentHash ?? material.commitment ?? material.hash, "commitmentHash");
+  const agentSubdomain = material.agentSubdomain ?? material.subdomain;
+  const merkleProof = material.merkleProof ?? material.proof;
+  const salt = normalizeBytes32Hex(material.salt, "salt");
+  const linkedJobId = material.linkedJobId ?? material.jobId ?? null;
+
+  return { commitmentHash, agentSubdomain, merkleProof, salt, linkedJobId };
+}
+
+function validateRequired(action, data) {
+  const missing = [];
+  if (action === "commit") {
+    if (!data.commitment) missing.push("commitment");
+    if (!data.subdomain) missing.push("subdomain");
+    if (!Array.isArray(data.merkleProof) || data.merkleProof.length === 0) missing.push("proof");
+  } else if (action === "reveal") {
+    if (!data.subdomain) missing.push("subdomain");
+    if (!Array.isArray(data.merkleProof) || data.merkleProof.length === 0) missing.push("proof");
+    if (!data.salt) missing.push("salt");
+    if (!data.applicationURI) missing.push("applicationURI");
+  } else if (action === "accept-finalist") {
+    if (!data.procurementId) missing.push("procurementId");
+  } else if (action === "submit-trial") {
+    if (!data.trialURI) missing.push("trialURI");
+  }
+  if (missing.length) {
+    throw new Error(`Missing required ${action} fields: ${missing.join(", ")}`);
+  }
+}
+
+function buildReviewPacket(action, status, unsignedPkg, txPath) {
+  return {
+    schema: "emperor-os/prime-action-review-packet/v1",
+    action,
+    targetStatus: status,
+    generatedAt: new Date().toISOString(),
+    txPackagePath: txPath,
+    humanReviewRequired: true,
+    executableAsIs: false,
+    unsignedTxPackage: unsignedPkg,
+    operatorChecklist: unsignedPkg?.reviewChecklist ?? [],
+    safety: {
+      noPrivateKeyInRuntime: true,
+      noSigningInRuntime: true,
+      noBroadcastInRuntime: true,
+    },
+  };
+}
+
+async function buildActionOptions(action, procurementId, procRoot, procState) {
+  if (action === "commit") {
+    const commitmentPath = path.join(procRoot, "application", "commitment_material.json");
+    const material = normalizeCommitmentMaterial(await readJson(commitmentPath, "application/commitment_material.json"));
+    const opts = {
+      procurementId,
+      linkedJobId: procState.linkedJobId ?? material.linkedJobId ?? null,
+      commitment: material.commitmentHash,
+      subdomain: material.agentSubdomain,
+      merkleProof: material.merkleProof,
+      applicationArtifactPath: path.join(procRoot, "application", "application_brief.md"),
+    };
+    validateRequired(action, opts);
+    return opts;
+  }
+
+  if (action === "reveal") {
+    const commitmentPath = path.join(procRoot, "application", "commitment_material.json");
+    const payloadPath = path.join(procRoot, "application", "application_payload.json");
+    const material = normalizeCommitmentMaterial(await readJson(commitmentPath, "application/commitment_material.json"));
+    const payload = await readJson(payloadPath, "application/application_payload.json");
+    const opts = {
+      procurementId,
+      linkedJobId: procState.linkedJobId ?? material.linkedJobId ?? null,
+      subdomain: material.agentSubdomain,
+      merkleProof: material.merkleProof,
+      salt: material.salt,
+      applicationURI: payload.applicationURI,
+    };
+    validateRequired(action, opts);
+    return opts;
+  }
+
+  if (action === "accept-finalist") {
+    const opts = { procurementId, linkedJobId: procState.linkedJobId ?? null };
+    validateRequired(action, opts);
+    return opts;
+  }
+
+  if (action === "submit-trial") {
+    const trialPublicationPath = path.join(procRoot, "trial", "publication_record.json");
+    const trialPayloadPath = path.join(procRoot, "trial", "trial_payload.json");
+    let trialURI = null;
+    if (await fileExists(trialPublicationPath)) {
+      const pub = await readJson(trialPublicationPath, "trial/publication_record.json");
+      trialURI = pub.trialURI ?? pub.uri ?? pub.applicationURI ?? null;
+    }
+    if (!trialURI && await fileExists(trialPayloadPath)) {
+      const payload = await readJson(trialPayloadPath, "trial/trial_payload.json");
+      trialURI = payload.trialURI ?? payload.uri ?? null;
+    }
+    const opts = { procurementId, linkedJobId: procState.linkedJobId ?? null, trialURI };
+    validateRequired(action, opts);
+    return opts;
+  }
+
+  throw new Error(`Unsupported action: ${action}`);
+}
+
+export async function approvePrimeAction(rawProcurementId, action, force = false) {
   console.log(`[prime_approve_action] Starting approval for procurement ${rawProcurementId}, action: ${action}`);
 
   await safetySelfCheck();
@@ -59,154 +219,57 @@ async function approvePrimeAction(rawProcurementId, action, force = false) {
   if (!procurementId) throw new Error("Missing procurementId");
 
   const procState = await getProcState(procurementId);
-  if (!procState) {
-    throw new Error(`No state found for procurement ${procurementId}. Run seed_prime_fixture.js first.`);
-  }
+  if (!procState) throw new Error(`No state found for procurement ${procurementId}. Run seed_prime_fixture.js first.`);
+
+  const spec = actionMap[action];
+  if (!spec) throw new Error(`Unsupported action: ${action}. Supported actions: ${Object.keys(actionMap).join(", ")}`);
 
   const procRoot = path.join(__dirname, "..", "artifacts", `proc_${procurementId}`);
-  const actionMap = {
-    commit: { status: "COMMIT_READY", builder: buildCommitApplicationTx, subdir: "application", txName: "unsigned_commit_tx.json", packetName: "prime_action_review_packet.json" },
-    reveal: { status: "REVEAL_READY", builder: buildRevealApplicationTx, subdir: "reveal", txName: "unsigned_reveal_tx.json", packetName: "prime_action_review_packet.json" },
-    "accept-finalist": { status: "FINALIST_ACCEPT_READY", builder: buildAcceptFinalistTx, subdir: "finalist", txName: "unsigned_accept_finalist_tx.json", packetName: "prime_action_review_packet.json" },
-    "submit-trial": { status: "TRIAL_READY", builder: buildSubmitTrialTx, subdir: "trial", txName: "unsigned_submit_trial_tx.json", packetName: "prime_action_review_packet.json" }
-  };
+  const artifactDir = path.join(procRoot, spec.subdir);
+  await ensureProcSubdir(procurementId, spec.subdir);
 
-  if (!actionMap[action]) {
-    throw new Error(`Unsupported action: ${action}. Supported actions: ${Object.keys(actionMap).join(", ")}`);
-  }
+  const txPath = path.join(artifactDir, spec.txName);
+  const packetPath = path.join(artifactDir, spec.packetName);
 
-  const { status, builder, subdir, txName, packetName } = actionMap[action];
-  const artifactDir = path.join(procRoot, subdir);
-  await ensureProcSubdir(procurementId, subdir);
-
-  const txPath = path.join(artifactDir, txName);
-  const packetPath = path.join(artifactDir, packetName);
-
-  // Check if we should skip due to idempotency
-  const txExists = await fileExists(txPath);
-  const packetExists = await fileExists(packetPath);
-
-  if (procState.status === status && !force) {
-    console.log(`[prime_approve_action] Procurement ${procurementId} already in ${status}. Idempotent exit.`);
+  if (procState.status === spec.status && !force) {
+    console.log(`[prime_approve_action] Procurement ${procurementId} already in ${spec.status}. Idempotent exit.`);
     console.log(`[prime_approve_action] Existing packet: ${packetPath}`);
     console.log(`[prime_approve_action] Existing tx: ${txPath}`);
     console.log("[prime_approve_action] Use --force to regenerate artifacts.");
     return;
   }
 
-  // Validate transition
-  const validTransitions = {
-    "DISCOVERED": ["INSPECTED"],
-    "INSPECTED": ["NOT_A_FIT", "FIT_APPROVED"],
-    "FIT_APPROVED": ["APPLICATION_DRAFTED"],
-    "APPLICATION_DRAFTED": ["COMMIT_READY"],
-    "COMMIT_SUBMITTED": ["REVEAL_READY"],
-    "REVEAL_SUBMITTED": ["SHORTLISTED"],
-    "SHORTLISTED": ["FINALIST_ACCEPT_READY"],
-    "FINALIST_ACCEPT_SUBMITTED": ["TRIAL_IN_PROGRESS"],
-    "TRIAL_IN_PROGRESS": ["TRIAL_READY"]
-  };
-
-  const currentStatus = procState.status;
-  const allowedNext = validTransitions[currentStatus] || [];
-  if (!allowedNext.includes(status)) {
-    throw new Error(`Invalid transition from ${currentStatus} to ${status}. Allowed next states: [${allowedNext.join(", ")}]`);
+  if (!force && !spec.from.includes(procState.status)) {
+    throw new Error(`Invalid transition from ${procState.status} to ${spec.status}. Allowed prior states: [${spec.from.join(", ")}]`);
   }
 
-  // Build the packet and tx based on action
-  let packet, unsignedTx;
-  try {
-    switch (action) {
-      case "commit": {
-        // Need commitment data from commitment_material.json
-        const commitmentPath = path.join(artifactDir, "commitment_material.json");
-        const commitmentData = JSON.parse(await fs.readFile(commitmentPath, "utf8"));
-        const opts = {
-          procurementId,
-          commitment: commitmentData.commitmentHash,
-          subdomain: commitmentData.agentSubdomain,
-          merkleProof: commitmentData.merkleProof,
-          applicationArtifactPath: path.join(artifactDir, "application_brief.md")
-        };
-        const result = await builder(opts);
-        if (!result) {
-          throw new Error(`Builder returned null or undefined for action ${action}`);
-        }
-        packet = result.packet;
-        unsignedTx = result.package;
-        if (packet === undefined) {
-          console.error(`[prime_approve_action] packet is undefined from result:`, result);
-        }
-        if (unsignedTx === undefined) {
-          console.error(`[prime_approve_action] unsignedTx is undefined from result:`, result);
-        }
-        break;
-      }
-      case "reveal": {
-        // Need reveal data from commitment_material.json
-        const commitmentPath = path.join(artifactDir, "commitment_material.json");
-        const commitmentData = JSON.parse(await fs.readFile(commitmentPath, "utf8"));
-        const opts = {
-          procurementId,
-          commitment: commitmentData.commitmentHash,
-          salt: commitmentData.salt,
-          applicationArtifactPath: path.join(artifactDir, "application_brief.md")
-        };
-        const result = await builder(opts);
-        packet = result.packet;
-        unsignedTx = result.package;
-        break;
-      }
-      case "accept-finalist": {
-        const opts = { procurementId };
-        const result = await builder(opts);
-        packet = result.packet;
-        unsignedTx = result.package;
-        break;
-      }
-      case "submit-trial": {
-        const opts = { procurementId };
-        const result = await builder(opts);
-        packet = result.packet;
-        unsignedTx = result.package;
-        break;
-      }
-    }
-  } catch (error) {
-    throw new Error(`Failed to build ${action} package: ${error.message}`);
+  const opts = await buildActionOptions(action, procurementId, procRoot, procState);
+  const result = await spec.builder(opts);
+  if (!result || !result.package) {
+    throw new Error(`Builder returned invalid result for ${action}. Expected { path, package }.`);
   }
 
-  // Write artifacts
+  const unsignedTx = result.package;
+  const packet = buildReviewPacket(action, spec.status, unsignedTx, txPath);
+
   await fs.writeFile(packetPath, JSON.stringify(packet, null, 2), "utf8");
   await fs.writeFile(txPath, JSON.stringify(unsignedTx, null, 2), "utf8");
+
   console.log(`[prime_approve_action] Wrote review packet: ${packetPath}`);
   console.log(`[prime_approve_action] Wrote unsigned tx: ${txPath}`);
 
-  // Update state
-  await setProcState(procurementId, { status });
-  console.log(`[prime_approve_action] Transitioned ${procurementId} -> ${status}`);
-
-  // Record tx handoff
   await setProcState(procurementId, {
+    status: spec.status,
     txHandoffs: {
       ...(procState.txHandoffs ?? {}),
-      [action]: {
-        path: txPath,
-        generatedAt: new Date().toISOString()
-      }
-    }
+      [action]: { path: txPath, generatedAt: new Date().toISOString() },
+    },
   });
 
-  console.log("[prime_approve_action] Operator handoff:");
-  console.log(`  - Review packet: ${packetPath}`);
-  console.log(`  - Unsigned tx package: ${txPath}`);
-  console.log("  - Operator may export this unsigned transaction package to an external wallet flow after independent review.");
-  console.log("  - Signing and broadcasting happen outside Emperor OS.");
-  console.log("  - Emperor OS did not sign, did not broadcast, does not manage nonce, and does not custody private keys.");
-  console.log("  - Human must re-check procurement status before external signing.");
+  console.log(`[prime_approve_action] Transitioned ${procurementId} -> ${spec.status}`);
+  console.log("[prime_approve_action] Emperor OS did not sign, broadcast, or use private keys.");
 }
 
-// Run if invoked directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   let procurementId = null;

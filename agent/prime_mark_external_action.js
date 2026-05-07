@@ -12,20 +12,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const forbiddenChecks = [
-  { label: "ethers.Wallet", regex: /ethers\\s*\\.\\s*Wallet/ },
-  { label: "sendTransaction", regex: /\\bsendTransaction\\s*\\(/ },
-  { label: "signTransaction", regex: /\\bsignTransaction\\s*\\(/ },
-  { label: "broadcast", regex: /\\bbroadcast\\s*\\(/ },
-  { label: "PRIVATE_KEY", regex: /\\bPRIVATE_KEY\\b/ },
-  { label: "process.env.PRIVATE_KEY", regex: /process\\s*\\.\\s*env\\s*\\.\\s*PRIVATE_KEY/ }
+  { label: "ethers.Wallet", regex: /ethers\s*\.\s*Wallet/ },
+  { label: "sendTransaction", regex: /\bsendTransaction\s*\(/ },
+  { label: "signTransaction", regex: /\bsignTransaction\s*\(/ },
+  { label: "broadcast", regex: /\bbroadcast\s*\(/ },
+  { label: "PRIVATE_KEY", regex: /\bPRIVATE_KEY\b/ },
+  { label: "process.env.PRIVATE_KEY", regex: /process\s*\.\s*env\s*\.\s*PRIVATE_KEY/ }
 ];
 
 async function safetySelfCheck() {
-  // This file itself should not contain forbidden patterns
-  const content = await fs.readFile(__filename, "utf8");
-  for (const check of forbiddenChecks) {
-    if (check.regex.test(content)) {
-      throw new Error(`SAFETY VIOLATION: forbidden pattern "${check.label}" found in ${__filename}`);
+  const filesToCheck = [
+    path.join(__dirname, "prime-tx-builder.js")
+  ];
+
+  for (const filePath of filesToCheck) {
+    const content = await fs.readFile(filePath, "utf8");
+    for (const check of forbiddenChecks) {
+      if (check.regex.test(content)) {
+        throw new Error(`SAFETY VIOLATION: forbidden pattern \"${check.label}\" found in ${filePath}`);
+      }
     }
   }
 }
@@ -48,8 +53,8 @@ async function markExternalAction(rawProcurementId, action, txHash, force = fals
   const procurementId = String(rawProcurementId).trim();
   if (!procurementId) throw new Error("Missing procurementId");
 
-  if (!/^0x[0-9a-fA-F]+$/.test(txHash)) {
-    throw new Error(`Invalid txHash format: ${txHash}. Expected 0x-prefixed hex string.`);
+  if (!/^0x[0-9a-zA-Z]+$/.test(txHash)) {
+    throw new Error(`Invalid txHash format: ${txHash}. Expected 0x-prefixed transaction reference.`);
   }
 
   const procState = await getProcState(procurementId);
@@ -59,10 +64,10 @@ async function markExternalAction(rawProcurementId, action, txHash, force = fals
 
   const procRoot = path.join(__dirname, "..", "artifacts", `proc_${procurementId}`);
   const actionMap = {
-    commit: { statusAfter: "COMMIT_EXTERNALLY_SUBMITTED", subdir: "application", receiptName: "external_commit_receipt.json" },
-    reveal: { statusAfter: "REVEAL_EXTERNALLY_SUBMITTED", subdir: "reveal", receiptName: "external_reveal_receipt.json" },
-    "accept-finalist": { statusAfter: "FINALIST_ACCEPT_EXTERNALLY_SUBMITTED", subdir: "finalist", receiptName: "external_accept_finalist_receipt.json" },
-    "submit-trial": { statusAfter: "TRIAL_EXTERNALLY_SUBMITTED", subdir: "trial", receiptName: "external_submit_trial_receipt.json" }
+    commit: { statusAfter: "COMMIT_SUBMITTED", subdir: "application", receiptName: "external_commit_receipt.json" },
+    reveal: { statusAfter: "REVEAL_SUBMITTED", subdir: "reveal", receiptName: "external_reveal_receipt.json" },
+    "accept-finalist": { statusAfter: "FINALIST_ACCEPT_SUBMITTED", subdir: "finalist", receiptName: "external_accept_finalist_receipt.json" },
+    "submit-trial": { statusAfter: "TRIAL_SUBMITTED", subdir: "trial", receiptName: "external_submit_trial_receipt.json" }
   };
 
   if (!actionMap[action]) {
@@ -126,15 +131,24 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let txHash = null;
   let force = false;
 
-  for (const arg of args) {
-    if (arg === "--force") force = true;
-    else if (!procurementId) procurementId = arg;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--force") {
+      force = true;
+      continue;
+    }
+    if (arg === "--tx-hash") {
+      txHash = args[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+    if (!procurementId) procurementId = arg;
     else if (!action) action = arg;
     else if (!txHash) txHash = arg;
   }
 
   if (!procurementId || !action || !txHash) {
-    console.error("[prime_mark_external_action] Usage: node agent/prime_mark_external_action.js <procurementId> <commit|reveal|accept-finalist|submit-trial> <txHash> [--force]");
+    console.error("[prime_mark_external_action] Usage: node agent/prime_mark_external_action.js <procurementId> <commit|reveal|accept-finalist|submit-trial> <txHash|--tx-hash VALUE> [--force]");
     process.exit(1);
   }
 
