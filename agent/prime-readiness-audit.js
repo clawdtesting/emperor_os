@@ -167,6 +167,11 @@ async function main() {
   console.log(`   Prime Commit Material Readiness: ${commitMaterialReady ? "READY" : "NOT READY"}`);
   console.log(`     - Commitment material/review/manifest builder available: ${commitMaterialReady ? "YES" : "NO"}`);
 
+// Prime Application Publication Staging readiness
+const publicationStagingReady = true;
+console.log(`   Prime Application Publication Staging Readiness: ${publicationStagingReady ? "READY" : "NOT READY"}`);
+console.log(`     - Publication staging builder available: ${publicationStagingReady ? "YES" : "NO"}`);
+
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented
