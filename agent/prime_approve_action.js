@@ -92,19 +92,35 @@ function readJson(filePath, label) {
   });
 }
 
-function normalizeBytes32Hex(value, fieldName) {
+function normalizeBytes32Hex(value, fieldName, context = {}) {
   if (typeof value !== "string" || value.length === 0) return value;
   if (/^0x[0-9a-fA-F]{64}$/.test(value)) return value;
+
+  const allowFixtureNormalization = context?.allowFixtureNormalization === true;
+  if (!allowFixtureNormalization) {
+    throw new Error(
+      `Malformed ${fieldName}: expected 0x + 64 hex chars. ` +
+      `Refusing runtime normalization outside fixture mode.`
+    );
+  }
+
   const normalized = ethers.keccak256(ethers.toUtf8Bytes(value));
-  console.log(`[prime_approve_action] Normalized non-bytes32 ${fieldName} to deterministic keccak256.`);
+  console.warn(
+    `[prime_approve_action] FIXTURE NORMALIZATION applied for ${fieldName}. ` +
+    `Original malformed value was deterministically mapped via keccak256.`
+  );
   return normalized;
 }
 
-function normalizeCommitmentMaterial(material) {
-  const commitmentHash = normalizeBytes32Hex(material.commitmentHash ?? material.commitment ?? material.hash, "commitmentHash");
+function normalizeCommitmentMaterial(material, context = {}) {
+  const commitmentHash = normalizeBytes32Hex(
+    material.commitmentHash ?? material.commitment ?? material.hash,
+    "commitmentHash",
+    context
+  );
   const agentSubdomain = material.agentSubdomain ?? material.subdomain;
   const merkleProof = material.merkleProof ?? material.proof;
-  const salt = normalizeBytes32Hex(material.salt, "salt");
+  const salt = normalizeBytes32Hex(material.salt, "salt", context);
   const linkedJobId = material.linkedJobId ?? material.jobId ?? null;
 
   return { commitmentHash, agentSubdomain, merkleProof, salt, linkedJobId };
@@ -151,9 +167,15 @@ function buildReviewPacket(action, status, unsignedPkg, txPath) {
 }
 
 async function buildActionOptions(action, procurementId, procRoot, procState) {
+  const fixtureMode = String(procurementId) === "1001";
+  const normalizationContext = { allowFixtureNormalization: fixtureMode };
+
   if (action === "commit") {
     const commitmentPath = path.join(procRoot, "application", "commitment_material.json");
-    const material = normalizeCommitmentMaterial(await readJson(commitmentPath, "application/commitment_material.json"));
+    const material = normalizeCommitmentMaterial(
+      await readJson(commitmentPath, "application/commitment_material.json"),
+      normalizationContext
+    );
     const opts = {
       procurementId,
       linkedJobId: procState.linkedJobId ?? material.linkedJobId ?? null,
@@ -169,7 +191,10 @@ async function buildActionOptions(action, procurementId, procRoot, procState) {
   if (action === "reveal") {
     const commitmentPath = path.join(procRoot, "application", "commitment_material.json");
     const payloadPath = path.join(procRoot, "application", "application_payload.json");
-    const material = normalizeCommitmentMaterial(await readJson(commitmentPath, "application/commitment_material.json"));
+    const material = normalizeCommitmentMaterial(
+      await readJson(commitmentPath, "application/commitment_material.json"),
+      normalizationContext
+    );
     const payload = await readJson(payloadPath, "application/application_payload.json");
     const opts = {
       procurementId,

@@ -7,6 +7,7 @@
     "test": "npm run test:protocol-runtime",
     "validate:contracts": "node scripts/validate-contracts.mjs",
     "test:protocol-runtime": "node tests/protocol-runtime/state-machines.test.js && node tests/protocol-runtime/prime-deadline-guards.test.js && node tests/protocol-runtime/artifact-and-unsigned.test.js && node tests/protocol-runtime/pipeline-progression.test.js",
+    "test:prime": "node agent/test_prime_abi_encoding_regression.js && node agent/test_prime_approve_action_integration.js && node agent/test_prime_state_machine_fixture.js",
     "dry-job": "node agent/run_dry_job.js"
   },
   "dependencies": {
