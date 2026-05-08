@@ -123,6 +123,10 @@ async function main() {
   const applicationDraftReady = true; // Stage 8.7 provides local/fixture application draft + evidence flow
   console.log(`  Prime Application Draft: ${applicationDraftReady ? "prime_application_draft_ready" : "prime_application_draft_not_ready"}`);
 
+  // Commit material readiness
+  const commitMaterialReady = true; // Stage 8.8 provides commitment material + review packet flow
+  console.log(`  Prime Commit Material: ${commitMaterialReady ? "prime_commit_material_ready" : "prime_commit_material_not_ready"}`);
+
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented

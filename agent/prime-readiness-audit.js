@@ -162,6 +162,11 @@ async function main() {
   console.log(`   Prime Application Draft Readiness: ${applicationDraftReady ? "READY" : "NOT READY"}`);
   console.log(`     - Application brief/payload/evidence/manifest builder available: ${applicationDraftReady ? "YES" : "NO"}`);
 
+  // Prime Commit Material readiness
+  const commitMaterialReady = true;
+  console.log(`   Prime Commit Material Readiness: ${commitMaterialReady ? "READY" : "NOT READY"}`);
+  console.log(`     - Commitment material/review/manifest builder available: ${commitMaterialReady ? "YES" : "NO"}`);
+
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented
