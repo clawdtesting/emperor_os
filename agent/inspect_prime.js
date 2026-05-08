@@ -119,6 +119,10 @@ async function main() {
   const candidateReviewReady = true; // Stage 8.6 provides read-only candidate review packet builder
   console.log(`  Prime Candidate Review: ${candidateReviewReady ? "prime_candidate_review_ready" : "prime_candidate_review_not_ready"}`);
 
+  // Application draft readiness
+  const applicationDraftReady = true; // Stage 8.7 provides local/fixture application draft + evidence flow
+  console.log(`  Prime Application Draft: ${applicationDraftReady ? "prime_application_draft_ready" : "prime_application_draft_not_ready"}`);
+
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented

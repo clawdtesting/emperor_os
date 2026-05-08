@@ -157,6 +157,11 @@ async function main() {
   console.log(`   Prime Candidate Review Readiness: ${candidateReviewReady ? "READY" : "NOT READY"}`);
   console.log(`     - Read-only candidate review packet builder available: ${candidateReviewReady ? "YES" : "NO"}`);
 
+  // Prime Application Draft readiness
+  const applicationDraftReady = true;
+  console.log(`   Prime Application Draft Readiness: ${applicationDraftReady ? "READY" : "NOT READY"}`);
+  console.log(`     - Application brief/payload/evidence/manifest builder available: ${applicationDraftReady ? "YES" : "NO"}`);
+
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented
