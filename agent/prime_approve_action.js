@@ -53,7 +53,7 @@ const actionMap = {
   },
   "submit-trial": {
     status: "TRIAL_READY",
-    from: ["FINALIST_ACCEPT_SUBMITTED", "TRIAL_IN_PROGRESS"],
+    from: ["FINALIST_ACCEPT_READY", "FINALIST_ACCEPT_SUBMITTED", "TRIAL_IN_PROGRESS"],
     builder: buildSubmitTrialTx,
     subdir: "trial",
     txName: "unsigned_submit_trial_tx.json",

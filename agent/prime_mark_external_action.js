@@ -95,9 +95,11 @@ async function markExternalAction(rawProcurementId, action, txHash, force = fals
   }
 
   if (receiptExists && !force) {
-    console.log(`[prime_mark_external_action] Receipt already exists: ${receiptPath}. Idempotent exit.`);
-    console.log("[prime_mark_external_action] Use --force to overwrite.");
-    return;
+    if (procState.status === statusAfter) {
+      console.log(`[prime_mark_external_action] Receipt already exists and procurement already in ${statusAfter}. Idempotent exit.`);
+      return;
+    }
+    console.log(`[prime_mark_external_action] Receipt already exists: ${receiptPath}. Reusing receipt and advancing state.`);
   }
 
   // Create receipt record
