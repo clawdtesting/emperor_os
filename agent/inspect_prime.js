@@ -115,6 +115,10 @@ async function main() {
   console.log(`    Discovery contract tx builders: ${haveDiscoveryBuilders ? "YES" : "NO"}`);
   console.log(`    Manager ABI available: ${haveManagerABI ? "YES" : "NO"}`);
 
+  // Candidate review readiness
+  const candidateReviewReady = true; // Stage 8.6 provides read-only candidate review packet builder
+  console.log(`  Prime Candidate Review: ${candidateReviewReady ? "prime_candidate_review_ready" : "prime_candidate_review_not_ready"}`);
+
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented

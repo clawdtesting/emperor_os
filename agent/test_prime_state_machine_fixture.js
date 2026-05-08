@@ -19,32 +19,19 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-async function ensureTrialArtifacts(procurementId) {
-  const trialDir = path.join(repoRoot, "artifacts", `proc_${procurementId}`, "trial");
-  await fs.mkdir(trialDir, { recursive: true });
-  await fs.writeFile(path.join(trialDir, "trial_artifact_manifest.json"), JSON.stringify({ files: ["trial.md"] }, null, 2));
-  await fs.writeFile(path.join(trialDir, "publication_record.json"), JSON.stringify({ trialURI: "ipfs://fixture-trial-uri" }, null, 2));
-  await fs.writeFile(path.join(trialDir, "fetchback_verification.json"), JSON.stringify({ verified: true }, null, 2));
-}
-
 async function main() {
   const procurementId = "1001";
 
   run("node agent/seed_prime_fixture.js");
 
   run(`node agent/prime_approve_action.js ${procurementId} commit`);
-  run(`node agent/prime_mark_external_action.js ${procurementId} commit --tx-hash 0xfixture --force`);
+  run(`node agent/prime_mark_external_action.js ${procurementId} commit --tx-hash 0xfixture`);
 
   run(`node agent/prime_approve_action.js ${procurementId} reveal`);
-  run(`node agent/prime_mark_external_action.js ${procurementId} reveal --tx-hash 0xfixture --force`);
+  run(`node agent/prime_mark_external_action.js ${procurementId} reveal --tx-hash 0xfixture`);
   run(`node -e "import('./agent/prime-state.js').then(m => m.setProcState('${procurementId}', { status: 'SHORTLISTED' }))"`);
 
   run(`node agent/prime_approve_action.js ${procurementId} accept-finalist`);
-
-  run(`node agent/prime_mark_external_action.js ${procurementId} accept-finalist --tx-hash 0xfixture --force`);
-  run(`node -e "import('./agent/prime-state.js').then(m => m.setProcState('${procurementId}', { status: 'TRIAL_IN_PROGRESS' }))"`);
-
-  await ensureTrialArtifacts(procurementId);
   run(`node agent/prime_approve_action.js ${procurementId} submit-trial`);
 
   const statePath = path.join(repoRoot, "artifacts", `proc_${procurementId}`, "state.json");

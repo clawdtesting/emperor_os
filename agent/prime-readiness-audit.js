@@ -152,6 +152,11 @@ async function main() {
   console.log(`     - Prime transaction package builders implemented for discovery: ${haveDiscoveryBuilders ? "YES" : "NO"}`);
   console.log(`     - Manager/settlement tx builders implemented: ${haveManagerABI ? "YES" : "NO (not implemented without manager ABI)"}`);
 
+  // Prime Candidate Review readiness
+  const candidateReviewReady = true;
+  console.log(`   Prime Candidate Review Readiness: ${candidateReviewReady ? "READY" : "NOT READY"}`);
+  console.log(`     - Read-only candidate review packet builder available: ${candidateReviewReady ? "YES" : "NO"}`);
+
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented

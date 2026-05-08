@@ -109,10 +109,19 @@ async function seedFixture() {
   await fs.writeFile(path.join(inspectionDir, "fit_evaluation.json"), JSON.stringify(fitEvaluation, null, 2), "utf8");
   console.log("[seed_prime_fixture] Created inspection/fit_evaluation.json");
   
-  // 6. Create empty directories for reveal, finalist, trial (to avoid errors)
+  // 6. Create directories for reveal, finalist, trial
   await ensureDir(path.join(procRoot, "reveal"));
   await ensureDir(path.join(procRoot, "finalist"));
-  await ensureDir(path.join(procRoot, "trial"));
+  const trialDir = path.join(procRoot, "trial");
+  await ensureDir(trialDir);
+
+  // Seed deterministic trial fixture artifacts so submit-trial can be packaged
+  const trialManifest = { files: ["trial_result.md"], generatedAt: now };
+  await fs.writeFile(path.join(trialDir, "trial_artifact_manifest.json"), JSON.stringify(trialManifest, null, 2), "utf8");
+  const trialPublication = { trialURI: "ipfs://fixture-trial-uri", publishedAt: now };
+  await fs.writeFile(path.join(trialDir, "publication_record.json"), JSON.stringify(trialPublication, null, 2), "utf8");
+  const trialFetchback = { verified: true, checkedAt: now };
+  await fs.writeFile(path.join(trialDir, "fetchback_verification.json"), JSON.stringify(trialFetchback, null, 2), "utf8");
   
   console.log("[seed_prime_fixture] Fixture seeding complete.");
   console.log(`[seed_prime_fixture] You can now run:`);
