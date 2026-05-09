@@ -126,12 +126,16 @@ async function main() {
   // Commit material readiness
   const commitMaterialReady = true; // Stage 8.8 provides commitment material + review packet flow
   const publicationStagingReady = true; // Stage 8.9 provides publication staging flow
+  const commitPackageReady = true; // Stage 8.10 provides commit package flow
   console.log(`  Prime Commit Material: ${commitMaterialReady ? "prime_commit_material_ready" : "prime_commit_material_not_ready"}`);
 
   // Live Execution Readiness: state machine integration, monitoring, etc.
   // We don't have Prime state machine integration yet.
   const liveExecutionReady = false; // To be implemented
   console.log(`  Prime Application Publication Staging: ${publicationStagingReady ? "prime_application_publication_staging_ready" : "prime_application_publication_staging_not_ready"}`);
+  console.log(`  Prime Commit Package Readiness: ${commitPackageReady ? "prime_commit_package_ready" : "prime_commit_package_not_ready"}`);
+  console.log();
+  console.log();
   console.log(`  Live Prime Execution: ${liveExecutionReady ? "live_prime_ready" : "live_prime_not_ready"}`);
 
   console.log();
