@@ -1,221 +1,351 @@
 #!/usr/bin/env node
 /**
- * Prime operator-approved commit transaction package.
- * Builds an unsigned commit tx package only after explicit operator approval.
- * In fixture mode, builds a fixture-only package marked as not executable.
+ * Prime operator-approved commit transaction package hardening.
+ * Builds unsigned commit tx package only after explicit operator approval.
+ * Uses buildCommitApplicationTx from prime-tx-builder.js and fails closed on invalid inputs.
  */
 
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import { program } from 'commander';
+import { buildCommitApplicationTx } from './prime-tx-builder.js';
 
 program
-  .option('--fixture', 'Run in fixture mode (no real tx)', false)
+  .option('--fixture', 'Run in fixture mode (no real tx submit)', false)
   .option('--force', 'Overwrite existing artifacts', false)
   .argument('<procurementId>', 'Procurement ID')
   .parse(process.argv);
 
 const opts = program.opts();
-const procurementId = program.args[0];
+const procurementIdArg = program.args[0];
 
-if (!procurementId) {
-  console.error('Error: procurementId is required');
+if (!procurementIdArg) {
+  console.error('[approve_prime_commit_package] Error: procurementId is required');
   process.exit(1);
 }
 
-const baseDir = path.join('artifacts', `proc_${procurementId}`, 'application');
+const procId = String(procurementIdArg);
+const baseDir = path.join('artifacts', `proc_${procId}`, 'application');
 const commitmentMaterialPath = path.join(baseDir, 'commitment_material.json');
 const commitmentReviewPath = path.join(baseDir, 'commitment_review_packet.json');
 const commitmentManifestPath = path.join(baseDir, 'commitment_artifact_manifest.json');
-
 const reviewPacketPath = path.join(baseDir, 'prime_commit_package_review_packet.json');
 const unsignedTxPath = path.join(baseDir, 'unsigned_commit_tx.json');
 
-// Helper to check if file exists
-const fileExists = (f) => fs.existsSync(f);
+const REQUIRED_INPUTS = [
+  commitmentMaterialPath,
+  commitmentReviewPath,
+  commitmentManifestPath,
+];
 
-// Helper to read JSON file
-const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
+const SAFETY_PATTERNS = [
+  /\bethers\.Wallet\s*\(/,
+  /\bsendTransaction\s*\(/,
+  /\bsignTransaction\s*\(/,
+  /\bbroadcast(Transaction)?\s*\(/,
+  /\bprocess\.env\.PRIVATE_KEY\b/,
+  /\bPRIVATE_KEY\s*[:=]/,
+];
 
-// Helper to write JSON file
-const writeJson = (f, obj) => {
-  fs.writeFileSync(f, JSON.stringify(obj, null, 2));
-};
+const SAFETY_SCAN_FILES = [
+  path.join('agent', 'approve_prime_commit_package.js'),
+  path.join('agent', 'prime-tx-builder.js'),
+];
 
-// Check required input files
-const requiredFiles = [commitmentMaterialPath, commitmentReviewPath, commitmentManifestPath];
-const missing = requiredFiles.filter(f => !fileExists(f));
-if (missing.length > 0) {
-  console.error('Missing required input files:');
-  missing.forEach(f => console.error(`  ${f}`));
-  console.error('\nPlease run previous stages first:');
-  console.error(`  node agent/build_prime_candidate_review.js ${procurementId} --fixture`);
-  console.error(`  node agent/build_prime_application_draft.js ${procurementId} --fixture`);
-  console.error(`  node agent/build_prime_commit_material.js ${procurementId} --fixture`);
-  console.error(`  node agent/publish_prime_application.js ${procurementId} --fixture`);
+function fileExists(p) {
+  return fs.existsSync(p);
+}
+
+function readJson(p) {
+  return JSON.parse(fs.readFileSync(p, 'utf8'));
+}
+
+function writeJson(p, obj) {
+  fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+}
+
+function sha256HexUtf8(text) {
+  return createHash('sha256').update(String(text), 'utf8').digest('hex');
+}
+
+function fail(msg, extra = []) {
+  console.error(`[approve_prime_commit_package] ${msg}`);
+  for (const line of extra) console.error(line);
   process.exit(1);
 }
 
-// Read commitment material to check readiness
-let commitmentMaterial;
-try {
-  commitmentMaterial = readJson(commitmentMaterialPath);
-} catch (e) {
-  console.error(`[approve_prime_commit_package] Could not read commitment material: ${e}`);
-  process.exit(1);
+function isPlaceholderUnsignedTx(pkg) {
+  if (!pkg || typeof pkg !== 'object') return true;
+  const calldata = pkg.calldata;
+  const args = pkg.args && typeof pkg.args === 'object' ? pkg.args : {};
+  const subdomain = args.subdomain;
+  const proof = args.proof;
+
+  if (calldata === '0x') return true;
+  if (typeof subdomain === 'string' && subdomain.trim() === '') return true;
+  if (Array.isArray(proof) && proof.length === 0) return true;
+  return false;
 }
 
-// Safety self-check: we are not using private keys, etc. in this script.
-
-// Determine if we should proceed
-let shouldProceed = false;
-const reason = [];
-
-if (opts.fixture) {
-  // In fixture mode, we allow building a fixture package regardless of readyForCommitTx
-  shouldProceed = true;
-  reason.push('Fixture mode: building fixture-only package');
-} else {
-  // Live mode: only proceed if readyForCommitTx is true
-  if (commitmentMaterial.readyForCommitTx === true) {
-    shouldProceed = true;
-    reason.push('Live mode: commitment material ready for commit tx');
-  } else {
-    reason.push('Live mode: commitment material not ready for commit tx (readyForCommitTx is false)');
+function validateRequiredInputFiles() {
+  const missing = REQUIRED_INPUTS.filter((p) => !fileExists(p));
+  if (missing.length) {
+    fail('Missing required input files.', [
+      ...missing.map((m) => `  - ${m}`),
+      '',
+      'Required predecessor stages:',
+      `  node agent/build_prime_candidate_review.js ${procId} --fixture --force`,
+      `  node agent/build_prime_application_draft.js ${procId} --fixture --force`,
+      `  node agent/build_prime_commit_material.js ${procId} --fixture --force`,
+      `  node agent/publish_prime_application.js ${procId} --fixture --force`,
+    ]);
   }
 }
 
-if (!shouldProceed) {
-  console.error(`[approve_prime_commit_package] Cannot proceed: ${reason.join('; ')}`);
-  console.error('In fixture mode, use --fixture flag to build a fixture-only package.');
-  process.exit(1);
+function stripCommentsAndStrings(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\/\/.*$/gm, ' ')
+    .replace(/`(?:\\.|[^`])*`/g, ' ')
+    .replace(/"(?:\\.|[^"])*"/g, ' ')
+    .replace(/'(?:\\.|[^'])*'/g, ' ');
 }
 
-// Check for existing output files and handle idempotency
-const reviewExists = fileExists(reviewPacketPath);
-const unsignedExists = fileExists(unsignedTxPath);
-if (reviewExists && unsignedExists && !opts.force) {
-  console.log(`[approve_prime_commit_package] Output files already exist:`);
-  console.log(`  ${reviewPacketPath}`);
-  console.log(`  ${unsignedTxPath}`);
-  console.log(`[approve_prime_commit_package] Use --force to overwrite`);
-  process.exit(0);
-}
-
-// We'll now build the output files.
-
-// 1. Build the review packet
-const reviewPacket = {
-  schema: 'emperor-os/prime-commit-package-review/v1',
-  procurementId,
-  linkedJobId: commitmentMaterial.linkedJobId || '999001', // fallback if not present
-  commitmentHash: commitmentMaterial.commitmentHash,
-  applicationURI: commitmentMaterial.applicationURI,
-  commitmentMaterialPath: './commitment_material.json',
-  commitmentReviewPacketPath: './commitment_review_packet.json',
-  commitmentArtifactManifestPath: './commitment_artifact_manifest.json',
-  preconditions: {
-    commitmentMaterialExists: true,
-    commitmentReviewPacketExists: true,
-    commitmentArtifactManifestExists: true,
-    // In live mode, we would also check readyForCommitTx, but we already did.
-  },
-  warnings: [],
-  requiredHumanReviewChecklist: [
-    'Verify commitment hash matches application bundle',
-    'Confirm application URI is correct and points to published content',
-    'Ensure no private keys are involved in this package',
-    'Confirm this is an unsigned transaction package for operator review'
-  ],
-  humanReviewRequired: true,
-  noSigning: true,
-  noBroadcasting: true,
-  noPrivateKey: true,
-  externalWalletRequired: true,
-  fixture: opts.fixture,
-  executableAsIs: false, // Never executable as-is in this stage; requires external signing
-  generatedAt: new Date().toISOString()
-};
-
-// Add warnings if any
-if (opts.fixture) {
-  reviewPacket.warnings.push('This is a fixture-only package; not for live execution');
-}
-if (commitmentMaterial.applicationURI === null) {
-  reviewPacket.warnings.push('applicationURI is null; commitment is provisional');
-}
-
-// 2. Build the unsigned transaction
-// We will use the existing prime-tx-builder.js if possible, but for simplicity we'll create a minimal unsigned tx.
-// However, we should try to reuse the existing transaction builder logic.
-
-// Let's check if we can import and use the prime-tx-builder.js functions.
-// Since we are in an ESM environment, we can try to import it.
-
-// We'll attempt to build a minimal unsigned commit transaction.
-// In a real implementation, we would use the Prime client to generate the calldata.
-// For now, we'll create a placeholder that matches the expected schema.
-
-const unsignedTx = {
-  schema: 'emperor-os/prime-unsigned-tx/v1',
-  phase: 'COMMIT',
-  function: 'commitApplication',
-  target: '0xd5EF1dde7Ac60488f697ff2A7967a52172A78F29', // AGIJobDiscoveryPrime from inspect_prime.js
-  procurementId: procurementId,
-  calldata: '0x', // placeholder; in real implementation, this would be the encoded function call
-  decodedCall: {
-    function: 'commitApplication',
-    params: {
-      procurementId: procurementId,
-      commitment: commitmentMaterial.commitmentHash,
-      subdomain: '', // placeholder
-      proof: [] // placeholder
+function validateSafetySelfCheck() {
+  const findings = [];
+  for (const relFile of SAFETY_SCAN_FILES) {
+    if (!fileExists(relFile)) continue;
+    const raw = fs.readFileSync(relFile, 'utf8');
+    const content = stripCommentsAndStrings(raw);
+    for (const pattern of SAFETY_PATTERNS) {
+      if (pattern.test(content)) {
+        findings.push(`${relFile}: matched forbidden pattern ${pattern}`);
+      }
     }
-  },
-  artifactBindings: {
-    commitmentMaterial: './commitment_material.json',
-    commitmentReviewPacket: './commitment_review_packet.json',
-    commitmentArtifactManifest: './commitment_artifact_manifest.json'
-  },
-  reviewChecklist: [
-    'Verify transaction targets the correct Prime discovery contract',
-    'Verify calldata encodes commitApplication with correct parameters',
-    'Verify no state-changing functions are called besides commitApplication'
-  ],
-  humanReviewRequired: true,
-  executableAsIs: false,
-  safety: {
-    noPrivateKey: true,
-    noSigning: true,
-    noBroadcasting: true
-  },
-  fixture: opts.fixture,
-  generatedAt: new Date().toISOString()
-};
-
-// Write the files
-writeJson(reviewPacketPath, reviewPacket);
-console.log(`[approve_prime_commit_package] Wrote review packet: ${reviewPacketPath}`);
-
-writeJson(unsignedTxPath, unsignedTx);
-console.log(`[approve_prime_commit_package] Wrote unsigned tx: ${unsignedTxPath}`);
-
-// Update fixture state metadata (optional)
-const statePath = path.join('artifacts', `proc_${procurementId}`, 'state.json');
-if (fileExists(statePath)) {
-  let state;
-  try {
-    state = readJson(statePath);
-  } catch (e) {
-    state = {};
   }
-  state.primeCommitPackageReady = true;
-  state.primeCommitPackagePath = unsignedTxPath;
-  state.readyForCommitTx = opts.fixture ? false : commitmentMaterial.readyForCommitTx; // In fixture mode, we don't set readyForCommitTx to true
-  fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
-  console.log(`[approve_prime_commit_package] Updated fixture state: ${statePath}`);
+  if (findings.length) {
+    fail('Safety self-check failed. Forbidden signing/broadcast/private-key patterns detected.', findings);
+  }
 }
 
-console.log(`[approve_prime_commit_package] Package built successfully in ${opts.fixture ? 'fixture' : 'live'} mode.`);
-console.log(`[approve_prime_commit_package] Remember: This is an unsigned package. External signing and submission required.`);
-process.exit(0);
+function extractRequiredFields(material) {
+  const procurementId = material?.procurementId;
+  const commitmentHash = material?.commitmentHash;
+  const salt = material?.salt;
+  const subdomain = material?.agentSubdomain ?? material?.subdomain;
+  const proof = material?.merkleProof ?? material?.proof;
+
+  const missing = [];
+  if (procurementId == null || String(procurementId).trim() === '') missing.push('procurementId');
+  if (!commitmentHash || typeof commitmentHash !== 'string') missing.push('commitmentHash');
+  if (!salt || typeof salt !== 'string') missing.push('salt');
+  if (subdomain == null || String(subdomain).trim() === '') missing.push('agentSubdomain|subdomain');
+  if (!Array.isArray(proof) || proof.length === 0) missing.push('merkleProof|proof');
+
+  if (missing.length) {
+    const stageHint = [];
+    if (missing.includes('agentSubdomain|subdomain') || missing.includes('merkleProof|proof')) {
+      stageHint.push('Subdomain/proof must be produced by commitment material stage.');
+      stageHint.push(`Run: node agent/build_prime_commit_material.js ${procId} --fixture --force`);
+    }
+    fail(`commitment_material.json missing required fields: ${missing.join(', ')}`, stageHint);
+  }
+
+  return {
+    procurementId: String(procurementId),
+    commitmentHash,
+    salt,
+    subdomain: String(subdomain),
+    proof,
+    applicationURI: material?.applicationURI ?? null,
+    readyForCommitTx: material?.readyForCommitTx === true,
+    fixture: material?.fixture === true,
+    nonExecutableAsIs: material?.executableAsIs === false,
+    requiresRealApplicationUri: material?.requiresRealApplicationUri === true,
+    humanReviewRequired: material?.humanReviewRequired === true,
+    linkedJobId: material?.linkedJobId,
+    commitmentMode: material?.commitmentMode ?? null,
+  };
+}
+
+function validateApplicationUriGate(fields) {
+  if (!opts.fixture) {
+    if (!fields.readyForCommitTx) {
+      fail('Live/default mode blocked: readyForCommitTx is false.');
+    }
+    if (fields.applicationURI == null) {
+      fail('Live/default mode blocked: applicationURI is null. Publish real application URI first.');
+    }
+    return;
+  }
+
+  if (fields.applicationURI == null) {
+    const allowedFixturePacket = (
+      fields.fixture === true &&
+      fields.nonExecutableAsIs === true &&
+      fields.requiresRealApplicationUri === true &&
+      fields.humanReviewRequired === true
+    );
+    if (!allowedFixturePacket) {
+      fail('Fixture mode blocked: provisional package flags are not all set (fixture=true, executableAsIs=false, requiresRealApplicationUri=true, humanReviewRequired=true).');
+    }
+  }
+}
+
+function validateIdempotency() {
+  const reviewExists = fileExists(reviewPacketPath);
+  const unsignedExists = fileExists(unsignedTxPath);
+  if (!(reviewExists && unsignedExists)) return;
+
+  let existing;
+  try {
+    existing = readJson(unsignedTxPath);
+  } catch (err) {
+    fail(`Unable to parse existing unsigned tx at ${unsignedTxPath}: ${err.message}`);
+  }
+
+  const placeholder = isPlaceholderUnsignedTx(existing);
+  if (placeholder && !opts.force) {
+    fail('Existing unsigned tx is placeholder/invalid. Refusing silent acceptance; rerun with --force to regenerate.');
+  }
+
+  if (!opts.force) {
+    console.log('[approve_prime_commit_package] Outputs already exist and pass placeholder guard. Use --force to regenerate.');
+    process.exit(0);
+  }
+}
+
+function validateBuiltCalldata(pkg) {
+  const calldata = pkg?.calldata;
+  if (typeof calldata !== 'string') {
+    fail('Builder output invalid: calldata is not a string.');
+  }
+  if (!calldata.startsWith('0x')) {
+    fail('Builder output invalid: calldata does not start with 0x.');
+  }
+  if (calldata === '0x' || calldata.length <= 10) {
+    fail('Builder output invalid: calldata is empty/placeholder.');
+  }
+
+  const fn = pkg?.function;
+  const decoded = pkg?.decodedCall;
+  if (fn !== 'commitApplication') {
+    fail(`Builder output invalid: function is not commitApplication (got: ${String(fn)}).`);
+  }
+  if (!decoded || String(decoded).includes('commitApplication') === false) {
+    fail('Builder output invalid: decoded call does not indicate commitApplication.');
+  }
+
+  const builtSubdomain = pkg?.args?.subdomain;
+  const builtProof = pkg?.args?.proof;
+  if (typeof builtSubdomain !== 'string' || builtSubdomain.trim() === '') {
+    fail('Builder output invalid: subdomain is empty.');
+  }
+  if (!Array.isArray(builtProof)) {
+    fail('Builder output invalid: proof is not an array.');
+  }
+}
+
+async function main() {
+  validateSafetySelfCheck();
+  validateRequiredInputFiles();
+  validateIdempotency();
+
+  let commitmentMaterial;
+  try {
+    commitmentMaterial = readJson(commitmentMaterialPath);
+  } catch (err) {
+    fail(`Could not read commitment material: ${err.message}`);
+  }
+
+  const fields = extractRequiredFields(commitmentMaterial);
+  validateApplicationUriGate(fields);
+
+  let builderResult;
+  try {
+    builderResult = await buildCommitApplicationTx({
+      procurementId: fields.procurementId,
+      linkedJobId: fields.linkedJobId,
+      commitment: fields.commitmentHash,
+      subdomain: fields.subdomain,
+      merkleProof: fields.proof,
+      applicationArtifactPath: path.join(baseDir, 'application_payload.json'),
+    });
+  } catch (err) {
+    fail(`Failed to build commit tx package: ${err.message}`);
+  }
+
+  if (!builderResult?.package || !builderResult?.path) {
+    fail('Builder returned malformed result (missing package/path).');
+  }
+
+  validateBuiltCalldata(builderResult.package);
+
+  if (!fileExists(builderResult.path)) {
+    fail(`Builder reported output path but file is missing: ${builderResult.path}`);
+  }
+
+  const applicationUriStatus = fields.applicationURI == null ? 'null/provisional' : 'present';
+  const calldataHash = sha256HexUtf8(builderResult.package.calldata);
+
+  const reviewPacket = {
+    schema: 'emperor-os/prime-commit-package-review/v1',
+    procurementId: fields.procurementId,
+    linkedJobId: fields.linkedJobId ?? null,
+    commitmentHash: fields.commitmentHash,
+    packagePath: path.relative(baseDir, builderResult.path),
+    unsignedTxPath: path.relative(baseDir, unsignedTxPath),
+    calldataHash,
+    subdomain: fields.subdomain,
+    proofLength: fields.proof.length,
+    applicationURI: fields.applicationURI,
+    applicationURIStatus: applicationUriStatus,
+    fixture: !!opts.fixture,
+    commitmentMode: fields.commitmentMode,
+    warnings: [],
+    humanReviewChecklist: [
+      'Verify decoded function is commitApplication and calldata selector matches ABI',
+      'Verify procurementId and commitmentHash match commitment_material.json',
+      'Verify subdomain is correct and non-empty',
+      'Verify proof array and proof length match commitment material',
+      'Verify target contract and chainId before external signing',
+      'Do not sign/broadcast from this runtime',
+    ],
+    safety: {
+      noPrivateKeyInRuntime: true,
+      noSigningInRuntime: true,
+      noBroadcastInRuntime: true,
+      humanReviewRequired: true,
+      executableAsIs: false,
+      requiresRealApplicationUri: fields.applicationURI == null,
+    },
+    builderOutput: {
+      function: builderResult.package.function,
+      decodedCall: builderResult.package.decodedCall,
+      calldataLength: builderResult.package.calldata.length,
+    },
+    generatedAt: new Date().toISOString(),
+  };
+
+  if (opts.fixture) {
+    reviewPacket.warnings.push('Fixture mode build: unsigned package is non-executable as-is.');
+  }
+  if (fields.applicationURI == null) {
+    reviewPacket.warnings.push('applicationURI is null: provisional only, requires real URI before live use.');
+  }
+  if (fields.commitmentMode && String(fields.commitmentMode).includes('fixture')) {
+    reviewPacket.warnings.push(`commitmentMode=${fields.commitmentMode}`);
+  }
+
+  writeJson(reviewPacketPath, reviewPacket);
+
+  console.log(`[approve_prime_commit_package] Wrote unsigned tx: ${builderResult.path}`);
+  console.log(`[approve_prime_commit_package] Wrote review packet: ${reviewPacketPath}`);
+  console.log(`[approve_prime_commit_package] calldata validated: hash=${calldataHash}, function=${builderResult.package.function}`);
+  console.log('[approve_prime_commit_package] Safety boundary maintained: unsigned package only, no signing/broadcasting/private-key usage.');
+}
+
+main().catch((err) => {
+  fail(`Unexpected error: ${err.message}`);
+});
